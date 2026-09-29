@@ -107,10 +107,10 @@ export default async function Home() {
         <section className="grid items-center gap-12 py-14 md:py-20 lg:grid-cols-[1.1fr_0.9fr]">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted">
-              <span className="size-2 rounded-full bg-[#5eead4]" /> ENEM · Concursos · Faculdade · Escola
+              <span className="size-2 rounded-full bg-[#fb923c]" /> ENEM · Concursos · Faculdade · Escola
             </span>
             <h1 className="font-display mt-5 text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
-              Seus PDFs viram um <span className="bg-gradient-to-r from-[#6d5dfc] to-[#3b82f6] bg-clip-text text-transparent">plano de estudo</span> que funciona.
+              Seus PDFs viram um <span className="bg-gradient-to-r from-[#f97316] to-[#f59e0b] bg-clip-text text-transparent">plano de estudo</span> que funciona.
             </h1>
             <p className="mt-5 max-w-xl text-lg text-muted">
               Envie o seu material e a IA monta sessões do tamanho do seu dia, com texto, questões, revisões no tempo certo, jogos e simulados. Tudo com a página de origem citada.
@@ -195,12 +195,12 @@ export default async function Home() {
 
         {/* ── Chamada final */}
         <section className="py-10">
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#6d5dfc] to-[#3b82f6] px-6 py-12 text-center text-white sm:px-12">
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1e293b] via-[#7c2d12] to-[#ea580c] px-6 py-12 text-center text-white sm:px-12">
             <div aria-hidden className="absolute -right-10 -top-10 size-48 rounded-full bg-white/10" />
             <div aria-hidden className="absolute -bottom-16 -left-10 size-56 rounded-full bg-white/10" />
             <h2 className="font-display relative text-3xl font-extrabold tracking-tight sm:text-4xl">Seu próximo estudo começa hoje.</h2>
             <p className="relative mx-auto mt-3 max-w-xl text-white/85">Crie sua conta em 2 minutos, envie seu primeiro PDF e veja o plano pronto.</p>
-            <Link href="/cadastro" className="relative mt-7 inline-flex h-12 items-center gap-2 rounded-xl bg-white px-6 font-semibold text-[#3b2fd6] transition hover:bg-white/90">
+            <Link href="/cadastro" className="relative mt-7 inline-flex h-12 items-center gap-2 rounded-xl bg-white px-6 font-semibold text-[#c2410c] transition hover:bg-white/90">
               Começar grátis <ArrowRight size={18} />
             </Link>
           </div>
@@ -239,7 +239,7 @@ function PriceCard({ label, price, period, highlight }: { label: string; price: 
 function HeroMockup() {
   return (
     <div className="relative mx-auto w-full max-w-sm" aria-hidden>
-      <div className="absolute -inset-6 -z-10 rounded-[3rem] bg-gradient-to-br from-[#6d5dfc]/30 to-[#3b82f6]/20 blur-2xl" />
+      <div className="absolute -inset-6 -z-10 rounded-[3rem] bg-gradient-to-br from-[#f97316]/30 to-[#f59e0b]/20 blur-2xl" />
       <div className="rounded-[2.2rem] border border-border bg-surface p-3 shadow-2xl">
         <div className="rounded-[1.7rem] border border-border bg-background p-4">
           <div className="flex items-center justify-between text-xs text-muted">

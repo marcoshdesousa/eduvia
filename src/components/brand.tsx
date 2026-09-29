@@ -1,23 +1,32 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-/** Símbolo do Eduvia: um livro aberto de onde sai um caminho ("via") até a estrela (o objetivo). */
+/** Símbolo do Eduvia: a raposa geométrica (esperta, curiosa, rápida para aprender). */
 export function LogoMark({ className }: { className?: string }) {
   // fundo em CSS (gradiente de SVG com id repetido some quando há outra logo escondida na página)
   return (
-    <span className={cn("inline-block size-8 shrink-0 overflow-hidden rounded-[28%] bg-gradient-to-br from-[#6d5dfc] to-[#3b82f6]", className)} aria-hidden="true">
-    <svg viewBox="0 0 64 64" className="size-full">
-      <path d="M8 41.5 Q20 36.5 31 42 V52.5 Q20 47 8 52 Z" fill="#fff" />
-      <path d="M56 41.5 Q44 36.5 33 42 V52.5 Q44 47 56 52 Z" fill="#e0e7ff" />
-      <g fill="#5eead4">
-        <circle cx="32" cy="36.5" r="2.5" />
-        <circle cx="27.6" cy="30.8" r="2.4" />
-        <circle cx="28.8" cy="24.2" r="2.3" />
-        <circle cx="34" cy="20" r="2.2" />
-      </g>
-      <path d="M43.5 7.5 l2.4 5.4 5.4 2.4 -5.4 2.4 -2.4 5.4 -2.4 -5.4 -5.4 -2.4 5.4 -2.4z" fill="#fff" />
-    </svg>
+    <span className={cn("inline-block size-8 shrink-0 overflow-hidden rounded-[26%] bg-gradient-to-br from-[#1e293b] to-[#334155]", className)} aria-hidden="true">
+      <svg viewBox="0 0 64 64" className="size-full">
+        <FoxShape />
+      </svg>
     </span>
+  );
+}
+
+/** A raposa (sem fundo), no espaço 64×64. */
+export function FoxShape() {
+  return (
+    <>
+      <path d="M12 12 L24 24 L16 30Z" fill="#fb923c" />
+      <path d="M52 12 L40 24 L48 30Z" fill="#f97316" />
+      <path d="M16 30 L24 24 L32 26 L40 24 L48 30 L44 42 L32 52 L20 42Z" fill="#fb923c" />
+      <path d="M32 26 L40 24 L48 30 L44 42 L32 52Z" fill="#ea580c" />
+      <path d="M20 42 L32 52 L26 40Z M44 42 L32 52 L38 40Z" fill="#fff7ed" />
+      <path d="M26 40 L32 52 L38 40 L32 44Z" fill="#ffedd5" />
+      <path d="M24 34 l4 2 -4 1Z M40 34 l-4 2 4 1Z" fill="#0f172a" />
+      <path d="M30 48 L34 48 L32 51Z" fill="#0f172a" />
+      <path d="M14 14 L20 22 L17 25Z M50 14 L44 22 L47 25Z" fill="#fff7ed" opacity=".8" />
+    </>
   );
 }
 

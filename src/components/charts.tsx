@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type Colors = { primary: string; surface: string; border: string; muted: string; surface2: string };
-const FALLBACK: Colors = { primary: "#7c7cf8", surface: "#12151c", border: "#252a35", muted: "#8b93a3", surface2: "#1a1e27" };
+const FALLBACK: Colors = { primary: "#fb923c", surface: "#12151c", border: "#252a35", muted: "#8b93a3", surface2: "#1a1e27" };
 
 /** SVG não resolve var(--x) em atributos: lê as cores do tema atual (e relê ao trocar o tema). */
 function useChartColors(): Colors {

@@ -74,7 +74,7 @@ e2e/                   testes de ponta a ponta (Playwright)
 
 ## Marca, site e atendimento
 
-- **Logo:** um livro aberto de onde sai um caminho pontilhado ("via") até a estrela (o objetivo). Símbolo em `src/components/brand.tsx` (`LogoMark`), favicon em `src/app/icon.svg`, ícones do app em `public/`.
+- **Logo:** raposa geométrica laranja sobre fundo grafite; paleta do site em laranja (`--primary` em `src/app/globals.css`). Símbolo em `src/components/brand.tsx` (`LogoMark`), favicon em `src/app/icon.svg`, ícones do app em `public/`.
 - **Página inicial** (`src/app/page.tsx`): apresentação, como funciona, recursos, preço (lido do plano no banco), perguntas frequentes (inclui "por que pedimos o CPF") e rodapé.
 - **Redes sociais:** em **/admin → Site**, cadastre Instagram, WhatsApp, TikTok e X. Só as preenchidas aparecem no rodapé.
 - **Suporte:** o aluno escreve em **Mais → Suporte** (`/suporte`); a equipe vê as conversas em **/admin → Suporte** (com o nº de não lidas), responde por lá e o aluno recebe uma notificação.
