@@ -11,22 +11,68 @@ export type AiTask = "outline" | "edital" | "session" | "grade" | "ocr" | "quest
 /** Partes de uma mensagem: texto, PDF ou imagem (base64). */
 export type AiPart = { type: "text"; text: string } | { type: "pdf"; data: string } | { type: "image"; mediaType: string; data: string };
 
-const API = "https://generativelanguage.googleapis.com/v1beta";
+const API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
 
 /**
- * Modelos tentados em ordem. A cota grátis do Google é separada por modelo: se um esgota no dia,
- * o próximo assume. Configure com GEMINI_MODELS (lista separada por vírgula) ou GEMINI_MODEL_<TAREFA>.
+ * Modelos de reserva (se a lista do Google não puder ser lida). Na prática, os modelos são descobertos
+ * com a própria chave do aluno (ListModels), porque o Google aposenta e renomeia modelos com o tempo.
+ * A cota grátis é separada por modelo: se um esgota no dia, o próximo assume.
+ * Dá para forçar a ordem com GEMINI_MODELS (lista separada por vírgula) ou GEMINI_MODEL_<TAREFA>.
  */
-const DEFAULT_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+const FALLBACK_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
 
 /** Tarefas simples rodam sem "pensar" (mais rápidas e leves na cota). */
 const NO_THINKING: AiTask[] = ["grade", "ocr", "tutor"];
 
-export function modelChain(task: AiTask): string[] {
-  const list = (process.env.GEMINI_MODELS || "").split(",").map((m) => m.trim()).filter(Boolean);
-  const chain = list.length ? list : DEFAULT_MODELS;
+type ModelInfo = { name?: string; supportedGenerationMethods?: string[] };
+const discovered = new Map<string, { models: string[]; at: number }>();
+
+/** Ordena os modelos "flash" disponíveis: aliases -latest, depois versão mais nova, estável antes de preview, flash antes de lite. */
+export function rankModels(names: string[]): string[] {
+  const re = /^gemini-(?:(\d+(?:\.\d+)?)-)?flash(-lite)?(?:-(latest|preview[\w-]*|\d{3}))?$/;
+  const scored = names.flatMap((n) => {
+    const m = n.match(re);
+    if (!m || /tts|image|audio|live|native/.test(n)) return []; // só texto
+    const alias = !m[1] && m[3] === "latest";
+    if (!m[1] && !alias) return [];
+    const version = alias ? 999 : parseFloat(m[1]);
+    const preview = m[3]?.startsWith("preview") ? 1 : 0;
+    return [{ n, key: [-version, preview, m[2] ? 1 : 0, n.length] }];
+  });
+  scored.sort((x, y) => x.key.reduce((acc, v, i) => acc || v - y.key[i], 0));
+  return scored.map((s) => s.n);
+}
+
+async function discoverModels(key: string): Promise<string[]> {
+  const hit = discovered.get(key);
+  if (hit && Date.now() - hit.at < 6 * 3600_000) return hit.models;
+  const names: string[] = [];
+  try {
+    let page = "";
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch(`${API}/models?pageSize=200${page ? `&pageToken=${page}` : ""}`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) break;
+      const body = (await res.json()) as { models?: ModelInfo[]; nextPageToken?: string };
+      for (const m of body.models ?? []) {
+        if (m.name && m.supportedGenerationMethods?.includes("generateContent")) names.push(m.name.replace(/^models\//, ""));
+      }
+      if (!body.nextPageToken) break;
+      page = body.nextPageToken;
+    }
+  } catch (e) {
+    console.error("[gemini] não foi possível listar os modelos:", (e as Error).message);
+  }
+  const ranked = rankModels(names).slice(0, 6);
+  if (ranked.length) discovered.set(key, { models: ranked, at: Date.now() });
+  return ranked;
+}
+
+export async function modelChain(task: AiTask, key: string): Promise<string[]> {
+  const env = (process.env.GEMINI_MODELS || "").split(",").map((m) => m.trim()).filter(Boolean);
   const override = process.env[`GEMINI_MODEL_${task.toUpperCase()}`]?.trim();
-  return override ? [override, ...chain.filter((m) => m !== override)] : chain;
+  const found = env.length ? [] : await discoverModels(key);
+  const chain = [...(override ? [override] : []), ...env, ...found, ...FALLBACK_MODELS];
+  return [...new Set(chain)];
 }
 
 /** Modo simulado (desenvolvimento e testes): AI_MODE=mock. Aceita qualquer chave e gera conteúdo local. */
@@ -37,6 +83,15 @@ export function isMockAi(): boolean {
 /** Erros que o aluno precisa ver (não adianta a fila tentar de novo sozinha). */
 export class AiUserError extends Error {}
 export class AiRefusalError extends AiUserError {}
+/** Nenhum modelo respondeu (fora do ar, modelo aposentado, erro do Google). `details` vai para o log e para o teste do admin. */
+export class AiUnavailableError extends AiUserError {
+  constructor(
+    message: string,
+    readonly details: string,
+  ) {
+    super(message);
+  }
+}
 /** Sem chave, ou chave recusada pelo Google. */
 export class AiKeyError extends AiUserError {}
 /** A cota da chave do aluno acabou (por minuto ou no dia). */
@@ -160,19 +215,25 @@ type GeminiResponse = {
 
 async function generate(req: Request): Promise<string> {
   const key = await keyFor(req.userId);
-  const chain = modelChain(req.task).filter((m) => !unavailable.has(m));
+  const chain = (await modelChain(req.task, key)).filter((m) => !unavailable.has(m));
+  const errors: string[] = [];
   let lastQuota: { daily: boolean; retryAt: Date } | null = null;
   let lastError: unknown = null;
 
   for (const model of chain) {
     let useSchema = !!req.schema;
+    let simple = false; // 2ª tentativa: sem esquema e sem configuração de raciocínio
     for (let attempt = 0; attempt < 2; attempt++) {
-      const generationConfig: Record<string, unknown> = { maxOutputTokens: req.maxTokens };
+      // folga para o "pensamento" dos modelos 2.5+ (que conta no limite de saída)
+      const generationConfig: Record<string, unknown> = { maxOutputTokens: Math.min(65_536, req.maxTokens * 2) };
       if (req.schema) {
         generationConfig.responseMimeType = "application/json";
         if (useSchema) generationConfig.responseJsonSchema = geminiSchema(req.schema);
       }
-      if (model.startsWith("gemini-2.5-flash") && NO_THINKING.includes(req.task)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      if (simple) {
+        // sem extras
+      } else if (/^gemini-2\.5-flash/.test(model)) generationConfig.thinkingConfig = { thinkingBudget: NO_THINKING.includes(req.task) ? 0 : 2048 };
+      else if (/^gemini-3/.test(model)) generationConfig.thinkingConfig = { thinkingLevel: "low" };
       const system = useSchema || !req.schema ? req.system : `${req.system}\n\nResponda somente com JSON válido neste formato (JSON Schema):\n${JSON.stringify(geminiSchema(req.schema))}`;
 
       const url = `${API}/models/${model}:${req.onText ? "streamGenerateContent?alt=sse" : "generateContent"}`;
@@ -186,6 +247,7 @@ async function generate(req: Request): Promise<string> {
         });
       } catch (e) {
         lastError = e;
+        errors.push(`${model}: ${(e as Error).message}`);
         break; // rede/timeout: tenta o próximo modelo
       }
 
@@ -193,6 +255,7 @@ async function generate(req: Request): Promise<string> {
         const body = (await res.json().catch(() => ({}))) as GoogleError;
         if (res.status === 404) {
           unavailable.add(model);
+          errors.push(`${model}: não existe (404)`);
           break;
         }
         if (res.status === 429) {
@@ -202,10 +265,14 @@ async function generate(req: Request): Promise<string> {
         if (isKeyProblem(res.status, body)) {
           throw new AiKeyError("Sua chave de acesso do Google não funciona mais. Cole uma nova em Ajustes → Chave de acesso.");
         }
-        if (res.status === 400 && useSchema) {
-          useSchema = false; // modelo sem suporte ao esquema: pede o JSON pelo texto
+        if (res.status === 400 && (useSchema || generationConfig.thinkingConfig)) {
+          // modelo sem suporte ao esquema ou à configuração de raciocínio: tenta de novo mais simples
+          errors.push(`${model}: ${res.status} ${body.error?.message ?? ""}`);
+          useSchema = false;
+          simple = true;
           continue;
         }
+        errors.push(`${model}: ${res.status} ${body.error?.message ?? ""}`);
         lastError = new Error(`Gemini ${model} respondeu ${res.status}: ${body.error?.message ?? ""}`);
         break;
       }
@@ -216,7 +283,11 @@ async function generate(req: Request): Promise<string> {
       if (data.promptFeedback?.blockReason || ["SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION"].includes(candidate?.finishReason ?? "")) {
         throw new AiRefusalError("A IA não conseguiu processar este conteúdo.");
       }
-      if (candidate?.finishReason === "MAX_TOKENS" && req.schema) throw new Error(`Resposta da IA truncada (${req.task}).`);
+      if (candidate?.finishReason === "MAX_TOKENS" && req.schema) {
+        errors.push(`${model}: resposta cortada (MAX_TOKENS)`);
+        lastError = new Error(`Resposta da IA truncada (${req.task}).`);
+        break; // tenta o próximo modelo
+      }
       return (candidate?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? "").join("");
     }
   }
@@ -225,7 +296,8 @@ async function generate(req: Request): Promise<string> {
     if (req.userId) await db.user.update({ where: { id: req.userId }, data: { aiPausedUntil: lastQuota.retryAt } }).catch(() => {});
     throw quotaError(lastQuota.retryAt, lastQuota.daily);
   }
-  throw lastError instanceof Error ? lastError : new Error("Nenhum modelo do Gemini disponível.");
+  console.error(`[gemini] ${req.task} falhou em todos os modelos:`, errors.join(" | ") || String(lastError));
+  throw new AiUnavailableError("Não conseguimos gerar agora. Tente de novo em alguns minutos.", errors.join("\n") || String(lastError ?? "sem modelos"));
 }
 
 /** Lê a resposta em SSE (streamGenerateContent), repassando o texto conforme chega. */
@@ -292,7 +364,8 @@ export async function callStructured<S extends z.ZodType>(opts: {
   // raro: JSON fora do formato. Uma nova tentativa costuma resolver.
   const retry = opts.schema.safeParse(parseJson(await generate(request)));
   if (retry.success) return retry.data;
-  throw new Error(`Resposta da IA fora do formato (${opts.task}).`);
+  console.error(`[gemini] ${opts.task}: JSON fora do formato`, retry.error.issues.slice(0, 3));
+  throw new AiUnavailableError("A IA respondeu fora do formato esperado. Tente de novo.", `JSON inválido em ${opts.task}: ${retry.error.issues[0]?.message ?? ""}`);
 }
 
 function parseJson(text: string): unknown {

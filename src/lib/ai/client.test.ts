@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { geminiSchema, nextGoogleReset, parseQuota } from "./client";
+import { geminiSchema, nextGoogleReset, parseQuota, rankModels } from "./client";
 
 describe("Gemini", () => {
   it("cota por minuto usa o retryDelay do Google", () => {
@@ -24,5 +24,9 @@ describe("Gemini", () => {
     expect(s).not.toHaveProperty("$schema");
     expect(s).not.toHaveProperty("additionalProperties");
     expect(s).toMatchObject({ type: "object", required: ["a", "b"], properties: { a: { type: "string", description: "x" }, b: { type: "array" } } });
+  });
+  it("escolhe os modelos flash disponíveis na chave, do mais novo ao mais antigo", () => {
+    const names = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3-flash-preview", "gemini-flash-latest", "gemini-3.1-flash", "text-embedding-004", "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-lite"];
+    expect(rankModels(names)).toEqual(["gemini-flash-latest", "gemini-3.1-flash", "gemini-3.1-flash-lite", "gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite"]);
   });
 });

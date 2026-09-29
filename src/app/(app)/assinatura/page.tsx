@@ -58,7 +58,7 @@ export default async function Page() {
           {access.reason === "subscription"
             ? `Plano ${access.interval === "WEEK" ? "semanal (7 dias)" : "mensal (30 dias)"} válido até ${longDate(access.until)}. Para continuar depois disso, é só renovar pelo WhatsApp.`
             : access.reason === "dev"
-              ? "Cobrança desativada neste ambiente (BILLING_ENFORCED=false)."
+              ? "Tudo liberado (conta de administrador ou cobrança desativada)."
               : "Você está no plano Grátis, para testar com limites bem pequenos. Assine o Eduvia para liberar tudo, com limites diários bem maiores."}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">

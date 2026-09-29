@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { addDays, today } from "@/lib/core/dates";
 import { DEFAULT_PLANS, isUnlimited, normalizeLimits, PAID_PLAN, PERIOD_DAYS, type PlanLimits, type PlanSlug } from "@/lib/plans";
 
-type UserLike = { id: string; timezone?: string };
+type UserLike = { id: string; timezone?: string; isAdmin?: boolean };
 
 export type PlanRow = { slug: string; name: string; order: number; priceWeekCents: number; priceMonthCents: number; limits: PlanLimits; active: boolean };
 
@@ -66,7 +66,8 @@ export async function getAccess(user: UserLike): Promise<Access> {
     const p = plan(sub.planSlug);
     return { mode: "full", reason: "subscription", until: sub.currentPeriodEnd, interval: sub.interval, planSlug: p.slug as PlanSlug, planName: p.name, limits: p.limits };
   }
-  if (!billingEnforced()) {
+  // administradores usam tudo do plano pago (para testar e dar suporte)
+  if (!billingEnforced() || user.isAdmin) {
     const p = plan(PAID_PLAN);
     return { mode: "full", reason: "dev", planSlug: p.slug as PlanSlug, planName: p.name, limits: p.limits };
   }
