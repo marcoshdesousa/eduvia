@@ -21,7 +21,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
 
   const baseWhere = {
     userId: user.id,
-    question: { topic: { subject: { preparation: prepFilter ? { id: prepFilter } : { userId: user.id, status: "ACTIVE" as const } } } },
+    // itens são sempre do próprio aluno; inclui questões de grupos (simulados e listas compartilhadas)
+    question: { topic: { subject: { preparation: prepFilter ? { id: prepFilter } : { status: "ACTIVE" as const } } } },
   };
   const [dueCount, errorCount, items] = await Promise.all([
     db.reviewItem.count({ where: { ...baseWhere, dueAt: { lte: day } } }),

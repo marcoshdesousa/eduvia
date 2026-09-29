@@ -6,6 +6,8 @@ import { ThemeToggle } from "@/components/theme";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { maskCpf } from "@/lib/core/phone";
+import { vapidPublicKey } from "@/lib/notifications";
+import { PushSettings } from "@/components/push-settings";
 import { DeleteAccountForm, PasswordForm, ProfileForm } from "./forms";
 
 export const metadata = { title: "Configurações" };
@@ -31,8 +33,9 @@ export default async function Page() {
       <Card className="space-y-2">
         <CardTitle>Notificações</CardTitle>
         <p className="text-sm text-muted">
-          Suas tarefas do dia aparecem no Início. Lembretes no horário de estudo (notificações no celular/navegador) chegam numa próxima versão.
+          Receba no celular ou no computador o lembrete no horário de estudo, convites de grupo e conquistas.
         </p>
+        <PushSettings vapidKey={vapidPublicKey()} remindersEnabled={user.remindersEnabled} />
       </Card>
       <Card className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle>Aparência</CardTitle>

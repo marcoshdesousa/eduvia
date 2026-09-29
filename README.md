@@ -3,7 +3,7 @@
 Plataforma de estudos com IA para qualquer estudante. O aluno envia os próprios materiais (PDF, DOCX, imagens, texto) e a IA monta o plano de estudo, as sessões com texto e perguntas, as revisões espaçadas e o banco de erros.
 
 - Arquitetura, modelo de dados, telas e fases: [docs/ARQUITETURA.md](docs/ARQUITETURA.md)
-- Status: **Fases 1 e 2 concluídas** (contas por CPF, assinatura manual pelo WhatsApp, plano de estudo, sessões, revisões, jogo da cobrinha, simulados, redação, desempenho e Professor IA). Próxima: Fase 3 (grupos, notificações, conquistas).
+- Status: **Fases 1, 2 e 3 concluídas**: contas por CPF, assinatura manual pelo WhatsApp, plano de estudo, sessões, revisões, jogo da cobrinha, simulados, redação, desempenho, Professor IA, grupos de estudo, conquistas, perfil e notificações (app + push/PWA).
 
 ## Stack
 
@@ -24,7 +24,11 @@ src/
     plan.ts, study.ts  plano de estudo e sessão (conteúdo, respostas, conclusão)
     question-bank.ts   questões por assunto para jogos e simulados (reaproveita; só gera o que falta)
     exams.ts, tutor.ts simulados (montagem por peso, correção) e Professor IA (RAG + streaming)
+    groups.ts          grupos: papéis, convites, mural, compartilhamento, acesso e rankings
+    achievements.ts    conquistas (catálogo + verificação após cada evento)
+    notifications.ts   central de notificações + push (web-push); jobs/reminders.ts: lembretes
   games/               jogos plugáveis: catálogo (catalog.ts) + componente de cada jogo
+public/sw.js           service worker (push e app instalável); src/app/manifest.ts: manifesto PWA
   worker/              processo da fila: materiais, planos, replanejamento diário
 prisma/                schema, migrações, seed
 scripts/               make-admin (dá acesso à tela /admin)
@@ -57,6 +61,27 @@ e2e/                   testes de ponta a ponta (Playwright)
 - **Professor IA** (`/professor`): chat que responde com base nos materiais (citando a página), com resposta em tempo real e atalhos: Explicar, Me testar, Criar questões e Analisar meus erros. Conversas ficam salvas.
 - **Desempenho** (`/desempenho`): acerto geral, tempo de estudo, simulados e pontos críticos; acerto por semana, minutos por dia, e acerto por disciplina e assunto com recomendação.
 - **Custo de IA:** questões geradas ficam no banco e são reaproveitadas; limites diários para quem assina (`FULL_PER_DAY` em `src/lib/billing.ts`: 10 simulados, 5 redações, 100 mensagens ao Professor). No **modo limitado**: 1 jogo por dia; simulados, redação e Professor IA ficam só para assinantes.
+
+## Fase 3 — comunidade e engajamento
+
+- **Grupos** (`/grupos`):
+  - Qualquer pessoa com plano cria um grupo e convida pelo @, com confirmação em tempo real de que o @ existe. O convidado recebe uma notificação e aceita ou recusa. No modo limitado dá para entrar em grupos por convite, mas não criar.
+  - Papéis: **dono** (muda papéis, passa a posse, exclui o grupo), **administrador** (convida, remove membros, modera o mural) e **membro**.
+  - Limites: até 50 pessoas por grupo e 20 grupos por dono.
+  - **Mural:** mensagens com atualização automática; apagar as próprias (admins apagam qualquer uma).
+  - **Compartilhar** o que é seu:
+    - **Material:** os outros abrem o PDF e podem **adicionar à própria preparação**. O arquivo não é reprocessado e os assuntos são copiados, então não há custo de IA.
+    - **Resumo:** o texto de estudo de um assunto.
+    - **Lista de questões:** os outros praticam, e os erros entram no banco de erros deles.
+    - **Simulado:** todos fazem a mesma prova, com **ranking do grupo** por nota e tempo.
+  - **Ranking:** XP da semana de cada membro e lista de simulados do grupo.
+- **Conquistas** (18 medalhas: sessões, sequência, questões, banco de erros, jogo, simulado, redação, domínio de assuntos, grupos, XP) e **níveis com título** (Iniciante → Lenda). Cada conquista nova gera uma notificação. Para criar outra, adicione em `ACHIEVEMENTS` (`src/lib/achievements.ts`).
+- **Perfil** (`/u/@usuario`, atalho `/perfil`): nível, XP, sequência, estatísticas e conquistas. Com o perfil **privado**, os outros veem só nome, @ e nível.
+- **Notificações:**
+  - Sino com contador e central (`/notificacoes`).
+  - Em Ajustes: **ativar notificações neste aparelho** (push via PWA) e ligar/desligar o **lembrete no horário de estudo**, que chega uma vez por dia se houver sessão pendente.
+  - Avisos de convite, entrada no grupo, simulado compartilhado, conquista, teste grátis acabando e plano vencendo.
+  - No iPhone, o push funciona com o Eduvia **adicionado à tela de início** (iOS 16.4+).
 
 ## Rodar localmente
 
@@ -110,6 +135,13 @@ npm run test:e2e                # terminal 3
 14. **Redação:** peça um tema, escreva com alguns erros de propósito ("a gente vamos", "haviam", espaço antes da vírgula) e veja as marcações.
 15. **Professor IA:** pergunte algo do seu material; teste "Me testar" e "Analisar meus erros" (depois de errar algumas questões).
 16. **Desempenho:** confira os gráficos e o detalhamento por assunto (toque na disciplina).
+17. **Grupos** (use duas contas, em navegadores diferentes):
+    - Crie um grupo, convide o outro @ e aceite pelo sino.
+    - Troque mensagens no mural.
+    - Compartilhe um material, uma lista de questões e um simulado.
+    - Com a outra conta: adicione o material à sua preparação, pratique as questões e faça o simulado para ver o ranking.
+18. **Conquistas e perfil:** entre num grupo ou conclua uma sessão e veja a medalha em `/perfil`. Deixe o perfil privado e abra-o com a outra conta.
+19. **Notificações:** em Ajustes, ative neste aparelho (precisa de `VAPID_*` configuradas; você recebe uma notificação de teste). Para testar o lembrete, ponha o horário de estudo da preparação 1–2 minutos à frente e deixe o worker rodando.
 
 ## Deploy no Render
 

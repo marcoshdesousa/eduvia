@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { featureLimitError } from "@/lib/billing";
+import { checkAchievementsSafe } from "@/lib/achievements";
 import { evaluateEssay, suggestEssayTheme } from "@/lib/ai/tasks";
 import { profileVoice } from "@/lib/core/profiles";
 import { normalizeScores, placeAnnotations, RUBRICS, wordCount, type RubricKey } from "@/lib/core/essay";
@@ -95,5 +96,6 @@ export async function submitEssayAction(_: FormState, f: FormData): Promise<Form
     await db.essay.update({ where: { id: essay.id }, data: { status: "ERROR" } });
     return { error: "Não foi possível corrigir agora. Seu texto foi salvo; tente de novo em instantes." };
   }
+  await checkAchievementsSafe(user.id);
   redirect(`/redacao/${essay.id}`);
 }

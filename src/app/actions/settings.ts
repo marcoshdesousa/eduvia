@@ -52,3 +52,8 @@ export async function deleteAccountAction(_: FormState, formData: FormData): Pro
   await deleteUserData(user.id);
   redirect("/");
 }
+
+export async function setRemindersAction(enabled: boolean) {
+  const user = await requireReadyUser();
+  await db.user.update({ where: { id: user.id }, data: { remindersEnabled: enabled } });
+}

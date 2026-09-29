@@ -3,11 +3,24 @@ import { addDays, diffDays, today, weekday } from "@/lib/core/dates";
 
 export const XP = { correct: 5, attempt: 1, sessionDone: 20, reviewDone: 10 } as const;
 
+const TITLES: [number, string][] = [
+  [1, "Iniciante"],
+  [3, "Estudante"],
+  [5, "Dedicado"],
+  [8, "Avançado"],
+  [12, "Mestre"],
+  [16, "Lenda"],
+];
+
+export function levelTitle(level: number) {
+  return [...TITLES].reverse().find(([min]) => level >= min)![1];
+}
+
 export function levelFromXp(xp: number) {
   const level = Math.floor(Math.sqrt(xp / 50)) + 1;
   const currentFloor = 50 * (level - 1) ** 2;
   const nextFloor = 50 * level ** 2;
-  return { level, progress: (xp - currentFloor) / (nextFloor - currentFloor), nextFloor };
+  return { level, title: levelTitle(level), progress: (xp - currentFloor) / (nextFloor - currentFloor), nextFloor };
 }
 
 export async function addXp(userId: string, amount: number, reason: string, refId?: string) {

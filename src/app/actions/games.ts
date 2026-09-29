@@ -5,6 +5,7 @@ import { featureLimitError } from "@/lib/billing";
 import { ensureQuestionPool } from "@/lib/question-bank";
 import { answerQuestion } from "@/lib/study";
 import { addXp } from "@/lib/gamification";
+import { checkAchievementsSafe } from "@/lib/achievements";
 import { answerPoints, getGame, sanitizeConfig } from "@/games/catalog";
 import type { GameEndReason, GameQuestion } from "@/games/types";
 
@@ -83,6 +84,7 @@ export async function finishGameAction(runId: string, reason: GameEndReason): Pr
       data: { score, correct: correct.length, wrong: attempts.length - correct.length, avgTimeMs, endedReason: reason, endedAt: new Date() },
     });
     if (score > 0) await addXp(user.id, Math.round(score / 100), "jogo", run.id);
+    await checkAchievementsSafe(user.id);
   }
   const best = Math.max(score, previousBest._max.score ?? 0);
   return { score, correct: correct.length, wrong: attempts.length - correct.length, avgTimeMs, reason, best, isRecord: score > 0 && score >= best && score > (previousBest._max.score ?? 0) };

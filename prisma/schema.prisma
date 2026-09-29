@@ -39,6 +39,7 @@ model User {
   /// Telefone/WhatsApp (só dígitos, com DDD).
   phone                 String?
   isAdmin               Boolean       @default(false)
+  remindersEnabled      Boolean       @default(true)
   birthDate             DateTime?     @db.Date
   guardianConsentStatus ConsentStatus @default(NOT_REQUIRED)
   profileVisibility     Visibility    @default(PUBLIC)
@@ -72,6 +73,15 @@ model User {
   examAttempts     ExamAttempt[]
   essays           Essay[]
   tutorThreads     TutorThread[]
+  groupsOwned      Group[]
+  memberships      GroupMember[]
+  invitesReceived  GroupInvite[]      @relation("invitee")
+  invitesSent      GroupInvite[]      @relation("inviter")
+  groupShares      GroupShare[]
+  groupMessages    GroupMessage[]
+  achievements     UserAchievement[]
+  notifications    Notification[]
+  pushSubs         PushSubscription[]
   usageCounters    UsageCounter[]
 
   @@map("user")
@@ -827,4 +837,133 @@ model TutorMessage {
   createdAt  DateTime    @default(now())
 
   @@index([threadId, createdAt])
+}
+
+// ───────────────────────── Fase 3: grupos, conquistas, notificações ─────────────────────────
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  members  GroupMember[]
+  invites  GroupInvite[]
+  shares   GroupShare[]
+  messages GroupMessage[]
+}
+
+enum GroupRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model GroupMember {
+  groupId  String
+  group    Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELED
+}
+
+model GroupInvite {
+  id          String       @id @default(cuid())
+  groupId     String
+  group       Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  inviterId   String
+  inviter     User         @relation("inviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  inviteeId   String
+  invitee     User         @relation("invitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  status      InviteStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  respondedAt DateTime?
+
+  @@index([inviteeId, status])
+  @@index([groupId, status])
+}
+
+enum ShareType {
+  MATERIAL
+  SUMMARY
+  QUESTION_SET
+  EXAM
+}
+
+model GroupShare {
+  id         String    @id @default(cuid())
+  groupId    String
+  group      Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sharedById String
+  sharedBy   User      @relation(fields: [sharedById], references: [id], onDelete: Cascade)
+  type       ShareType
+  resourceId String
+  title      String
+  createdAt  DateTime  @default(now())
+
+  @@unique([groupId, type, resourceId])
+  @@index([type, resourceId])
+}
+
+model GroupMessage {
+  id        String    @id @default(cuid())
+  groupId   String
+  group     Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([groupId, createdAt])
+}
+
+model UserAchievement {
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug       String
+  unlockedAt DateTime @default(now())
+
+  @@id([userId, slug])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String?
+  href      String?
+  /// Evita avisos repetidos (ex.: lembrete:prepId:2026-10-01).
+  dedupeKey String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt, createdAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
 }

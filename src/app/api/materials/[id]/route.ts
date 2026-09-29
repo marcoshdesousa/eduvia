@@ -13,6 +13,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   if (!material) return jsonError("Material não encontrado", 404);
 
   await db.topic.deleteMany({ where: { materialId: id, source: "MATERIAL" } });
+  await db.groupShare.deleteMany({ where: { type: "MATERIAL", resourceId: id } });
   await db.material.delete({ where: { id } });
   if (material.blob) {
     const others = await db.material.count({ where: { blobId: material.blob.id } });

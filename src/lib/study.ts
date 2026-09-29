@@ -9,6 +9,8 @@ import { masteryStatus, nextReview, topicReviewDates } from "@/lib/core/spaced";
 import { today } from "@/lib/core/dates";
 import { searchChunks } from "@/lib/rag";
 import { addXp, registerStudy, XP } from "@/lib/gamification";
+import { checkAchievementsSafe } from "@/lib/achievements";
+import { canAccessQuestion } from "@/lib/groups";
 
 export type SourceRef = { label: string; materialId: string; title: string; pageStart: number; pageEnd: number };
 
@@ -211,11 +213,12 @@ export async function answerQuestion(input: {
   contextId?: string;
   timeMs?: number;
 }): Promise<AnswerResult | null> {
-  const question = await db.question.findFirst({
-    where: { id: input.questionId, topic: { subject: { preparation: { userId: input.userId } } } },
+  const question = await db.question.findUnique({
+    where: { id: input.questionId },
     include: { topic: { include: { subject: { include: { preparation: true } } } } },
   });
-  if (!question) return null;
+  // própria preparação, lista de questões ou simulado compartilhado num grupo do aluno
+  if (!question || !(await canAccessQuestion(input.userId, question))) return null;
   const prep = question.topic.subject.preparation;
   const user = await db.user.findUniqueOrThrow({ where: { id: input.userId } });
 
@@ -348,5 +351,6 @@ export async function completeSession(sessionId: string, userId: string) {
   }
   await addXp(userId, planned?.kind === "REVIEW" ? XP.reviewDone : XP.sessionDone, "sessao", sessionId);
   await registerStudy(userId, minutes);
+  await checkAchievementsSafe(userId);
   return session;
 }

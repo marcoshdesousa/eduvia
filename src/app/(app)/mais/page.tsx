@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, ChevronRight, CreditCard, PenLine, RotateCcw, Settings, Shield } from "lucide-react";
+import { Award, BarChart3, ChevronRight, Users, CreditCard, PenLine, RotateCcw, Settings, Shield } from "lucide-react";
 import { requireReadyUser } from "@/lib/session";
 import { ThemeToggle } from "@/components/theme";
 
@@ -8,6 +8,8 @@ export const metadata = { title: "Mais" };
 export default async function Page() {
   const user = await requireReadyUser();
   const links = [
+    { href: "/perfil", label: "Meu perfil e conquistas", icon: Award },
+    { href: "/grupos", label: "Grupos de estudo", icon: Users },
     { href: "/desempenho", label: "Desempenho", icon: BarChart3 },
     { href: "/redacao", label: "Redação", icon: PenLine },
     { href: "/revisoes", label: "Revisões e banco de erros", icon: RotateCcw },

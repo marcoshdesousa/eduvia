@@ -12,6 +12,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardTitle, Stat } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ExamRunner } from "./exam-runner";
+import { canAccessExam, examRanking } from "@/lib/groups";
 
 const LETTERS = "ABCDEFGH";
 
@@ -19,8 +20,9 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const user = await requireReadyUser();
   const { id } = await params;
   const { resultado } = await searchParams;
-  const exam = await db.exam.findFirst({ where: { id, ownerId: user.id }, include: { preparation: true } });
-  if (!exam) notFound();
+  if (!(await canAccessExam(user.id, id))) notFound();
+  const exam = await db.exam.findUniqueOrThrow({ where: { id }, include: { preparation: true, owner: { select: { handle: true } } } });
+  const groupShares = await db.groupShare.findMany({ where: { type: "EXAM", resourceId: exam.id, group: { members: { some: { userId: user.id } } } }, include: { group: true } });
   const attempts = await db.examAttempt.findMany({ where: { examId: exam.id, userId: user.id }, orderBy: { startedAt: "desc" } });
   const open = attempts.find((a) => !a.finishedAt);
   const questions = await db.question.findMany({ where: { id: { in: exam.questionIds } }, include: { topic: { include: { subject: true } } } });
@@ -46,7 +48,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <Link href="/simulados" className="text-sm text-muted hover:text-foreground">← Simulados</Link>
       <h1 className="mt-2 text-2xl font-bold">{exam.title}</h1>
       <p className="text-sm text-muted">
-        {exam.preparation.title} · {exam.questionIds.length} questões · {exam.durationMin} min · {exam.style === "CERTO_ERRADO" ? "certo ou errado" : "múltipla escolha"}
+        {exam.ownerId === user.id ? exam.preparation.title : `Compartilhado por @${exam.owner.handle}`} · {exam.questionIds.length} questões · {exam.durationMin} min · {exam.style === "CERTO_ERRADO" ? "certo ou errado" : "múltipla escolha"}
       </p>
     </div>
   );
@@ -106,6 +108,27 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <Link href="/simulados/novo" className={buttonClass("primary")}>Novo simulado</Link>
         {result.correct! < result.total! && <Link href="/revisoes?filtro=erros" className={buttonClass("ghost")}>Treinar os erros</Link>}
       </div>
+
+      {await Promise.all(
+        groupShares.map(async (gs) => {
+          const ranking = await examRanking(exam.id, gs.groupId);
+          return (
+            <Card key={gs.id}>
+              <CardTitle>Ranking — {gs.group.name}</CardTitle>
+              <ol className="mt-3 divide-y divide-border text-sm">
+                {ranking.map((r, i) => (
+                  <li key={r.user.id} className={cn("flex items-center gap-3 py-2", r.user.id === user.id && "font-semibold")}>
+                    <span className="w-6 text-center">{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span>
+                    <Link href={`/u/${r.user.handle}`} className="flex-1 truncate hover:text-primary">{r.user.name} <span className="text-muted">@{r.user.handle}</span></Link>
+                    <span className="text-muted">{r.correct}/{r.total} · {Math.floor(r.timeSpentSec / 60)}min</span>
+                    <span className="w-10 text-right font-bold">{r.score.toFixed(1).replace(".", ",")}</span>
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          );
+        }),
+      )}
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Gabarito comentado</h2>

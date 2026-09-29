@@ -54,3 +54,8 @@ export const weekdayLong = (i: number) => WEEKDAYS_LONG[i];
 export function formatDay(d: Date, opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short" }): string {
   return new Intl.DateTimeFormat("pt-BR", { ...opts, timeZone: "UTC" }).format(d);
 }
+
+/** Data e hora de um instante no fuso do aluno (ex.: "29 de set., 19:05"). */
+export function formatDateTime(d: Date, tz = DEFAULT_TZ): string {
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: tz, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(d);
+}

@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { ensureQuestionPool, questionStyleFor } from "@/lib/question-bank";
 import { answerQuestion } from "@/lib/study";
 import { addXp } from "@/lib/gamification";
+import { checkAchievementsSafe } from "@/lib/achievements";
+import { canAccessExam } from "@/lib/groups";
 
 export const EXAM_SIZES = [10, 20, 30, 50] as const;
 export const MINUTES_PER_QUESTION = 3;
@@ -64,8 +66,8 @@ export async function createExam(input: { userId: string; preparationId: string;
 export class ExamError extends Error {}
 
 export async function startAttempt(examId: string, userId: string) {
-  const exam = await db.exam.findFirst({ where: { id: examId, ownerId: userId } });
-  if (!exam) return null;
+  if (!(await canAccessExam(userId, examId))) return null;
+  const exam = await db.exam.findUniqueOrThrow({ where: { id: examId } });
   const open = await db.examAttempt.findFirst({ where: { examId, userId, finishedAt: null } });
   if (open) return open;
   return db.examAttempt.create({ data: { examId, userId, deadline: new Date(Date.now() + exam.durationMin * 60_000) } });
@@ -115,5 +117,6 @@ export async function submitAttempt(attemptId: string, userId: string, answers?:
     },
   });
   await addXp(userId, 10 + correct * 2, "simulado", attempt.id);
+  await checkAchievementsSafe(userId);
   return done;
 }

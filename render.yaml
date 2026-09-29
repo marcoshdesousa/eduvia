@@ -30,6 +30,12 @@ envVarGroups:
         sync: false
       - key: WHATSAPP_NUMBER
         value: "5511999999999" # troque pelo número real (DDI + DDD + número)
+      - key: VAPID_PUBLIC_KEY
+        sync: false # gere com: npx web-push generate-vapid-keys
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:suporte@eduvia.app
       - key: BILLING_ENFORCED
         value: "true" # após os 3 dias de teste, a conta entra no modo limitado
 

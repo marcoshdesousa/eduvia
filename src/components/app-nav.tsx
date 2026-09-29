@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BookOpen, CreditCard, GraduationCap, Home, Menu, PenLine, Settings, Shield, Target } from "lucide-react";
+import { Users, BarChart3, BookOpen, CreditCard, GraduationCap, Home, Menu, PenLine, Settings, Shield, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
@@ -10,6 +10,7 @@ const ITEMS = [
   { href: "/praticar", label: "Praticar", icon: Target },
   { href: "/professor", label: "Professor IA", icon: GraduationCap },
   { href: "/redacao", label: "Redação", icon: PenLine },
+  { href: "/grupos", label: "Grupos", icon: Users },
   { href: "/desempenho", label: "Desempenho", icon: BarChart3 },
   { href: "/assinatura", label: "Assinatura", icon: CreditCard },
   { href: "/configuracoes", label: "Ajustes", icon: Settings },
@@ -24,7 +25,7 @@ const MOBILE = [
 ];
 
 const PRACTICE = ["/praticar", "/revisoes", "/jogos", "/simulados"];
-const MORE = ["/mais", "/redacao", "/desempenho", "/assinatura", "/configuracoes", "/admin"];
+const MORE = ["/mais", "/redacao", "/desempenho", "/assinatura", "/configuracoes", "/admin", "/grupos", "/perfil", "/u", "/notificacoes"];
 
 function useActive() {
   const path = usePathname();

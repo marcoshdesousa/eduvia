@@ -96,6 +96,8 @@ async function organizeContent(materialId: string) {
     return;
   }
 
+  if (await copyTopicsFromTwin(material)) return;
+
   const pages = await db.materialPage.findMany({ where: { blobId: material.blobId! }, orderBy: { pageNumber: "asc" } });
   const outline = await extractOutline({
     userId: material.uploaderId,
@@ -129,6 +131,46 @@ async function organizeContent(materialId: string) {
       },
     });
   }
+}
+
+/**
+ * O mesmo arquivo já foi organizado em outra preparação (ex.: material compartilhado num grupo):
+ * copia os assuntos em vez de chamar a IA de novo.
+ */
+async function copyTopicsFromTwin(material: { id: string; blobId: string | null; preparationId: string; subject: { id: string; name: string } | null; preparation: { studentType: import("@/generated/prisma/enums").StudentType } }) {
+  const twins = await db.material.findMany({ where: { blobId: material.blobId, id: { not: material.id } }, select: { id: true } });
+  if (!twins.length) return false;
+  const source = await db.topic.findMany({
+    where: { materialId: { in: twins.map((t) => t.id) }, source: "MATERIAL" },
+    include: { subject: true },
+    orderBy: { order: "asc" },
+  });
+  const fromOne = source.filter((t) => t.materialId === source[0]?.materialId);
+  if (!fromOne.length) return false;
+  const chunks = await db.chunk.findMany({ where: { blobId: material.blobId! }, select: { id: true, pageStart: true, pageEnd: true, tokenCount: true } });
+  const pace = PROFILES[material.preparation.studentType].paceFactor;
+  const baseOrder = await db.topic.count({ where: { subject: { preparationId: material.preparationId } } });
+  for (const [i, t] of fromOne.entries()) {
+    const subject = material.subject ?? (await upsertSubject(material.preparationId, t.subject.name));
+    const linked = chunks.filter((c) => t.pageStart != null && t.pageEnd != null && c.pageStart <= t.pageEnd && c.pageEnd >= t.pageStart);
+    const tokens = linked.reduce((sum, c) => sum + c.tokenCount, 0);
+    await db.topic.create({
+      data: {
+        subjectId: subject.id,
+        title: t.title,
+        description: t.description,
+        order: baseOrder + i,
+        difficulty: t.difficulty,
+        estimatedMinutes: tokens ? estimateMinutes(tokens, pace) : t.estimatedMinutes,
+        source: "MATERIAL",
+        materialId: material.id,
+        pageStart: t.pageStart,
+        pageEnd: t.pageEnd,
+        chunks: { create: linked.map((c) => ({ chunkId: c.id })) },
+      },
+    });
+  }
+  return true;
 }
 
 /** Edital/ementa: cria disciplinas e assuntos com pesos e liga os materiais já enviados. */
