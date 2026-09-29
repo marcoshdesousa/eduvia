@@ -5,7 +5,7 @@ import Link from "next/link";
 import { resetPasswordAction } from "@/app/actions/account";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Field, FormError, Input } from "@/components/ui/form";
-import { CpfInput, PhoneInput } from "@/components/masked-inputs";
+import { CpfInput, PasswordPair, PhoneInput } from "@/components/masked-inputs";
 
 export function ResetForm() {
   const [state, action, pending] = useActionState(resetPasswordAction, undefined);
@@ -22,9 +22,7 @@ export function ResetForm() {
       <FormError message={state?.error} />
       <Field label="CPF" htmlFor="cpf"><CpfInput /></Field>
       <Field label="Telefone (WhatsApp) cadastrado" htmlFor="phone" hint="Para confirmar que a conta é sua."><PhoneInput /></Field>
-      <Field label="Nova senha" htmlFor="password" hint="Mínimo de 8 caracteres.">
-        <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
-      </Field>
+      <PasswordPair label="Nova senha" />
       <Button className="w-full" disabled={pending}>{pending ? "Salvando..." : "Criar nova senha"}</Button>
     </ActionForm>
   );

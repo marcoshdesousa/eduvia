@@ -21,7 +21,8 @@ export async function signUp(page: Page, opts: { name: string; handle: string; p
   await page.getByLabel("Telefone (WhatsApp)").fill(phone);
   await page.locator("#handle").fill(opts.handle);
   await expect(page.getByText("Disponível!")).toBeVisible();
-  await page.getByLabel("Senha").fill(PASSWORD);
+  await page.getByLabel("Senha", { exact: true }).fill(PASSWORD);
+  await page.getByLabel("Confirme a senha").fill(PASSWORD);
   await page.locator('input[name="terms"]').check();
   // passo 2: chave do Gemini
   await page.getByRole("button", { name: "Continuar" }).click();

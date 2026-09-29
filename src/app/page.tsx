@@ -50,8 +50,8 @@ const FAQ = [
     a: "Para garantir uma conta por pessoa e evitar contas falsas ou repetidas para burlar o plano grátis. O CPF também é o seu login. Ele não aparece para outros alunos, não é vendido nem compartilhado e não é usado para nenhuma outra finalidade.",
   },
   {
-    q: "Por que telefone em vez de e-mail?",
-    a: "Porque é mais simples: você entra com o CPF ou o seu @ e, se esquecer a senha, recupera com o CPF e o telefone cadastrado, sem depender de e-mail. É também por onde a assinatura é combinada no WhatsApp. Não mandamos propaganda.",
+    q: "Vocês pedem e-mail ou telefone?",
+    a: "Não pedimos e-mail. Pedimos só o telefone (WhatsApp), que não é usado para mandar mensagens nem propaganda: ele serve apenas para confirmar que a conta é sua se você esquecer a senha. Aí, em \"Esqueci a senha\", você cria uma senha nova. A senha antiga ninguém consegue ver, nem a equipe do Eduvia.",
   },
   {
     q: "Preciso pagar alguma coisa para começar?",

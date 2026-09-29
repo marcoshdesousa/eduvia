@@ -3,7 +3,7 @@ import { ActionForm } from "@/components/action-form";
 import { useActionState } from "react";
 import { changePasswordAction, deleteAccountAction, updateProfileAction } from "@/app/actions/settings";
 import { AvatarPicker } from "@/components/avatar-picker";
-import { PhoneInput } from "@/components/masked-inputs";
+import { PasswordPair, PhoneInput } from "@/components/masked-inputs";
 import { Button } from "@/components/ui/button";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 
@@ -45,10 +45,8 @@ export function PasswordForm() {
     <ActionForm action={action} className="space-y-4">
       <FormError message={state?.error} />
       {state?.message && <p className="text-sm text-success">{state.message}</p>}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Senha atual" htmlFor="currentPassword"><Input id="currentPassword" name="currentPassword" type="password" autoComplete="current-password" /></Field>
-        <Field label="Nova senha" htmlFor="newPassword"><Input id="newPassword" name="newPassword" type="password" autoComplete="new-password" minLength={8} /></Field>
-      </div>
+      <Field label="Senha atual" htmlFor="currentPassword"><Input id="currentPassword" name="currentPassword" type="password" autoComplete="current-password" required /></Field>
+      <PasswordPair name="newPassword" label="Nova senha" />
       <Button variant="secondary" disabled={pending}>Alterar senha</Button>
     </ActionForm>
   );

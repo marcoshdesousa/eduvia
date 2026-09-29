@@ -11,10 +11,17 @@ test("login por CPF ou @ e nova senha pelo CPF + telefone", async ({ page, brows
   const other = await browser.newPage();
   await other.goto("/cadastro");
   await other.getByLabel("Nome", { exact: true }).fill("Outra Pessoa");
+  // CPF inválido é avisado na hora
+  await other.getByLabel("CPF").fill("123.456.789-00");
+  await expect(other.getByText("CPF inválido. Confira os números.")).toBeVisible();
   await other.getByLabel("CPF").fill(cpf);
   await other.getByLabel("Telefone (WhatsApp)").fill("11912345678");
   await other.locator("#handle").fill(`outra.${uid}`);
-  await other.getByLabel("Senha").fill(PASSWORD);
+  await other.getByLabel("Senha", { exact: true }).fill(PASSWORD);
+  // as duas senhas precisam ser iguais
+  await other.getByLabel("Confirme a senha").fill("outra-senha-999");
+  await expect(other.getByText("As senhas não são iguais.")).toBeVisible();
+  await other.getByLabel("Confirme a senha").fill(PASSWORD);
   await other.locator('input[name="terms"]').check();
   await other.getByRole("button", { name: "Continuar" }).click();
   // "Voltar" volta ao passo 1 sem perder o que foi digitado
@@ -45,10 +52,12 @@ test("login por CPF ou @ e nova senha pelo CPF + telefone", async ({ page, brows
   await page.getByLabel("CPF").fill(cpf);
   await page.getByLabel(/Telefone/).fill("11900000000");
   await page.getByLabel("Nova senha").fill("nova-senha-456");
+  await page.getByLabel("Confirme a senha").fill("nova-senha-456");
   await page.getByRole("button", { name: "Criar nova senha" }).click();
   await expect(page.getByText("CPF e telefone não conferem com nenhuma conta.")).toBeVisible();
   await page.getByLabel(/Telefone/).fill(phone);
   await page.getByLabel("Nova senha").fill("nova-senha-456");
+  await page.getByLabel("Confirme a senha").fill("nova-senha-456");
   await page.getByRole("button", { name: "Criar nova senha" }).click();
   await expect(page.getByText(/Senha alterada!/)).toBeVisible();
 

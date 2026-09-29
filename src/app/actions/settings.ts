@@ -40,6 +40,7 @@ export async function changePasswordAction(_: FormState, formData: FormData): Pr
     .object({ currentPassword: z.string().min(1, "Informe a senha atual."), newPassword: z.string().min(8, "A nova senha precisa ter 8+ caracteres.") })
     .safeParse({ currentPassword: formData.get("currentPassword"), newPassword: formData.get("newPassword") });
   if (!p.success) return { error: p.error.issues[0].message };
+  if (p.data.newPassword !== String(formData.get("newPasswordConfirm") ?? "")) return { error: "As senhas novas não são iguais." };
   try {
     await auth.api.changePassword({ body: { ...p.data, revokeOtherSessions: true }, headers: await headers() });
   } catch {

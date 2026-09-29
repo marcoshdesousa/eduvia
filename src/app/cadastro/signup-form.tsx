@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FormError, Input } from "@/components/ui/form";
 import { ProfileFields } from "@/components/profile-fields";
 import { GeminiKeyFields } from "@/components/gemini-key-fields";
+import { PasswordPair } from "@/components/masked-inputs";
 import { cn } from "@/lib/utils";
 
 /** Cadastro em 2 passos: 1) dados da conta; 2) chave do Gemini (com "Voltar", sem perder o que foi digitado). */
@@ -33,9 +34,7 @@ export function SignupForm() {
             <Input id="name" name="name" autoComplete="name" required />
           </Field>
           <ProfileFields />
-          <Field label="Senha" htmlFor="password" hint="Mínimo de 8 caracteres.">
-            <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
-          </Field>
+          <PasswordPair />
           <Button className="w-full">
             Continuar <ArrowRight size={16} />
           </Button>

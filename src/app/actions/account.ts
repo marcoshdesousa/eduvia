@@ -41,6 +41,7 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
   if (name.length < 2) return { error: "Informe seu nome." };
   const password = String(f.get("password") ?? "");
   if (password.length < 8) return { error: "A senha precisa ter pelo menos 8 caracteres." };
+  if (password !== String(f.get("passwordConfirm") ?? "")) return { error: "As senhas não são iguais. Digite a mesma senha nos dois campos." };
   if (!(await allowAttempt(`signup:${await clientIp()}`, 10, 60))) return { error: "Muitas tentativas. Tente de novo mais tarde." };
   const p = await validateProfile(f);
   if ("error" in p) return { error: p.error };
@@ -117,6 +118,7 @@ export async function resetPasswordAction(_: FormState, f: FormData): Promise<Fo
   const password = String(f.get("password") ?? "");
   if (!isValidCpf(cpf)) return { error: "CPF inválido." };
   if (password.length < 8) return { error: "A nova senha precisa ter pelo menos 8 caracteres." };
+  if (password !== String(f.get("passwordConfirm") ?? "")) return { error: "As senhas não são iguais. Digite a mesma senha nos dois campos." };
   if (!(await allowAttempt(`reset:${cpf}`, 5, 30)) || !(await allowAttempt(`reset-ip:${await clientIp()}`, 20, 30))) {
     return { error: "Muitas tentativas. Aguarde 30 minutos." };
   }
