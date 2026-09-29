@@ -41,6 +41,7 @@ model User {
   termsAcceptedAt       DateTime?
   termsVersion          String?
   trialEndsAt           DateTime?
+  billingCustomerId     String?
 
   xp            Int       @default(0)
   currentStreak Int       @default(0)
@@ -582,6 +583,7 @@ model Plan {
 }
 
 enum SubscriptionStatus {
+  PENDING
   ACTIVE
   PAST_DUE
   CANCELED
@@ -597,12 +599,61 @@ model Subscription {
   providerCustomerId     String?
   providerSubscriptionId String?            @unique
   status                 SubscriptionStatus
+  billingType            BillingType
+  /// Fim do período já pago. O acesso vale até esta data (mesmo após cancelar).
   currentPeriodEnd       DateTime
   cancelAtPeriodEnd      Boolean            @default(false)
+  canceledAt             DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
+  payments Payment[]
+
   @@index([userId, status])
+}
+
+enum BillingType {
+  PIX
+  CREDIT_CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  REFUNDED
+  CANCELED
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  subscriptionId    String
+  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  providerPaymentId String        @unique
+  status            PaymentStatus
+  billingType       BillingType
+  valueCents        Int
+  dueDate           DateTime      @db.Date
+  paidAt            DateTime?
+  invoiceUrl        String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([subscriptionId, dueDate])
+}
+
+/// Eventos recebidos do provedor de pagamento (idempotência e auditoria).
+model PaymentEvent {
+  id          String    @id @default(cuid())
+  provider    String
+  eventId     String
+  type        String
+  payload     Json
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([provider, eventId])
 }
 
 model UsageCounter {

@@ -17,9 +17,10 @@ export function billingEnforced() {
   return process.env.BILLING_ENFORCED === "true";
 }
 
+/** Assinatura com período pago em vigor (inclusive cancelada, até o fim do período). */
 export async function activeSubscription(userId: string) {
   return db.subscription.findFirst({
-    where: { userId, status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: new Date() } },
+    where: { userId, status: { in: ["ACTIVE", "PAST_DUE", "CANCELED"] }, currentPeriodEnd: { gt: new Date() } },
     include: { plan: true },
     orderBy: { currentPeriodEnd: "desc" },
   });

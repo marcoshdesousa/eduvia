@@ -3,7 +3,7 @@
 Plataforma de estudos com IA para qualquer estudante. O aluno envia os próprios materiais (PDF, DOCX, imagens, texto) e a IA monta o plano de estudo, as sessões com texto e perguntas, as revisões espaçadas e o banco de erros.
 
 - Arquitetura, modelo de dados, telas e fases: [docs/ARQUITETURA.md](docs/ARQUITETURA.md)
-- Status: **Fase 1 (MVP) concluída.** Próximas: Fase 2 (jogo da cobrinha, simulados, redação, painel de desempenho, Professor IA) e Fase 3 (grupos, pagamento, notificações, conquistas).
+- Status: **Fase 1 (MVP) concluída + assinatura com Asaas (antecipada da Fase 3).** Próximas: Fase 2 (jogo da cobrinha, simulados, redação, painel de desempenho, Professor IA) e Fase 3 (grupos, notificações, conquistas).
 
 ## Stack
 
@@ -43,12 +43,13 @@ npm run worker                  # em outro terminal: processa PDFs, planos e lem
 - **Sem `ANTHROPIC_API_KEY`** o app funciona em **modo de demonstração**: o texto de estudo e as questões são montados com frases do próprio material (sem custo, bom para testar o fluxo). Com a chave, tudo é gerado pelo Claude.
 - **Sem `VOYAGE_API_KEY`** a busca nos materiais usa vetores locais simples. Se ativar a Voyage depois, reenvie os materiais (os vetores antigos não são compatíveis).
 - **Sem `SMTP_URL`** os e-mails (lembrete, consentimento do responsável, redefinição de senha) aparecem no terminal. Com o Mailpit: `SMTP_URL="smtp://localhost:1025"`.
+- **Sem `ASAAS_API_KEY`** os pagamentos rodam em **modo simulado**: a tela de pagamento mostra um botão "Simular pagamento".
 - Login com Google: preencha `GOOGLE_CLIENT_ID/SECRET` (redirecionamento: `{APP_URL}/api/auth/callback/google`). Sem eles o botão não aparece.
 
 ## Testes
 
 ```bash
-npm test                        # unidade: planner, revisão espaçada, @, leitor de edital simulado
+npm test                        # unidade: planner, revisão espaçada, @, edital simulado, CPF, pagamentos
 npm run typecheck
 
 # ponta a ponta (com o app e o worker rodando, de preferência com AI_MODE=mock):
@@ -69,7 +70,8 @@ npm run test:e2e                # terminal 3
 7. **Sessão de estudo**: texto com links para a página do PDF → destaques e "para entender" → recuperação ativa (resposta aberta corrigida) → objetivas com explicação → concluir.
 8. **Banco de erros e revisões**: as erradas aparecem em Revisões → Banco de erros; saem depois de 2 acertos seguidos. Ao concluir um assunto, R1–R4 (1, 7, 15, 30 dias, configuráveis) entram no plano.
 9. **Início**: o que fazer hoje, sequência de dias, XP/nível, meta semanal, pontos de atenção (assuntos com menos de 50% de acerto).
-10. **Configurações**: trocar @, tema claro/escuro, exportar dados (JSON), excluir conta.
+10. **Assinatura** (`/assinatura`): escolha Semanal (R$ 7) ou Mensal (R$ 15), Pix ou cartão, informe um CPF válido → tela com QR code e Pix copia e cola, que confirma sozinha quando o pagamento cai. Depois: histórico de pagamentos e cancelamento (o acesso continua até o fim do período pago). Com `BILLING_ENFORCED=true`, quem passou dos 3 dias sem assinar é levado para essa tela.
+11. **Configurações**: trocar @, tema claro/escuro, exportar dados (JSON), excluir conta.
 
 ## Deploy no Render
 
@@ -77,11 +79,22 @@ O `render.yaml` cria o **web**, o **worker** e o **PostgreSQL** (que suporta pgv
 
 1. Crie um bucket no **Cloudflare R2** (ou S3) e uma chave de acesso. Configure o CORS do bucket para aceitar `PUT` e `GET` vindos do domínio do app (o navegador envia os arquivos direto para o bucket).
 2. No Render: **New → Blueprint** → selecione o repositório.
-3. Preencha as variáveis do grupo `eduvia-shared` (URL do app, chaves de IA, R2, SMTP, Google).
+3. Preencha as variáveis do grupo `eduvia-shared` (URL do app, chaves de IA, R2, SMTP, Google, Asaas) e cadastre o webhook do Asaas (seção abaixo).
 4. As migrações e o seed rodam sozinhos em cada deploy (`preDeployCommand`).
+
+## Pagamentos (Asaas)
+
+1. Crie a conta no Asaas (use primeiro o **sandbox**: https://sandbox.asaas.com) e gere a chave de API em Integrações → Chaves de API. Coloque em `ASAAS_API_KEY` e `ASAAS_ENV`.
+2. Cadastre o webhook em Integrações → Webhooks: URL `{APP_URL}/api/webhooks/asaas`, token de autenticação igual a `ASAAS_WEBHOOK_TOKEN`, eventos de **cobranças** e **assinaturas**.
+3. Como funciona:
+   - O checkout cria o cliente (nome + CPF/CNPJ de quem paga; para menores, o responsável) e a assinatura semanal/mensal no Asaas.
+   - **Pix**: o app mostra o QR code; a cada renovação o Asaas gera um novo Pix e avisa o cliente por e-mail, e a cobrança aparece em `/assinatura`.
+   - **Cartão**: o aluno informa o cartão na página segura do Asaas (o Eduvia nunca recebe os dados do cartão); as renovações são automáticas.
+   - Cada pagamento confirmado estende o acesso em 1 semana ou 1 mês. Eventos repetidos são ignorados (idempotência). Estorno encerra o acesso.
+   - Cancelar para a renovação; o acesso segue até o fim do período pago. Trocar de plano: cancele e assine o outro, que só cobra quando o período atual terminar.
 
 ## Notas de desenvolvimento
 
 - Ao criar migrações com `prisma migrate dev`, o Prisma tenta remover o índice vetorial `Chunk_embedding_hnsw_idx` (criado em SQL). Apague essa linha `DROP INDEX` da migração gerada.
 - Modelo e esforço da IA por tarefa: `src/lib/ai/client.ts` (variáveis `AI_MODEL_DEFAULT`, `AI_MODEL_SESSION`, `AI_MODEL_GRADE`...). O custo de cada chamada fica na tabela `AiUsage`.
-- Cobrança: `BILLING_ENFORCED=true` passa a exigir assinatura depois dos 3 dias de teste. O checkout (Asaas, Pix + cartão) entra na Fase 3.
+- Cobrança: `BILLING_ENFORCED=true` passa a exigir assinatura depois dos 3 dias de teste (padrão no `render.yaml`).

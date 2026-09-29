@@ -15,7 +15,7 @@ export default function Page() {
       <h2>4. Conteúdo gerado pela IA</h2>
       <p>Textos, questões e correções são gerados automaticamente a partir do seu material e podem conter imprecisões. Use-os como apoio ao estudo e confira as informações importantes na fonte indicada.</p>
       <h2>5. Planos e pagamento</h2>
-      <p>Novas contas têm 3 dias de teste grátis com acesso completo. Depois, o acesso continua mediante assinatura semanal (R$ 7) ou mensal (R$ 15), com renovação automática e cancelamento a qualquer momento, válido até o fim do período pago.</p>
+      <p>Novas contas têm 3 dias de teste grátis com acesso completo. Depois, o acesso continua mediante assinatura semanal (R$ 7) ou mensal (R$ 15), com renovação automática e cancelamento a qualquer momento, válido até o fim do período pago. Os pagamentos (Pix e cartão) são processados pelo Asaas; o Eduvia não armazena dados de cartão.</p>
       <h2>6. Uso adequado</h2>
       <p>Não é permitido tentar acessar dados de outros usuários, sobrecarregar o serviço, usar robôs para extrair conteúdo ou revender o acesso.</p>
       <h2>7. Encerramento</h2>

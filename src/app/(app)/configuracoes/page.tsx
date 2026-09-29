@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Download, LogOut } from "lucide-react";
 import { requireReadyUser } from "@/lib/session";
 import { signOutAction } from "@/app/actions/account";
@@ -21,6 +22,10 @@ export default async function Page() {
       <Card className="space-y-4">
         <CardTitle>Senha</CardTitle>
         <PasswordForm />
+      </Card>
+      <Card className="flex flex-wrap items-center justify-between gap-3">
+        <CardTitle>Assinatura</CardTitle>
+        <Link href="/assinatura" className={buttonClass("outline")}>Gerenciar assinatura</Link>
       </Card>
       <Card className="space-y-2">
         <CardTitle>Notificações</CardTitle>
