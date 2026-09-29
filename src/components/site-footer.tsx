@@ -12,7 +12,7 @@ export async function SiteFooter() {
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-3 lg:col-span-2">
           <Link href="/" className="inline-flex items-center gap-2 text-xl"><LogoMark /><Wordmark /></Link>
-          <p className="max-w-sm text-sm text-muted">Seu material, seu ritmo, sua IA. O Eduvia transforma seus PDFs em plano de estudo, sessões, revisões e simulados.</p>
+          <p className="max-w-sm text-sm text-muted">Seu material, no seu ritmo. O Eduvia transforma seus PDFs em plano de estudo, sessões, revisões e simulados.</p>
           {socials.length > 0 && (
             <ul className="flex gap-2 pt-1" aria-label="Redes sociais">
               {socials.map((s) => (

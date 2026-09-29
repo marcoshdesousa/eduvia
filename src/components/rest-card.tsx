@@ -64,12 +64,12 @@ export function RestCard({
         )}
         <li className="flex items-start gap-2">
           <RotateCcw size={18} className="mt-0.5 shrink-0 text-primary" />
-          <span><strong>Fazer revisões</strong> e o banco de erros: não gastam a sua IA. <Link href="/revisoes" className="text-primary underline">Ir para revisões</Link></span>
+          <span><strong>Fazer revisões</strong> e o banco de erros: estão sempre liberados. <Link href="/revisoes" className="text-primary underline">Ir para revisões</Link></span>
         </li>
         {rechargeAt && (
           <li className="flex items-start gap-2">
             <Timer size={18} className="mt-0.5 shrink-0 text-warning" />
-            <span>Sua IA recarrega em <strong>{until(rechargeAt)}</strong>.</span>
+            <span>Tudo volta a ser liberado em <strong>{until(rechargeAt)}</strong>.</span>
           </li>
         )}
       </ul>

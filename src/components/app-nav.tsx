@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, BarChart3, BookOpen, BrainCircuit, LifeBuoy, CreditCard, GraduationCap, Home, Menu, PenLine, Settings, Shield, Target } from "lucide-react";
+import { Users, BarChart3, BookOpen, LifeBuoy, CreditCard, GraduationCap, Home, Menu, PenLine, Settings, Shield, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
@@ -12,7 +12,6 @@ const ITEMS = [
   { href: "/redacao", label: "Redação", icon: PenLine },
   { href: "/grupos", label: "Grupos", icon: Users },
   { href: "/desempenho", label: "Desempenho", icon: BarChart3 },
-  { href: "/minha-ia", label: "Minha IA", icon: BrainCircuit },
   { href: "/assinatura", label: "Assinatura", icon: CreditCard },
   { href: "/suporte", label: "Suporte", icon: LifeBuoy },
   { href: "/configuracoes", label: "Ajustes", icon: Settings },

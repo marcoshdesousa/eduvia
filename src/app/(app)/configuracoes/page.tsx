@@ -28,8 +28,8 @@ export default async function Page() {
         <PasswordForm />
       </Card>
       <Card className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle>Minha IA (Gemini)</CardTitle>
-        <Link href="/minha-ia" className={buttonClass("outline")}>Ver ou trocar chave</Link>
+        <CardTitle>Chave de acesso</CardTitle>
+        <Link href="/minha-ia" className={buttonClass("outline")}>Ver ou trocar</Link>
       </Card>
       <Card className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle>Assinatura</CardTitle>

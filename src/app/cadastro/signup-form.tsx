@@ -58,7 +58,7 @@ export function SignupForm() {
 }
 
 function Steps({ step }: { step: 1 | 2 }) {
-  const items = ["Seus dados", "Sua IA"];
+  const items = ["Seus dados", "Ativação"];
   return (
     <ol className="flex items-center gap-2 text-xs font-medium">
       {items.map((label, i) => (

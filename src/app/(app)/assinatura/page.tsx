@@ -59,7 +59,7 @@ export default async function Page() {
             ? `Plano ${access.interval === "WEEK" ? "semanal (7 dias)" : "mensal (30 dias)"} válido até ${longDate(access.until)}. Para continuar depois disso, é só renovar pelo WhatsApp.`
             : access.reason === "dev"
               ? "Cobrança desativada neste ambiente (BILLING_ENFORCED=false)."
-              : "Você está no plano Grátis, para testar com limites bem pequenos. Assine o Eduvia para usar sua IA de verdade: os limites de cada dia ficam bem maiores."}
+              : "Você está no plano Grátis, para testar com limites bem pequenos. Assine o Eduvia para liberar tudo, com limites diários bem maiores."}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {meters.map((m) => (
@@ -77,7 +77,7 @@ export default async function Page() {
       <Card className="space-y-4 border-primary">
         <div>
           <CardTitle>Plano {paid.name}: tudo liberado</CardTitle>
-          <p className="mt-1 text-sm text-muted">Um plano só, com todos os recursos. Os limites por dia existem para a sua IA do Gemini não estourar.</p>
+          <p className="mt-1 text-sm text-muted">Um plano só, com todos os recursos liberados.</p>
         </div>
         <ul className="grid gap-2 text-sm sm:grid-cols-2">
           {planFeatures(paid.limits).map((f) => (

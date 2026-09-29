@@ -52,7 +52,7 @@ export class AiQuotaError extends AiUserError {
 
 // ───────────── Chave do aluno ─────────────
 
-const NO_KEY = "Conecte sua IA do Gemini para usar este recurso (Perfil → Minha IA).";
+const NO_KEY = "Para usar este recurso, conecte sua chave de acesso em Ajustes → Chave de acesso.";
 
 async function keyFor(userId: string | null | undefined): Promise<string> {
   if (!userId) throw new AiKeyError(NO_KEY);
@@ -66,8 +66,8 @@ async function keyFor(userId: string | null | undefined): Promise<string> {
 function quotaError(retryAt: Date, daily: boolean) {
   return new AiQuotaError(
     daily
-      ? "Sua IA do Gemini chegou ao limite grátis de hoje. Descanse um pouco: ela recarrega sozinha."
-      : "Sua IA do Gemini pediu uma pausa rápida. Respire um minuto e tente de novo.",
+      ? "Você chegou ao limite de hoje. Descanse um pouco: logo libera de novo."
+      : "Muitos pedidos seguidos. Faça uma pausa de um minuto e tente de novo.",
     retryAt,
     daily,
   );
@@ -200,7 +200,7 @@ async function generate(req: Request): Promise<string> {
           break; // cota deste modelo acabou: tenta o próximo
         }
         if (isKeyProblem(res.status, body)) {
-          throw new AiKeyError("O Google recusou a sua chave do Gemini. Conecte uma chave nova em Perfil → Minha IA.");
+          throw new AiKeyError("Sua chave de acesso do Google não funciona mais. Cole uma nova em Ajustes → Chave de acesso.");
         }
         if (res.status === 400 && useSchema) {
           useSchema = false; // modelo sem suporte ao esquema: pede o JSON pelo texto

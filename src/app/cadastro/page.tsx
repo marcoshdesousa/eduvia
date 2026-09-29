@@ -8,7 +8,7 @@ export const metadata = { title: "Criar conta" };
 export default async function Page() {
   if (await getCurrentUser()) redirect("/inicio");
   return (
-    <AuthShell title="Criar conta" subtitle="Comece grátis, com a sua própria IA do Gemini.">
+    <AuthShell title="Criar conta" subtitle="Comece grátis. Leva 2 minutos.">
       <SignupForm />
     </AuthShell>
   );

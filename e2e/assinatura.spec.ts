@@ -24,7 +24,7 @@ test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", as
 
   // Minha IA: chave conectada (só o final aparece)
   await page.goto("/minha-ia");
-  await expect(page.getByText("✅ IA conectada")).toBeVisible();
+  await expect(page.getByText("✅ Conectada")).toBeVisible();
   await expect(page.getByText(`…${GEMINI_KEY.slice(-4)}`, { exact: true })).toBeVisible();
 
   // sem chave, o app leva para "Conecte sua IA"

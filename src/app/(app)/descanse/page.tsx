@@ -14,7 +14,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
     <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl font-bold">Hora de descansar</h1>
       <RestCard
-        title={paused ? "Sua IA pediu uma pausa. Descanse um pouco! 🌿" : undefined}
+        title={paused ? "Hora de uma pausa. Descanse um pouco! 🌿" : undefined}
         suggestions={suggestions}
         rechargeAt={paused ?? suggestions.resetAt}
       />

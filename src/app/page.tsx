@@ -54,8 +54,8 @@ const FAQ = [
     a: "Porque é mais simples: você entra com o CPF ou o seu @ e, se esquecer a senha, recupera com o CPF e o telefone cadastrado, sem depender de e-mail. É também por onde a assinatura é combinada no WhatsApp. Não mandamos propaganda.",
   },
   {
-    q: "Preciso pagar pela inteligência artificial?",
-    a: "Não. O Eduvia usa a IA do Google (Gemini) com a sua própria chave, que é grátis e não pede cartão. Você cria em 2 minutos no Google AI Studio e cola no cadastro; o passo a passo aparece lá.",
+    q: "Preciso pagar alguma coisa para começar?",
+    a: "Não. A conta é grátis e não pede cartão. No cadastro você ativa o Eduvia com uma chave gratuita do Google (o passo a passo aparece lá). Quando quiser tudo liberado, é só assinar o plano Eduvia.",
   },
   {
     q: "Quanto custa?",
@@ -120,7 +120,7 @@ export default async function Home() {
               <a href="#como-funciona" className={buttonClass("outline", "lg")}>Ver como funciona</a>
             </div>
             <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
-              {["Sem cartão", "IA grátis do Google", `Tudo liberado por ${month}/mês`].map((t) => (
+              {["Sem cartão", "Pronto em 2 minutos", `Tudo liberado por ${month}/mês`].map((t) => (
                 <li key={t} className="inline-flex items-center gap-1.5"><Check size={16} className="text-success" />{t}</li>
               ))}
             </ul>
