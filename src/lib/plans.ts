@@ -11,8 +11,9 @@ export type PlanLimits = {
   scannedPagesPerDay: number;
   /** Sessões de estudo com conteúdo novo por dia (revisões são ilimitadas). */
   newSessionsPerDay: number;
+  /** Testes rápidos por dia. */
   gamesPerDay: number;
-  examsPerDay: number;
+  examsPerMonth: number;
   essaysPerDay: number;
   tutorMessagesPerDay: number;
   /** Pode criar e participar de grupos. */
@@ -33,7 +34,7 @@ export const DEFAULT_PLANS: PlanDef[] = [
     order: 0,
     priceWeekCents: 0,
     priceMonthCents: 0,
-    limits: { activePreparations: 1, materials: 1, pagesPerDay: 30, scannedPagesPerDay: 5, newSessionsPerDay: 1, gamesPerDay: 2, examsPerDay: 0, essaysPerDay: 1, tutorMessagesPerDay: 5, groups: false, groupsOwned: 0, restAfterMinutes: 180 },
+    limits: { activePreparations: 1, materials: 1, pagesPerDay: 30, scannedPagesPerDay: 5, newSessionsPerDay: 1, gamesPerDay: 3, examsPerMonth: 0, essaysPerDay: 1, tutorMessagesPerDay: 5, groups: false, groupsOwned: 0, restAfterMinutes: 180 },
   },
   {
     slug: "eduvia",
@@ -41,7 +42,7 @@ export const DEFAULT_PLANS: PlanDef[] = [
     order: 1,
     priceWeekCents: 700,
     priceMonthCents: 1500,
-    limits: { activePreparations: -1, materials: -1, pagesPerDay: 300, scannedPagesPerDay: 60, newSessionsPerDay: 6, gamesPerDay: 10, examsPerDay: 2, essaysPerDay: 3, tutorMessagesPerDay: 40, groups: true, groupsOwned: 5, restAfterMinutes: 180 },
+    limits: { activePreparations: -1, materials: -1, pagesPerDay: 300, scannedPagesPerDay: 60, newSessionsPerDay: 6, gamesPerDay: -1, examsPerMonth: 8, essaysPerDay: 3, tutorMessagesPerDay: 40, groups: true, groupsOwned: 5, restAfterMinutes: 180 },
   },
 ];
 
@@ -56,8 +57,8 @@ export const LIMIT_FIELDS: { key: keyof PlanLimits; label: string; kind: "number
   { key: "pagesPerDay", label: "Páginas enviadas por dia", kind: "number" },
   { key: "scannedPagesPerDay", label: "Páginas escaneadas por dia", kind: "number" },
   { key: "newSessionsPerDay", label: "Sessões novas por dia", kind: "number" },
-  { key: "gamesPerDay", label: "Jogos por dia", kind: "number" },
-  { key: "examsPerDay", label: "Simulados por dia", kind: "number" },
+  { key: "gamesPerDay", label: "Testes rápidos por dia", kind: "number" },
+  { key: "examsPerMonth", label: "Simulados por mês", kind: "number" },
   { key: "essaysPerDay", label: "Redações por dia", kind: "number" },
   { key: "tutorMessagesPerDay", label: "Mensagens ao Professor IA por dia", kind: "number" },
   { key: "groups", label: "Criar e participar de grupos", kind: "boolean" },
@@ -89,8 +90,8 @@ export function planFeatures(l: PlanLimits): string[] {
     n(l.activePreparations, "preparação", "preparações"),
     l.pagesPerDay ? `${n(l.materials, "PDF/arquivo", "PDFs/arquivos")} · até ${formatLimit(l.pagesPerDay)} páginas por dia` : "Sem envio de materiais",
     l.newSessionsPerDay ? `${n(l.newSessionsPerDay, "sessão nova", "sessões novas")} por dia + revisões ilimitadas` : "Só revisões",
-    l.gamesPerDay ? `${n(l.gamesPerDay, "jogo", "jogos")} por dia` : "Sem jogos",
-    l.examsPerDay ? `${n(l.examsPerDay, "simulado", "simulados")} por dia` : "Sem simulados",
+    isUnlimited(l.gamesPerDay) ? "Testes rápidos à vontade" : l.gamesPerDay ? `${n(l.gamesPerDay, "teste rápido", "testes rápidos")} por dia` : "Sem testes rápidos",
+    l.examsPerMonth ? `${n(l.examsPerMonth, "simulado", "simulados")} por mês` : "Sem simulados",
     l.essaysPerDay ? `${n(l.essaysPerDay, "redação corrigida", "redações corrigidas")} por dia` : "Sem correção de redação",
     l.tutorMessagesPerDay ? `Professor IA: ${formatLimit(l.tutorMessagesPerDay)} mensagens por dia` : "Sem Professor IA",
     l.groups ? `Grupos: cria até ${formatLimit(l.groupsOwned)} e entra em quantos quiser` : "Sem grupos",

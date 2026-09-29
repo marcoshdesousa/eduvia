@@ -103,3 +103,5 @@ export const EssayEvaluationSchema = z.object({
   summary: z.string(),
 });
 export type EssayEvaluation = z.infer<typeof EssayEvaluationSchema>;
+
+export const LessonSchema = z.object({ lesson: z.string().describe("Aula curta em Markdown ensinando a resposta certa") });

@@ -126,7 +126,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         {header}
         <Card>
           <CardTitle>XP da semana</CardTitle>
-          <p className="text-xs text-muted">Pontos de experiência dos últimos 7 dias (sessões, questões, jogos e simulados)</p>
+          <p className="text-xs text-muted">Pontos de experiência dos últimos 7 dias (sessões, questões, testes rápidos e simulados)</p>
           <ol className="mt-3 divide-y divide-border text-sm">
             {xp.map((r, i) => (
               <li key={r.user.id} className={cn("flex items-center gap-3 py-2", r.user.id === user.id && "font-semibold")}>

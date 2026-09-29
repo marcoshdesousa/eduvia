@@ -35,7 +35,7 @@ const TASK_LABEL: Record<string, string> = {
   session: "Sessões de estudo",
   grade: "Correção de respostas",
   ocr: "OCR (escaneados)",
-  questions: "Questões (jogos/simulados)",
+  questions: "Questões (testes rápidos/simulados)",
   essay: "Redação",
   tutor: "Professor IA",
 };

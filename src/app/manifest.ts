@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Eduvia — estude com o seu material",
     short_name: "Eduvia",
-    description: "Plano de estudo, sessões, revisões, jogos e simulados feitos a partir dos seus materiais.",
+    description: "Plano de estudo, sessões, revisões, testes rápidos e simulados feitos a partir dos seus materiais.",
     start_url: "/inicio",
     scope: "/",
     display: "standalone",

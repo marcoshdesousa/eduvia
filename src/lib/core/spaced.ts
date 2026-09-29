@@ -4,7 +4,7 @@ import { addDays } from "./dates";
 /** Intervalos (dias) da repetição por questão. Erro volta em 1 dia; acertos vão espaçando. */
 export const QUESTION_STEPS = [1, 3, 7, 15, 30, 60];
 /** Acertos seguidos necessários para uma questão sair do banco de erros. */
-export const ERROR_BANK_EXIT_STREAK = 2;
+export const ERROR_BANK_EXIT_STREAK = 1;
 /** Primeiro acerto já entra num degrau mais espaçado: acertos voltam com menos frequência que erros. */
 const FIRST_CORRECT_STEP = 2;
 

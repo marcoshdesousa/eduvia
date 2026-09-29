@@ -17,9 +17,8 @@ describe("nextReview", () => {
     expect(r.inErrorBank).toBe(false);
     expect(key(r.dueAt)).toBe("2026-10-08");
   });
-  it("sai do banco de erros após 2 acertos seguidos", () => {
+  it("sai do banco de erros quando acerta", () => {
     let s = nextReview(null, false, D);
-    s = nextReview(s, true, D);
     expect(s.inErrorBank).toBe(true);
     s = nextReview(s, true, D);
     expect(s.inErrorBank).toBe(false);

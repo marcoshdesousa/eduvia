@@ -29,7 +29,7 @@ test("fase 3: grupo com convite, mural, compartilhamento, simulado com ranking, 
   // Ana: preparação com material e um simulado (gera questões)
   await newPrep(a, "Biologia da Ana", true);
   await a.goto("/simulados/novo");
-  await a.getByRole("button", { name: "10", exact: true }).click();
+  await a.getByRole("button", { name: "30", exact: true }).click();
   await a.getByRole("button", { name: "Montar simulado" }).click();
   await expect(a.getByRole("button", { name: "Começar simulado" })).toBeVisible({ timeout: 90_000 });
 

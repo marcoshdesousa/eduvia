@@ -12,7 +12,7 @@ export const metadata = { title: "Desempenho" };
 
 const RECOMMEND: Record<string, string> = {
   CRITICO: "Refaça as questões no banco de erros e revise o texto de estudo antes de seguir.",
-  EM_DESENVOLVIMENTO: "Continue praticando: um simulado ou uma partida do jogo ajudam a consolidar.",
+  EM_DESENVOLVIMENTO: "Continue praticando: um simulado ou um teste rápido ajudam a consolidar.",
   BOM: "Mantenha as revisões programadas para não esquecer.",
   SEM_DADOS: "Responda algumas questões para medirmos seu desempenho.",
 };

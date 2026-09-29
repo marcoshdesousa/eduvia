@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { today } from "@/lib/core/dates";
 import { QuestionCard, type QuestionData, type SourceRef } from "@/components/question-card";
+import { ErrorBankItem } from "@/components/error-bank-item";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -31,7 +32,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
       where: filter === "erros" ? { ...baseWhere, inErrorBank: true } : { ...baseWhere, dueAt: { lte: day } },
       include: { question: { include: { topic: { include: { subject: true } } } } },
       orderBy: [{ inErrorBank: "desc" }, { dueAt: "asc" }],
-      take: PAGE,
+      take: filter === "erros" ? 50 : PAGE,
     }),
   ]);
 
@@ -40,7 +41,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Revisões</h1>
-        <p className="text-sm text-muted">Questões que você errou voltam no dia seguinte; as que acertou voltam com menos frequência para consolidar.</p>
+        <p className="text-sm text-muted">No banco de erros você vê o que errou e aprende a resposta certa com o seu material. Quando acertar a questão de novo (numa revisão ou teste rápido), ela sai de lá.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Link href={tabHref("hoje")} className={cn("rounded-lg px-3 py-1.5 text-sm font-medium", filter === "hoje" ? "bg-primary/15 text-primary" : "text-muted hover:bg-surface-2")}>
@@ -66,6 +67,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
       )}
       <div className="space-y-4">
         {items.map((it, i) => {
+          if (filter === "erros") {
+            const opts = (it.question.options as string[] | null) ?? [];
+            return (
+              <ErrorBankItem
+                key={it.id}
+                questionId={it.question.id}
+                subject={`${it.question.topic.subject.name} · ${it.question.topic.title}`}
+                statement={it.question.statement}
+                correct={opts[Number(it.question.correctAnswer)] ?? it.question.correctAnswer}
+                explanation={it.question.explanation}
+                lapses={it.lapses}
+                sources={it.question.sourceRefs as SourceRef[]}
+                initialLesson={it.question.lesson}
+              />
+            );
+          }
           const q: QuestionData = {
             id: it.question.id,
             type: it.question.type,
@@ -85,7 +102,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
           );
         })}
       </div>
-      {items.length === PAGE && <p className="text-center text-sm text-muted">Responda estas e recarregue a página para ver as próximas.</p>}
+      {items.length === PAGE && filter === "hoje" && <p className="text-center text-sm text-muted">Responda estas e recarregue a página para ver as próximas.</p>}
     </div>
   );
 }

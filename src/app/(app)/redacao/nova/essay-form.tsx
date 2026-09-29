@@ -1,94 +1,82 @@
 "use client";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
-import { Loader2, Sparkles } from "lucide-react";
+import { Dices, Loader2, ShieldAlert } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
-import { submitEssayAction, suggestThemeAction } from "@/app/actions/essays";
-import { RUBRICS, wordCount, type RubricKey } from "@/lib/core/essay";
+import { submitEssayAction } from "@/app/actions/essays";
+import { RUBRICS, wordCount } from "@/lib/core/essay";
+import { drawEssayTheme, drawPortuguesePrompt, type EssayPrompt } from "@/lib/core/essay-themes";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Field, FormError, Input, Select, Textarea } from "@/components/ui/form";
+import { FormError, Textarea } from "@/components/ui/form";
 
-type Prep = { id: string; title: string; rubric: RubricKey };
-
-export function EssayForm({ preparations }: { preparations: Prep[] }) {
+/** Redação com tema sorteado (correção estilo ENEM) ou teste de português (qualidade da escrita). */
+export function EssayForm({ mode, initial }: { mode: "redacao" | "portugues"; initial: EssayPrompt }) {
   const [state, action, pending] = useActionState(submitEssayAction, undefined);
-  const [prepId, setPrepId] = useState(preparations[0]?.id ?? "");
-  const [rubric, setRubric] = useState<RubricKey>(preparations[0]?.rubric ?? "GERAL");
-  const [theme, setTheme] = useState("");
-  const [instructions, setInstructions] = useState("");
+  const [prompt, setPrompt] = useState(initial);
   const [text, setText] = useState("");
-  const [themeError, setThemeError] = useState<string | null>(null);
-  const [suggesting, startSuggest] = useTransition();
+  const rubric = mode === "portugues" ? "GERAL" : "ENEM";
   const words = wordCount(text);
+  const min = 50;
 
   return (
     <ActionForm action={action} className="space-y-4">
-      <Card className="space-y-4">
+      <input type="hidden" name="rubric" value={rubric} />
+      <input type="hidden" name="theme" value={prompt.theme} />
+      <input type="hidden" name="instructions" value={prompt.instructions} />
+      <div className="flex gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
+        <ShieldAlert className="mt-0.5 shrink-0 text-warning" size={20} />
+        <p>
+          <strong>Recomendamos que você não use inteligência artificial</strong> para escrever {mode === "portugues" ? "este texto" : "a redação"} nem para pesquisar.
+          A ideia é você treinar e tirar uma nota boa por conta própria: escreva tudo do zero, com as suas palavras.
+        </p>
+      </div>
+      <Card className="space-y-3">
         <FormError message={state?.error} />
         {state?.upgrade && <Link href="/assinatura" className="text-sm font-semibold text-primary">Assinar plano</Link>}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Preparação (opcional)" htmlFor="preparationId">
-            <Select
-              id="preparationId"
-              name="preparationId"
-              value={prepId}
-              onChange={(e) => {
-                setPrepId(e.target.value);
-                const p = preparations.find((x) => x.id === e.target.value);
-                if (p) setRubric(p.rubric);
-              }}
-            >
-              <option value="">Nenhuma</option>
-              {preparations.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-            </Select>
-          </Field>
-          <Field label="Tipo de correção" htmlFor="rubric">
-            <Select id="rubric" name="rubric" value={rubric} onChange={(e) => setRubric(e.target.value as RubricKey)}>
-              {(Object.keys(RUBRICS) as RubricKey[]).map((k) => <option key={k} value={k}>{RUBRICS[k].label}</option>)}
-            </Select>
-          </Field>
-        </div>
-        <Field label="Tema" htmlFor="theme">
-          <div className="flex gap-2">
-            <Input id="theme" name="theme" value={theme} onChange={(e) => setTheme(e.target.value)} placeholder="Escreva o tema ou peça uma sugestão" required />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={suggesting}
-              onClick={() =>
-                startSuggest(async () => {
-                  setThemeError(null);
-                  const r = await suggestThemeAction(prepId || null, rubric);
-                  if ("error" in r && r.error) setThemeError(r.error);
-                  else if ("theme" in r) {
-                    setTheme(r.theme);
-                    setInstructions(r.instructions);
-                  }
-                })
-              }
-            >
-              {suggesting ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Sugerir
-            </Button>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">{mode === "portugues" ? "Proposta sorteada" : "Tema sorteado"}</p>
+            <h2 className="mt-1 text-lg font-semibold">{prompt.theme}</h2>
           </div>
-          {themeError && <p className="mt-1 text-xs text-danger">{themeError}</p>}
-        </Field>
-        {instructions && (
-          <Field label="Proposta" htmlFor="instructions">
-            <Textarea id="instructions" name="instructions" value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={4} />
-          </Field>
-        )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={text.trim().length > 0}
+            title={text.trim() ? "Apague o texto para sortear outro tema" : undefined}
+            onClick={() => setPrompt(mode === "portugues" ? drawPortuguesePrompt(prompt.theme) : drawEssayTheme(prompt.theme))}
+          >
+            <Dices size={16} /> Sortear outro
+          </Button>
+        </div>
+        <p className="text-sm text-muted">{prompt.instructions}</p>
       </Card>
       <Card className="space-y-2">
         <div className="flex items-center justify-between text-sm">
           <label htmlFor="text" className="font-medium">Seu texto</label>
-          <span className={words < 50 ? "text-muted" : "text-success"}>{words} palavras</span>
+          <span className={words < min ? "text-muted" : "text-success"}>{words} palavras</span>
         </div>
-        <Textarea id="text" name="text" value={text} onChange={(e) => setText(e.target.value)} rows={18} className="font-[inherit] text-[15px] leading-7" placeholder="Escreva aqui..." />
+        <Textarea
+          id="text"
+          name="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onPaste={(e) => {
+            // incentivo a escrever do zero: colar textos grandes é bloqueado
+            if (e.clipboardData.getData("text").length > 200) {
+              e.preventDefault();
+              alert("Para treinar de verdade, escreva o texto com as suas palavras (colar textos grandes está desativado).");
+            }
+          }}
+          rows={18}
+          className="font-[inherit] text-[15px] leading-7"
+          placeholder="Escreva aqui..."
+        />
         <p className="text-xs text-muted">Critérios: {RUBRICS[rubric].criteria.map((c) => c.name.replace(/^Competência \d — /, "")).join(" · ")} (nota máxima {RUBRICS[rubric].total}).</p>
       </Card>
-      <Button size="lg" className="w-full" disabled={pending || words < 50}>
-        {pending ? <><Loader2 size={18} className="animate-spin" /> Corrigindo sua redação...</> : "Enviar para correção"}
+      <Button size="lg" className="w-full" disabled={pending || words < min}>
+        {pending ? <><Loader2 size={18} className="animate-spin" /> Corrigindo...</> : "Enviar para correção"}
       </Button>
     </ActionForm>
   );

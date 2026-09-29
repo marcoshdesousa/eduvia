@@ -10,12 +10,17 @@ import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
 
 type Prep = { id: string; title: string; subjects: { id: string; name: string }[] };
-const SIZES = [10, 20, 30, 50];
+const SIZES = [30, 50, 100];
+const DURATIONS = [
+  { min: 30, label: "30 minutos" },
+  { min: 60, label: "1 hora" },
+  { min: 180, label: "3 horas" },
+];
 
 export function NewExamForm({ preparations }: { preparations: Prep[] }) {
   const [state, action, pending] = useActionState(createExamAction, undefined);
   const [prepId, setPrepId] = useState(preparations[0].id);
-  const [count, setCount] = useState(20);
+  const [count, setCount] = useState(30);
   const [duration, setDuration] = useState(60);
   const prep = preparations.find((p) => p.id === prepId)!;
   return (
@@ -44,7 +49,7 @@ export function NewExamForm({ preparations }: { preparations: Prep[] }) {
               <button
                 type="button"
                 key={n}
-                onClick={() => { setCount(n); setDuration(n * 3); }}
+                onClick={() => setCount(n)}
                 className={cn("rounded-lg border px-4 py-1.5 text-sm", count === n ? "border-primary bg-primary/15 text-primary" : "border-border hover:bg-surface-2")}
               >
                 {n}
@@ -53,12 +58,22 @@ export function NewExamForm({ preparations }: { preparations: Prep[] }) {
           </div>
           <input type="hidden" name="questionCount" value={count} />
         </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Tempo (minutos)" htmlFor="durationMin" hint="Sugestão: 3 minutos por questão.">
-            <Input id="durationMin" name="durationMin" type="number" min={5} max={300} value={duration} onChange={(e) => setDuration(Number(e.target.value))} />
-          </Field>
-          <Field label="Nome (opcional)" htmlFor="title"><Input id="title" name="title" placeholder="Ex.: Simulado de revisão" /></Field>
-        </div>
+        <Field label="Tempo de prova">
+          <div className="flex flex-wrap gap-2">
+            {DURATIONS.map((d) => (
+              <button
+                type="button"
+                key={d.min}
+                onClick={() => setDuration(d.min)}
+                className={cn("rounded-lg border px-4 py-1.5 text-sm", duration === d.min ? "border-primary bg-primary/15 text-primary" : "border-border hover:bg-surface-2")}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <input type="hidden" name="durationMin" value={duration} />
+        </Field>
+        <Field label="Nome (opcional)" htmlFor="title"><Input id="title" name="title" placeholder="Ex.: Simulado de revisão" /></Field>
         <Button size="lg" className="w-full" disabled={pending}>
           {pending ? <><Loader2 size={18} className="animate-spin" /> Montando a prova (pode levar 1 minuto)...</> : "Montar simulado"}
         </Button>

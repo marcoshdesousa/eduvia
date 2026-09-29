@@ -8,7 +8,6 @@ import {
   Check,
   ChevronDown,
   FileUp,
-  Gamepad2,
   GraduationCap,
   Leaf,
   MessageCircle,
@@ -18,6 +17,7 @@ import {
   Target,
   Timer,
   Users,
+  Zap,
 } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { SiteFooter } from "@/components/site-footer";
@@ -29,7 +29,7 @@ import { PAID_PLAN } from "@/lib/plans";
 const STEPS = [
   { icon: FileUp, title: "Envie seu material", text: "PDFs, apostilas, fotos do caderno, DOCX ou texto colado. Para concurso, mande também o edital." },
   { icon: Sparkles, title: "A IA organiza tudo", text: "Ela lê, separa em assuntos, cita a página de origem e monta um plano do tamanho do seu dia." },
-  { icon: Target, title: "Estude e acompanhe", text: "Sessões curtas, questões, revisões no tempo certo, jogos e simulados. Você vê sua evolução." },
+  { icon: Target, title: "Estude e acompanhe", text: "Sessões curtas, questões, revisões no tempo certo, testes rápidos e simulados. Você vê sua evolução." },
 ];
 
 const FEATURES = [
@@ -37,9 +37,9 @@ const FEATURES = [
   { icon: BookOpen, title: "Sessões prontas", text: "Texto explicativo, destaques e perguntas feitas do seu material." },
   { icon: RotateCcw, title: "Revisão espaçada", text: "Revisões em 1, 7, 15 e 30 dias. O que você erra volta mais." },
   { icon: Target, title: "Banco de erros", text: "Toda questão errada vira revisão, com a explicação certa." },
-  { icon: Gamepad2, title: "Jogos", text: "Responda rápido antes que a cobrinha alcance o ratinho." },
+  { icon: Zap, title: "Teste rápido", text: "Perguntas cronometradas: acertou, o bonequinho pula de alegria." },
   { icon: GraduationCap, title: "Simulados", text: "No estilo da sua banca, com nota, gabarito e evolução." },
-  { icon: PenLine, title: "Correção de redação", text: "ENEM, discursiva ou português, com os erros marcados." },
+  { icon: PenLine, title: "Redação e português", text: "Tema sorteado, correção no estilo ENEM e teste de português." },
   { icon: Brain, title: "Professor IA", text: "Tire dúvidas sobre o seu material, com a página citada." },
   { icon: Users, title: "Grupos de estudo", text: "Estude com amigos: mural, materiais e ranking de simulado." },
 ];
@@ -113,7 +113,7 @@ export default async function Home() {
               Seus PDFs viram um <span className="bg-gradient-to-r from-[#f97316] to-[#f59e0b] bg-clip-text text-transparent">plano de estudo</span> que funciona.
             </h1>
             <p className="mt-5 max-w-xl text-lg text-muted">
-              Envie o seu material e a IA monta sessões do tamanho do seu dia, com texto, questões, revisões no tempo certo, jogos e simulados. Tudo com a página de origem citada.
+              Envie o seu material e a IA monta sessões do tamanho do seu dia, com texto, questões, revisões no tempo certo, testes rápidos e simulados. Tudo com a página de origem citada.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link href="/cadastro" className={buttonClass("primary", "lg")}>Começar grátis <ArrowRight size={18} /></Link>
@@ -171,7 +171,7 @@ export default async function Home() {
             <PriceCard label="Mensal" price={month} period="30 dias" highlight />
           </div>
           <ul className="mx-auto mt-6 grid max-w-3xl gap-2 text-sm text-muted sm:grid-cols-2">
-            {["Preparações e PDFs à vontade", "Sessões, jogos, simulados e redação todo dia", "Professor IA com o seu material", "Grupos de estudo e ranking", "Revisões e banco de erros ilimitados", "Sem renovação automática"].map((t) => (
+            {["Preparações e PDFs à vontade", "Sessões, testes rápidos, simulados e redação", "Professor IA com o seu material", "Grupos de estudo e ranking", "Revisões e banco de erros ilimitados", "Sem renovação automática"].map((t) => (
               <li key={t} className="inline-flex items-center gap-2"><Check size={16} className="shrink-0 text-success" />{t}</li>
             ))}
           </ul>

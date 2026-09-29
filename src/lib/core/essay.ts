@@ -6,7 +6,7 @@ export type Criterion = { key: string; name: string; max: number; description: s
 
 export const RUBRICS: Record<RubricKey, { label: string; total: number; criteria: Criterion[]; genre: string }> = {
   ENEM: {
-    label: "ENEM (5 competências)",
+    label: "Redação ENEM (5 competências)",
     total: 1000,
     genre: "texto dissertativo-argumentativo em prosa, com proposta de intervenção",
     criteria: [
@@ -28,7 +28,7 @@ export const RUBRICS: Record<RubricKey, { label: string; total: number; criteria
     ],
   },
   GERAL: {
-    label: "Qualidade do português",
+    label: "Teste de português",
     total: 10,
     genre: "texto livre",
     criteria: [

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardCheck, Gamepad2, PenLine, RotateCcw } from "lucide-react";
+import { ClipboardCheck, PenLine, RotateCcw, Zap } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { today } from "@/lib/core/dates";
@@ -11,16 +11,16 @@ export const metadata = { title: "Praticar" };
 export default async function Page() {
   const user = await requireReadyUser();
   const day = today(user.timezone);
-  const [due, errors, best] = await Promise.all([
+  const [due, errors, quick] = await Promise.all([
     db.reviewItem.count({ where: { userId: user.id, dueAt: { lte: day } } }),
     db.reviewItem.count({ where: { userId: user.id, inErrorBank: true } }),
-    db.gameRun.aggregate({ _max: { score: true }, where: { userId: user.id, gameSlug: "cobrinha" } }),
+    db.gameRun.count({ where: { userId: user.id, gameSlug: "teste-rapido" } }),
   ]);
   const cards = [
-    { href: "/revisoes", icon: RotateCcw, title: "Revisões e banco de erros", text: "Refaça as questões que você errou e as que vencem hoje.", badge: due ? `${due} para hoje` : errors ? `${errors} no banco de erros` : null },
-    { href: "/jogos", icon: Gamepad2, title: "Jogos", text: "Jogo da cobrinha: responda rápido antes que ela te alcance.", badge: best._max.score ? `Recorde: ${best._max.score}` : null },
+    { href: "/revisoes", icon: RotateCcw, title: "Revisões e banco de erros", text: "Veja as questões que você errou e aprenda a resposta certa com o seu material.", badge: due ? `${due} para hoje` : errors ? `${errors} no banco de erros` : null },
+    { href: "/teste-rapido", icon: Zap, title: "Teste rápido", text: "10, 15 ou 20 perguntas cronometradas. Acertou, o bonequinho pula; errou, ele cai.", badge: quick ? `${quick} feito(s)` : null },
     { href: "/simulados", icon: ClipboardCheck, title: "Simulados", text: "Prova cronometrada com nota, desempenho por disciplina e gabarito comentado.", badge: null },
-    { href: "/redacao", icon: PenLine, title: "Redação", text: "Escreva e receba a correção com os trechos marcados.", badge: null },
+    { href: "/redacao", icon: PenLine, title: "Redação", text: "Tema sorteado, correção no estilo ENEM e teste de português.", badge: null },
   ];
   return (
     <div className="space-y-6">

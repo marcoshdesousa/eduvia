@@ -6,7 +6,9 @@ import { addXp } from "@/lib/gamification";
 import { checkAchievementsSafe } from "@/lib/achievements";
 import { canAccessExam } from "@/lib/groups";
 
-export const EXAM_SIZES = [10, 20, 30, 50] as const;
+export const EXAM_SIZES = [30, 50, 100] as const;
+/** Tempos de prova que o aluno pode escolher (minutos). */
+export const EXAM_DURATIONS = [30, 60, 180] as const;
 export const MINUTES_PER_QUESTION = 3;
 /** Tolerância para entregas que chegam um pouco depois do fim do tempo (rede lenta). */
 const GRACE_MS = 60_000;

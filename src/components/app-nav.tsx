@@ -25,7 +25,7 @@ const MOBILE = [
   { href: "/mais", label: "Mais", icon: Menu },
 ];
 
-const PRACTICE = ["/praticar", "/revisoes", "/jogos", "/simulados"];
+const PRACTICE = ["/praticar", "/revisoes", "/teste-rapido", "/simulados"];
 const MORE = ["/mais", "/minha-ia", "/descanse", "/suporte", "/redacao", "/desempenho", "/assinatura", "/configuracoes", "/admin", "/grupos", "/perfil", "/u", "/notificacoes"];
 
 function useActive() {

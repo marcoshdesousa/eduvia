@@ -482,6 +482,8 @@ model Question {
   options       Json?
   correctAnswer String
   explanation   String
+  /// Aula curta (gerada sob demanda no banco de erros) explicando a resposta certa com base no material.
+  lesson        String?
   difficulty    Int          @default(3)
   sourceRefs    Json         @default("[]")
   createdAt     DateTime     @default(now())
@@ -738,6 +740,8 @@ model GameRun {
   preparationId String
   preparation   Preparation @relation(fields: [preparationId], references: [id], onDelete: Cascade)
   gameSlug      String
+  /// Nome dado pelo aluno ao teste rápido (ex.: "Teste 3").
+  name          String?
   topicIds      String[]
   questionIds   String[]
   config        Json        @default("{}")

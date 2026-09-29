@@ -91,13 +91,14 @@ async function pagesToday(userId: string, dayStart: Date, exceptMaterialId?: str
 export async function usage(user: UserLike) {
   const tz = user.timezone ?? "America/Sao_Paulo";
   const dayStart = localDayStart(tz);
-  const [activePreparations, materials, pages, newSessionsToday, gamesToday, examsToday, essaysToday, tutorToday, groupsOwned, studyDay] = await Promise.all([
+  const monthStart = localMonthStart(tz);
+  const [activePreparations, materials, pages, newSessionsToday, gamesToday, examsThisMonth, essaysToday, tutorToday, groupsOwned, studyDay] = await Promise.all([
     db.preparation.count({ where: { userId: user.id, status: "ACTIVE" } }),
     db.material.count({ where: { preparation: { userId: user.id }, role: "CONTENT", status: { not: "ERROR" } } }),
     pagesToday(user.id, dayStart),
     db.studySession.count({ where: { userId: user.id, kind: "STUDY", startedAt: { gte: dayStart } } }),
     db.gameRun.count({ where: { userId: user.id, startedAt: { gte: dayStart } } }),
-    db.exam.count({ where: { ownerId: user.id, createdAt: { gte: dayStart } } }),
+    db.exam.count({ where: { ownerId: user.id, createdAt: { gte: monthStart } } }),
     db.essay.count({ where: { userId: user.id, status: { not: "DRAFT" }, createdAt: { gte: dayStart } } }),
     db.tutorMessage.count({ where: { role: "user", createdAt: { gte: dayStart }, thread: { userId: user.id } } }),
     db.group.count({ where: { ownerId: user.id } }),
@@ -110,7 +111,7 @@ export async function usage(user: UserLike) {
     scannedToday: pages.scanned,
     newSessionsToday,
     gamesToday,
-    examsToday,
+    examsThisMonth,
     essaysToday,
     tutorToday,
     groupsOwned,
@@ -185,21 +186,24 @@ export async function sessionLimitError(user: UserLike & { timezone: string }) {
 
 export type Feature = "game" | "exam" | "essay" | "tutor";
 
-const FEATURE: Record<Feature, { limit: keyof PlanLimits; used: "gamesToday" | "examsToday" | "essaysToday" | "tutorToday"; none: string; what: (n: number) => string }> = {
-  game: { limit: "gamesPerDay", used: "gamesToday", none: "Jogos não fazem parte", what: (n) => `${n} partida(s) de jogo` },
-  exam: { limit: "examsPerDay", used: "examsToday", none: "Simulados não fazem parte", what: (n) => `${n} simulado(s). Refazer simulados continua liberado` },
+const FEATURE: Record<Feature, { limit: keyof PlanLimits; used: "gamesToday" | "examsThisMonth" | "essaysToday" | "tutorToday"; none: string; what: (n: number) => string; period?: "month" }> = {
+  game: { limit: "gamesPerDay", used: "gamesToday", none: "Testes rápidos não fazem parte", what: (n) => `${n} teste(s) rápido(s)` },
+  exam: { limit: "examsPerMonth", used: "examsThisMonth", none: "Simulados não fazem parte", what: (n) => `${n} simulados por mês`, period: "month" },
   essay: { limit: "essaysPerDay", used: "essaysToday", none: "A correção de redação não faz parte", what: (n) => `${n} redação(ões) corrigida(s)` },
   tutor: { limit: "tutorMessagesPerDay", used: "tutorToday", none: "O Professor IA não faz parte", what: (n) => `${n} mensagens ao Professor IA` },
 };
 
-/** Jogos, simulados, redação e Professor IA: limites por dia. */
+/** Testes rápidos, redação e Professor IA: limites por dia; simulados: por mês. */
 export async function featureLimitError(user: UserLike & { timezone: string }, feature: Feature) {
   const a = await getAccess(user);
   const f = FEATURE[feature];
   const max = a.limits[f.limit] as number;
   if (max === 0) return `${f.none} do plano ${a.planName}.${upgradeHint(a)}`;
   const u = await usage(user);
-  return over(u[f.used], max) ? dailyLimit(a, f.what(max)) : null;
+  if (!over(u[f.used], max)) return null;
+  return f.period === "month"
+    ? `Você já fez os ${f.what(max)} do seu plano. No mês que vem libera de novo; refazer simulados continua liberado.${upgradeHint(a)}`
+    : dailyLimit(a, f.what(max));
 }
 
 export async function groupCreateError(user: UserLike) {

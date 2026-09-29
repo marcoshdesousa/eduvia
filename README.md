@@ -3,7 +3,7 @@
 Plataforma de estudos com IA para qualquer estudante. O aluno envia os próprios materiais (PDF, DOCX, imagens, texto) e a IA monta o plano de estudo, as sessões com texto e perguntas, as revisões espaçadas e o banco de erros.
 
 - Arquitetura, modelo de dados, telas e fases: [docs/ARQUITETURA.md](docs/ARQUITETURA.md)
-- Status: **Fases 1, 2 e 3 concluídas**: contas por CPF, assinatura manual pelo WhatsApp, plano de estudo, sessões, revisões, jogo da cobrinha, simulados, redação, desempenho, Professor IA, grupos de estudo, conquistas, perfil e notificações (app + push/PWA).
+- Status: **Fases 1, 2 e 3 concluídas**: contas por CPF, assinatura manual pelo WhatsApp, plano de estudo, sessões, revisões, teste rápido, simulados, redação, desempenho, Professor IA, grupos de estudo, conquistas, perfil e notificações (app + push/PWA).
 
 ## Stack
 
@@ -12,7 +12,7 @@ Next.js 16 (App Router, TypeScript) · Tailwind CSS 4 · PostgreSQL 16 + pgvecto
 ```
 src/
   app/                 telas e rotas de API (Next.js)
-    (app)/             área logada: início, preparações, estudar, praticar (revisões, jogos, simulados),
+    (app)/             área logada: início, preparações, estudar, praticar (revisões, teste rápido, simulados),
                        redação, professor, desempenho, ajustes, assinatura, admin
     actions/           server actions
     api/               upload, status de materiais, arquivos, exportação LGPD, auth
@@ -23,12 +23,12 @@ src/
     billing.ts         plano Grátis/Eduvia, limites por dia, link do WhatsApp
     rest.ts            aviso "Descanse" (tempo de estudo, sessões seguidas) e sugestões
     plan.ts, study.ts  plano de estudo e sessão (conteúdo, respostas, conclusão)
-    question-bank.ts   questões por assunto para jogos e simulados (reaproveita; só gera o que falta)
+    question-bank.ts   questões por assunto para testes rápidos e simulados (reaproveita; só gera o que falta)
     exams.ts, tutor.ts simulados (montagem por peso, correção) e Professor IA (RAG + streaming)
     groups.ts          grupos: papéis, convites, mural, compartilhamento, acesso e rankings
     achievements.ts    conquistas (catálogo + verificação após cada evento)
     notifications.ts   central de notificações + push (web-push); jobs/reminders.ts: lembretes
-  games/               jogos plugáveis: catálogo (catalog.ts) + componente de cada jogo
+  lib/quick-test.ts    teste rápido (opções e regras); components/pixel-stage.tsx: bonequinho em pixel art
 public/sw.js           service worker (push e app instalável); src/app/manifest.ts: manifesto PWA
   worker/              processo da fila: materiais, planos, replanejamento diário
 prisma/                schema, migrações, seed
@@ -56,8 +56,8 @@ e2e/                   testes de ponta a ponta (Playwright)
   | Preparações ativas / PDFs guardados | 1 / 1 | à vontade |
   | Páginas enviadas por dia (escaneadas) | 30 (5) | 300 (60) |
   | Sessões novas por dia (revisões ilimitadas) | 1 | 6 |
-  | Jogos por dia | 2 | 10 |
-  | Simulados por dia | 0 | 2 |
+  | Testes rápidos por dia | 3 | à vontade |
+  | Simulados por mês | 0 | 8 |
   | Redações corrigidas por dia | 1 | 3 |
   | Professor IA (mensagens por dia) | 5 | 40 |
   | Grupos | não | cria até 5, entra em quantos quiser |
@@ -83,13 +83,13 @@ e2e/                   testes de ponta a ponta (Playwright)
 
 ## Fase 2 — praticar
 
-- **Jogo da cobrinha** (`/jogos`): a cobra persegue o ratinho e se aproxima enquanto o aluno pensa. Acerto afasta a cobra (e ela acelera um pouco); erro custa uma vida. Acaba ao atingir o limite de erros (1, 3 ou 5) ou quando a cobra alcança. Pontos: 100 por acerto + bônus de rapidez. Resultado com acertos, erros, tempo médio e recorde; os erros vão para o banco de erros. Atalhos de teclado 1–5 / A–E.
-  - **Novo jogo:** adicione a definição em `src/games/catalog.ts` (nome, configurações, nº de questões) e o componente em `src/games/components.tsx`. O componente recebe as perguntas e as funções `onAnswer`/`onFinish`; a correção e a pontuação ficam no servidor.
-- **Simulados** (`/simulados`): escolha disciplinas, 10/20/30/50 questões e o tempo. As questões são divididas pelo peso de cada disciplina (edital) e seguem o estilo da banca (múltipla escolha ou certo/errado). Cronômetro com entrega automática, respostas salvas a cada 5 s, nota 0–10, % por disciplina com etiqueta (crítico/em desenvolvimento/bom), tempo gasto, gabarito comentado com link para a página do material e gráfico de evolução.
-- **Redação** (`/redacao`): tema escrito pelo aluno ou sugerido pela IA; correção **ENEM** (C1–C5, 0–1000), **discursiva de concurso** (conteúdo, estrutura, linguagem; 0–100) ou **qualidade do português** (0–10). O texto aparece com os trechos marcados (ortografia, pontuação, concordância, coesão...) e a sugestão ao lado; mais pontos fortes, dicas e histórico.
+- **Teste rápido** (`/teste-rapido`, substitui os jogos): o aluno dá um nome (sugestão "Teste N"), escolhe 10, 15 ou 20 perguntas e 10, 15, 20 ou 30 segundos por pergunta. Um bonequinho em pixel art preto e branco (personagem próprio) pula enquanto o aluno pensa; acertou, ele pula de alegria, sobe de fase e soltam balões; errou (ou acabou o tempo), ele cai. Cada teste fica salvo e **não pode ser refeito** (para praticar de novo, cria-se outro, sem limite no plano pago). As perguntas priorizam o que o aluno errou e questões novas; as que ele já acertou entram no máximo 10%. Erros vão para o banco de erros; acertar uma questão do banco a tira de lá.
+- **Simulados** (`/simulados`): escolha disciplinas, 30, 50 ou 100 questões e o tempo (30 min, 1 h ou 3 h); até 8 simulados por mês no plano pago. As questões são divididas pelo peso de cada disciplina (edital) e seguem o estilo da banca (múltipla escolha ou certo/errado). Cronômetro com entrega automática, respostas salvas a cada 5 s, nota 0–10, % por disciplina com etiqueta (crítico/em desenvolvimento/bom), tempo gasto, gabarito comentado com link para a página do material e gráfico de evolução.
+- **Redação** (`/redacao`): o tema é **sorteado** (lista própria em `src/lib/core/essay-themes.ts`, sem gastar IA; dá para sortear outro antes de escrever) e a correção segue o **ENEM** (C1–C5, 0–1000). O **teste de português** sorteia uma proposta curta e avalia a qualidade da escrita (0–10). As duas telas recomendam não usar IA para escrever nem pesquisar, e colar textos grandes fica desativado. O texto aparece com os trechos marcados (ortografia, pontuação, concordância, coesão...) e a sugestão ao lado; mais pontos fortes, dicas e histórico.
 - **Professor IA** (`/professor`): chat que responde com base nos materiais (citando a página), com resposta em tempo real e atalhos: Explicar, Me testar, Criar questões e Analisar meus erros. Conversas ficam salvas.
 - **Desempenho** (`/desempenho`): acerto geral, tempo de estudo, simulados e pontos críticos; acerto por semana, minutos por dia, e acerto por disciplina e assunto com recomendação.
-- **Uso da IA:** questões geradas ficam no banco e são reaproveitadas (jogos e simulados só chamam a IA quando faltam questões). Limites por dia na tabela de planos acima.
+- **Banco de erros** (`/revisoes?filtro=erros`): mostra a questão errada com a resposta certa, a explicação e o link da página do PDF; o botão "Aprender o certo com o meu material" gera uma aula curta com base no material (guardada para não gastar IA de novo).
+- **Uso da IA:** questões geradas ficam no banco e são reaproveitadas (testes rápidos e simulados só chamam a IA quando faltam questões). Limites por dia na tabela de planos acima.
 
 ## Fase 3 — comunidade e engajamento
 

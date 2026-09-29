@@ -11,6 +11,7 @@ import {
   type EssayTheme,
   type EssayEvaluation,
   OutlineSchema,
+  LessonSchema,
   SessionContentSchema,
   SyllabusSchema,
   type Grade,
@@ -220,7 +221,7 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-// ───────────── Banco de questões (jogos e simulados) ─────────────
+// ───────────── Banco de questões (testes rápidos e simulados) ─────────────
 
 export async function generateQuestionSet(input: {
   userId: string;
@@ -244,7 +245,7 @@ export async function generateQuestionSet(input: {
       : `Múltipla escolha com exatamente ${input.optionsCount} alternativas, uma só correta, distratores plausíveis, sem letras no início. Varie a posição da correta.`;
   const purposeRule =
     input.purpose === "jogo"
-      ? "As questões são para um jogo de rapidez: enunciados CURTOS (até 2 linhas) e alternativas curtas, respondíveis em poucos segundos por quem estudou."
+      ? "As questões são para um teste rápido cronometrado: enunciados CURTOS (até 2 linhas) e alternativas curtas, respondíveis em poucos segundos por quem estudou."
       : "As questões são para um simulado: nível de prova real, com enunciados completos e contextualizados quando fizer sentido.";
   return callStructured({
     task: "questions",
@@ -319,4 +320,42 @@ ${input.instructions ? `Instruções da proposta: ${input.instructions}\n` : ""}
 ${input.text}
 </redacao>`,
   });
+}
+
+// ───────────── Banco de erros: aula da resposta certa ─────────────
+
+export async function explainCorrectAnswer(input: {
+  userId: string;
+  voice: string;
+  statement: string;
+  options: string[];
+  correct: string;
+  explanation: string;
+  chunks: RetrievedChunk[];
+}): Promise<string> {
+  if (isMockAi()) {
+    const trecho = input.chunks[0]?.content.slice(0, 400) ?? "";
+    return `**Resposta certa: ${input.correct}**\n\n${input.explanation}\n\n${trecho ? `No seu material: "${trecho}..." [${input.chunks[0].label}]` : ""}`;
+  }
+  const res = await callStructured({
+    task: "tutor",
+    userId: input.userId,
+    schema: LessonSchema,
+    maxTokens: 3000,
+    system: `${BASE}
+Tarefa: ensinar ao aluno o conteúdo de uma questão que ele errou, para que ele APRENDA (não para decorar).
+- Comece dizendo qual é a resposta certa.
+- Explique o conceito por trás dela de forma clara e curta (3 a 6 frases ou tópicos), com um exemplo se ajudar.
+- Baseie-se nos trechos do material do aluno e cite o rótulo do trecho entre colchetes, ex.: [T1].
+- Não fale sobre "o seu erro"; foque em ensinar o certo. Markdown simples.`,
+    content: `Perfil do aluno: ${input.voice}
+Questão: ${input.statement}
+Alternativas: ${input.options.map((o, i) => `${"ABCDE"[i]}) ${o}`).join(" | ") || "(Certo/Errado)"}
+Resposta certa: ${input.correct}
+Explicação curta já existente: ${input.explanation}
+
+Trechos do material:
+${input.chunks.map((c) => `<trecho rotulo="${c.label}" arquivo="${c.materialTitle}" paginas="${c.pageStart}-${c.pageEnd}">\n${c.content}\n</trecho>`).join("\n")}`,
+  });
+  return res.lesson;
 }

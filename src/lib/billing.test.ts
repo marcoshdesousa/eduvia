@@ -47,16 +47,16 @@ describe("assinatura", () => {
 
 describe("planos", () => {
   it("completa limites faltando com os padrões e aceita ilimitado", () => {
-    const l = normalizeLimits({ gamesPerDay: -1, groups: "sim", examsPerDay: 2.4 }, "eduvia");
+    const l = normalizeLimits({ gamesPerDay: -1, groups: "sim", examsPerMonth: 2.4 }, "eduvia");
     expect(l.gamesPerDay).toBe(-1);
     expect(l.groups).toBe(true);
-    expect(l.examsPerDay).toBe(2);
+    expect(l.examsPerMonth).toBe(2);
     expect(l.tutorMessagesPerDay).toBe(40);
   });
   it("lista os benefícios do plano", () => {
     const f = planFeatures(DEFAULT_PLANS[0].limits);
     expect(f).toContain("Sem grupos");
-    expect(f).toContain("2 jogos por dia");
+    expect(f).toContain("3 testes rápidos por dia");
     expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Professor IA: 40 mensagens por dia");
   });
 });

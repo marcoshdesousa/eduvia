@@ -28,8 +28,8 @@ export default async function Page() {
     { label: "PDFs/arquivos guardados", used: used.materials, max: l.materials },
     { label: "Páginas enviadas hoje", used: used.pagesToday, max: l.pagesPerDay },
     { label: "Sessões novas hoje", used: used.newSessionsToday, max: l.newSessionsPerDay },
-    { label: "Jogos hoje", used: used.gamesToday, max: l.gamesPerDay },
-    { label: "Simulados hoje", used: used.examsToday, max: l.examsPerDay },
+    { label: "Testes rápidos hoje", used: used.gamesToday, max: l.gamesPerDay },
+    { label: "Simulados este mês", used: used.examsThisMonth, max: l.examsPerMonth },
     { label: "Redações corrigidas hoje", used: used.essaysToday, max: l.essaysPerDay },
     { label: "Mensagens ao Professor IA hoje", used: used.tutorToday, max: l.tutorMessagesPerDay },
   ];

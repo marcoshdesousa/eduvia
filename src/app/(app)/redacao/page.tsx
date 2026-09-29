@@ -15,17 +15,20 @@ export default async function Page() {
   const essays = await db.essay.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 50 });
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Redação</h1>
-          <p className="text-sm text-muted">Escreva, receba a correção com os trechos marcados e acompanhe sua evolução.</p>
+          <p className="text-sm text-muted">Tema sorteado, correção no estilo ENEM e teste de português, com os trechos marcados.</p>
         </div>
-        <Link href="/redacao/nova" className={buttonClass("primary")}><Plus size={16} /> Nova</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/redacao/nova" className={buttonClass("primary")}><Plus size={16} /> Nova redação</Link>
+          <Link href="/redacao/nova?tipo=portugues" className={buttonClass("outline")}>Teste de português</Link>
+        </div>
       </div>
       {!essays.length && (
         <Card className="text-center">
           <p className="font-medium">Nenhuma redação ainda</p>
-          <p className="mt-1 text-sm text-muted">Escolha um tema (ou peça um para a IA) e escreva seu texto.</p>
+          <p className="mt-1 text-sm text-muted">O tema é sorteado na hora. Escreva do zero, sem IA, e veja sua nota.</p>
           <Link href="/redacao/nova" className={buttonClass("primary", "md", "mt-4")}>Escrever redação</Link>
         </Card>
       )}
