@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, type LabelHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +34,18 @@ export function Field({ label, hint, error, children, htmlFor }: { label: string
   );
 }
 
+/** Mensagens de limite do dia / pausa da IA: convidam a descansar em vez de só dar erro. */
+export const isRestMessage = (m: string) => /Descanse|pausa/i.test(m);
+
 export function FormError({ message }: { message?: string | null }) {
   if (!message) return null;
+  if (isRestMessage(message)) {
+    return (
+      <div className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm">
+        🌿 {message}{" "}
+        <Link href="/descanse" className="font-medium text-primary underline">Ver sugestões para descansar</Link>
+      </div>
+    );
+  }
   return <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{message}</div>;
 }

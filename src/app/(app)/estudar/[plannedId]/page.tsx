@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
-import { getOwnedPlanned } from "@/lib/study";
+import { getOwnedPlanned, nearestSessionMinutes, SESSION_MINUTES } from "@/lib/study";
+import { restAdvice, restSuggestions } from "@/lib/rest";
+import { RestCard } from "@/components/rest-card";
+import { SessionStart } from "./session-start";
 import type { SourceRef } from "@/components/question-card";
 import { SessionLoader } from "./session-loader";
 import { SessionView, type SessionQuestion } from "./session-view";
@@ -25,7 +28,19 @@ export default async function Page({ params }: { params: Promise<{ plannedId: st
   };
 
   const session = planned.studySession;
-  if (!session) return <SessionLoader plannedId={plannedId} header={header} />;
+  if (!session) {
+    if (planned.kind !== "STUDY") return <SessionLoader plannedId={plannedId} header={header} />;
+    const advice = await restAdvice(user);
+    const rest = advice ? (
+      <RestCard
+        title={advice.reason === "time" ? `Você já estudou ${Math.floor(advice.minutesToday / 60)}h${advice.minutesToday % 60 ? ` ${advice.minutesToday % 60}min` : ""} hoje. Descanse um pouco! 🌿` : "Três sessões seguidas sem pausa! Descanse um pouco. 🌿"}
+        suggestions={await restSuggestions(user, planned.topicId)}
+      >
+        <span />
+      </RestCard>
+    ) : null;
+    return <SessionStart plannedId={plannedId} header={header} options={SESSION_MINUTES} suggested={nearestSessionMinutes(planned.durationMin)} rest={rest} />;
+  }
 
   const [text, questions, attempts] = await Promise.all([
     session.studyTextId ? db.studyText.findUnique({ where: { id: session.studyTextId } }) : null,

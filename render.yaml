@@ -42,12 +42,8 @@ services:
       - key: WHATSAPP_NUMBER
         value: "5562992067369"
       - key: BILLING_ENFORCED
-        value: "true" # após os 3 dias de teste, a conta entra no modo limitado
-      # IA: sem a chave, o app roda em modo de demonstração
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: VOYAGE_API_KEY
-        sync: false
+        value: "true" # sem assinatura, a conta fica no plano Grátis (limitado)
+      # IA: Google Gemini com a chave de cada aluno (informada no cadastro). Nada a configurar aqui.
       # notificações push: gere com `npx web-push generate-vapid-keys`
       - key: VAPID_PUBLIC_KEY
         value: BAHR0NyTSbKzMlU5z66DwDtMNfv9ZFZaIN5ps1bBecDlsDDACe4LAR9Bu0zk4N2ZSIlm0_V8yYn87uphNOr9vYQ # pública (pode ficar no código)

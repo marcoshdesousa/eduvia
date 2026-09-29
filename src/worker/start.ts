@@ -16,7 +16,7 @@ export async function startWorker({ handleSignals }: { handleSignals: boolean })
   globalForWorker.workerStarted = true;
   const boss = await getBoss();
   console.log(
-    `[worker] iniciado. IA: ${isMockAi() ? "SIMULADA (sem ANTHROPIC_API_KEY)" : "Claude"}; embeddings: ${usingLocalEmbeddings() ? "locais" : "Voyage AI"}; push: ${pushConfigured() ? "ativo" : "desligado (sem VAPID)"}`,
+    `[worker] iniciado. IA: ${isMockAi() ? "SIMULADA (AI_MODE=mock)" : "Gemini (chave de cada aluno)"}; embeddings: ${usingLocalEmbeddings() ? "locais" : "Voyage AI"}; push: ${pushConfigured() ? "ativo" : "desligado (sem VAPID)"}`,
   );
 
   await boss.work<JobPayloads["material.process"]>(QUEUES.processMaterial, { localConcurrency: 2 }, async (jobs) => {

@@ -1,4 +1,4 @@
-// Tarefas de IA do Eduvia. Cada função tem uma versão real (Claude) e uma simulada (modo mock).
+// Tarefas de IA do Eduvia. Cada função tem uma versão real (Gemini, com a chave do aluno) e uma simulada (modo mock).
 import { callStructured, isMockAi } from "./client";
 import * as mock from "./mock";
 import {
@@ -48,7 +48,8 @@ Tarefa: montar o índice de estudo de um material enviado pelo aluno.
 - Divida o conteúdo em tópicos estudáveis (cada um com 5 a 40 páginas, conforme a densidade), seguindo o sumário/títulos do material quando existirem.
 - Informe pageStart/pageEnd reais (os marcadores [p.N] indicam a página).
 - Ignore capa, sumário, referências e páginas em branco.
-- "subject" é a disciplina. Se o aluno já indicou a disciplina, use exatamente esse nome em todos os tópicos. Prefira reutilizar disciplinas existentes.`,
+- "subject" é a disciplina. Se o aluno já indicou a disciplina, use exatamente esse nome em todos os tópicos. Prefira reutilizar disciplinas existentes.
+- "books": para cada disciplina do material, 2 ou 3 livros conhecidos e reais (título e autor) para o aluno ler nos momentos de descanso. Só indique livros que você tem certeza de que existem.`,
     content: `Material: "${input.materialTitle}"
 Disciplina indicada pelo aluno: ${input.subjectHint ?? "(não indicada)"}
 Disciplinas já existentes na preparação: ${input.existingSubjects.join(", ") || "(nenhuma)"}
@@ -192,7 +193,7 @@ export async function ocrPdfPages(input: { userId: string; pdfBase64: string; pa
     maxTokens: 32000,
     system: `Transcreva fielmente o texto das páginas do documento, na ordem de leitura. Mantenha títulos e listas. Descreva tabelas em texto corrido. Não resuma nem corrija.`,
     content: [
-      { type: "document", source: { type: "base64", media_type: "application/pdf", data: input.pdfBase64 } },
+      { type: "pdf", data: input.pdfBase64 },
       { type: "text", text: `O documento contém as páginas originais ${input.pageNumbers.join(", ")} (nesta ordem). Retorne o texto de cada uma usando esses números.` },
     ],
   });
@@ -208,7 +209,7 @@ export async function ocrImage(input: { userId: string; base64: string; mediaTyp
     maxTokens: 16000,
     system: `Transcreva fielmente o texto da imagem, na ordem de leitura. Não resuma.`,
     content: [
-      { type: "image", source: { type: "base64", media_type: input.mediaType, data: input.base64 } },
+      { type: "image", mediaType: input.mediaType, data: input.base64 },
       { type: "text", text: "Retorne como página 1." },
     ],
   });

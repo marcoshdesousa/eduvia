@@ -14,8 +14,9 @@ export default function Page() {
       <p>O Eduvia remove conteúdos mediante notificação fundamentada do titular dos direitos e pode suspender contas em caso de violação reiterada.</p>
       <h2>4. Conteúdo gerado pela IA</h2>
       <p>Textos, questões e correções são gerados automaticamente a partir do seu material e podem conter imprecisões. Use-os como apoio ao estudo e confira as informações importantes na fonte indicada.</p>
+      <p>A IA do Eduvia é o Google Gemini, usado com a <strong>chave de API do próprio aluno</strong>, obrigatória no cadastro. O uso da chave segue os termos do Google e a cota da conta Google do aluno. Na cota gratuita, o Google pode usar o conteúdo enviado para melhorar os produtos dele; com o faturamento ativado na conta Google, isso não acontece. O Eduvia guarda a chave criptografada e só a usa para gerar o seu conteúdo.</p>
       <h2>5. Planos e pagamento</h2>
-      <p>Novas contas têm 3 dias de teste grátis. Depois disso, sem assinatura, a conta continua disponível no plano Grátis (1 preparação, revisões, banco de erros e 1 jogo por dia, sem envio de novos materiais). Os planos pagos (Essencial, Completo e Intensivo, com preços e limites mostrados na página de assinatura) podem ser semanais ou mensais e são contratados e paga pelo WhatsApp e liberada manualmente após a confirmação do pagamento. Não há renovação automática: ao fim do período, basta renovar.</p>
+      <p>Novas contas começam no plano Grátis, para testar, com limites diários bem pequenos. O plano Eduvia libera todos os recursos, com limites por dia pensados para a cota gratuita do Gemini, e custa R$ 7 por 7 dias ou R$ 15 por 30 dias (valores atuais na página de assinatura). O plano é contratado e pago pelo WhatsApp e liberado manualmente após a confirmação do pagamento. Não há renovação automática: ao fim do período, basta renovar.</p>
       <h2>6. Uso adequado</h2>
       <p>Não é permitido tentar acessar dados de outros usuários, sobrecarregar o serviço, usar robôs para extrair conteúdo ou revender o acesso.</p>
       <h2>7. Encerramento</h2>

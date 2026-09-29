@@ -20,12 +20,14 @@ export async function requireUser() {
 }
 
 /**
- * Usuário com cadastro completo (CPF, telefone, @ e termos).
- * Sem assinatura nem teste grátis, o app continua acessível no modo limitado (ver lib/billing.ts).
+ * Usuário com cadastro completo (CPF, telefone, @, termos e chave do Gemini).
+ * Sem assinatura, o app funciona no plano Grátis (limitado; ver lib/billing.ts).
  */
 export async function requireReadyUser() {
   const user = await requireUser();
   if (!user.handle || !user.termsAcceptedAt || !user.cpf || !user.phone) redirect("/boas-vindas");
+  // a IA roda com a chave do Gemini do próprio aluno: sem ela, só dá para conectar
+  if (!user.geminiKey) redirect("/conectar-ia");
   return user;
 }
 

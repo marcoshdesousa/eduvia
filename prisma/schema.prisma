@@ -48,6 +48,13 @@ model User {
   termsVersion          String?
   trialEndsAt           DateTime?
   billingCustomerId     String?
+  /// Chave da API do Gemini do aluno, criptografada (AES-256-GCM). Obrigatória para usar a IA.
+  geminiKey             String?
+  /// Últimos caracteres da chave, para o aluno reconhecer qual está usando.
+  geminiKeyHint         String?
+  geminiConnectedAt     DateTime?
+  /// A IA do aluno pediu pausa (cota do Google) até este horário.
+  aiPausedUntil         DateTime?
 
   xp            Int       @default(0)
   currentStreak Int       @default(0)
@@ -209,6 +216,8 @@ model Subject {
   name          String
   weight        Float       @default(1)
   order         Int         @default(0)
+  /// Livros recomendados pela IA (gerados junto com o índice do material): [{ title, author }]
+  books         Json?
   createdAt     DateTime    @default(now())
 
   topics    Topic[]

@@ -27,8 +27,8 @@ export function PlanEditor({ plan }: { plan: Plan }) {
           <Field label="Nome" htmlFor={`${plan.slug}-name`}><Input id={`${plan.slug}-name`} name="name" defaultValue={plan.name} /></Field>
           {!isFree && (
             <>
-              <Field label="Preço semanal (R$)" htmlFor={`${plan.slug}-w`}><Input id={`${plan.slug}-w`} name="priceWeek" inputMode="decimal" defaultValue={money(plan.priceWeekCents)} /></Field>
-              <Field label="Preço mensal (R$)" htmlFor={`${plan.slug}-m`}><Input id={`${plan.slug}-m`} name="priceMonth" inputMode="decimal" defaultValue={money(plan.priceMonthCents)} /></Field>
+              <Field label="Preço 7 dias (R$)" htmlFor={`${plan.slug}-w`}><Input id={`${plan.slug}-w`} name="priceWeek" inputMode="decimal" defaultValue={money(plan.priceWeekCents)} /></Field>
+              <Field label="Preço 30 dias (R$)" htmlFor={`${plan.slug}-m`}><Input id={`${plan.slug}-m`} name="priceMonth" inputMode="decimal" defaultValue={money(plan.priceMonthCents)} /></Field>
             </>
           )}
         </div>

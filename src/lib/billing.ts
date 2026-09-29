@@ -1,20 +1,10 @@
 // Assinatura manual: o aluno paga pelo WhatsApp e um admin libera o plano em /admin.
-// Cada plano (grátis, essencial, completo, intensivo) tem preço semanal/mensal e limites próprios.
+// Um plano pago (Eduvia: 7 ou 30 dias) e o plano Grátis, bem limitado, para testar. Limites são por dia.
 import { db } from "@/lib/db";
 import { addDays, today } from "@/lib/core/dates";
-import {
-  DEFAULT_PLANS,
-  ESSAY_SAFETY_PER_DAY,
-  isUnlimited,
-  normalizeLimits,
-  TRIAL_PLAN,
-  type PlanLimits,
-  type PlanSlug,
-} from "@/lib/plans";
+import { DEFAULT_PLANS, isUnlimited, normalizeLimits, PAID_PLAN, PERIOD_DAYS, type PlanLimits, type PlanSlug } from "@/lib/plans";
 
-export const TRIAL_DAYS = 3;
-
-type UserLike = { id: string; trialEndsAt: Date | null; timezone?: string };
+type UserLike = { id: string; timezone?: string };
 
 export type PlanRow = { slug: string; name: string; order: number; priceWeekCents: number; priceMonthCents: number; limits: PlanLimits; active: boolean };
 
@@ -45,15 +35,11 @@ export function whatsappLink(message: string) {
 }
 
 export function subscribeMessage(plan: { name: string; priceWeekCents: number; priceMonthCents: number }, interval: "WEEK" | "MONTH", user: { name: string; handle: string | null }) {
-  const price = interval === "WEEK" ? `${formatBRL(plan.priceWeekCents)}/semana` : `${formatBRL(plan.priceMonthCents)}/mês`;
-  return `Olá! Quero assinar o plano ${plan.name} ${interval === "WEEK" ? "semanal" : "mensal"} do Eduvia (${price}).\nNome: ${user.name}\nUsuário: @${user.handle}`;
+  const period = interval === "WEEK" ? `semanal (7 dias) por ${formatBRL(plan.priceWeekCents)}` : `mensal (30 dias) por ${formatBRL(plan.priceMonthCents)}`;
+  return `Olá! Quero assinar o plano ${plan.name} ${period}.\nNome: ${user.name}\nUsuário: @${user.handle}`;
 }
 
-export function trialEnd(from = new Date()) {
-  return addDays(from, TRIAL_DAYS);
-}
-
-/** Com BILLING_ENFORCED=false (só para desenvolvimento) todo mundo tem o plano mais alto. */
+/** Com BILLING_ENFORCED=false (só para desenvolvimento) todo mundo tem o plano pago. */
 export function billingEnforced() {
   return process.env.BILLING_ENFORCED !== "false";
 }
@@ -68,72 +54,78 @@ export async function activeSubscription(userId: string) {
 
 export type Access = { planSlug: PlanSlug; planName: string; limits: PlanLimits } & (
   | { mode: "full"; reason: "subscription"; until: Date; interval: "WEEK" | "MONTH" }
-  | { mode: "full"; reason: "trial"; until: Date }
   | { mode: "full"; reason: "dev" }
-  | { mode: "limited"; reason: "expired" }
+  | { mode: "limited"; reason: "free" }
 );
 
 export async function getAccess(user: UserLike): Promise<Access> {
   const plans = await listPlans();
-  const plan = (slug: string) => plans.find((p) => p.slug === slug) ?? plans[0];
+  const plan = (slug: string) => plans.find((p) => p.slug === slug) ?? plans[plans.length - 1];
   const sub = await activeSubscription(user.id);
   if (sub) {
     const p = plan(sub.planSlug);
     return { mode: "full", reason: "subscription", until: sub.currentPeriodEnd, interval: sub.interval, planSlug: p.slug as PlanSlug, planName: p.name, limits: p.limits };
   }
-  if (user.trialEndsAt && user.trialEndsAt > new Date()) {
-    const p = plan(TRIAL_PLAN);
-    return { mode: "full", reason: "trial", until: user.trialEndsAt, planSlug: p.slug as PlanSlug, planName: p.name, limits: p.limits };
-  }
   if (!billingEnforced()) {
-    const p = plans[plans.length - 1];
+    const p = plan(PAID_PLAN);
     return { mode: "full", reason: "dev", planSlug: p.slug as PlanSlug, planName: p.name, limits: p.limits };
   }
   const free = plan("gratis");
-  return { mode: "limited", reason: "expired", planSlug: "gratis", planName: free.name, limits: free.limits };
+  return { mode: "limited", reason: "free", planSlug: "gratis", planName: free.name, limits: free.limits };
 }
 
-export async function hasAccess(user: UserLike) {
-  return (await getAccess(user)).mode === "full";
-}
+// ───────────── Uso de hoje (para aplicar limites e mostrar ao aluno) ─────────────
 
-// ───────────── Uso atual (para aplicar limites e mostrar ao aluno) ─────────────
+/** Páginas enviadas hoje (todas) e páginas escaneadas lidas pela IA hoje. */
+async function pagesToday(userId: string, dayStart: Date, exceptMaterialId?: string) {
+  const mats = await db.material.findMany({
+    where: { uploaderId: userId, createdAt: { gte: dayStart }, status: { not: "ERROR" }, ...(exceptMaterialId ? { id: { not: exceptMaterialId } } : {}) },
+    select: { blobId: true, blob: { select: { pageCount: true } } },
+  });
+  const blobIds = mats.flatMap((m) => (m.blobId ? [m.blobId] : []));
+  const scanned = blobIds.length ? await db.materialPage.count({ where: { blobId: { in: blobIds }, ocr: true } }) : 0;
+  return { pages: mats.reduce((s, m) => s + (m.blob?.pageCount ?? 0), 0), scanned };
+}
 
 export async function usage(user: UserLike) {
   const tz = user.timezone ?? "America/Sao_Paulo";
   const dayStart = localDayStart(tz);
-  const monthStart = localMonthStart(tz);
-  const [activePreparations, materials, pages, newSessionsToday, gamesToday, examsThisMonth, essaysToday, tutorThisMonth, groupsOwned] = await Promise.all([
+  const [activePreparations, materials, pages, newSessionsToday, gamesToday, examsToday, essaysToday, tutorToday, groupsOwned, studyDay] = await Promise.all([
     db.preparation.count({ where: { userId: user.id, status: "ACTIVE" } }),
     db.material.count({ where: { preparation: { userId: user.id }, role: "CONTENT", status: { not: "ERROR" } } }),
-    db.material.findMany({
-      where: { uploaderId: user.id, createdAt: { gte: monthStart }, status: { not: "ERROR" } },
-      select: { blob: { select: { pageCount: true } } },
-    }),
+    pagesToday(user.id, dayStart),
     db.studySession.count({ where: { userId: user.id, kind: "STUDY", startedAt: { gte: dayStart } } }),
     db.gameRun.count({ where: { userId: user.id, startedAt: { gte: dayStart } } }),
-    db.exam.count({ where: { ownerId: user.id, createdAt: { gte: monthStart } } }),
+    db.exam.count({ where: { ownerId: user.id, createdAt: { gte: dayStart } } }),
     db.essay.count({ where: { userId: user.id, status: { not: "DRAFT" }, createdAt: { gte: dayStart } } }),
-    db.tutorMessage.count({ where: { role: "user", createdAt: { gte: monthStart }, thread: { userId: user.id } } }),
+    db.tutorMessage.count({ where: { role: "user", createdAt: { gte: dayStart }, thread: { userId: user.id } } }),
     db.group.count({ where: { ownerId: user.id } }),
+    db.studyDay.findUnique({ where: { userId_date: { userId: user.id, date: today(tz) } } }),
   ]);
   return {
     activePreparations,
     materials,
-    pagesThisMonth: pages.reduce((s, m) => s + (m.blob?.pageCount ?? 0), 0),
+    pagesToday: pages.pages,
+    scannedToday: pages.scanned,
     newSessionsToday,
     gamesToday,
-    examsThisMonth,
+    examsToday,
     essaysToday,
-    tutorThisMonth,
+    tutorToday,
     groupsOwned,
+    studyMinutesToday: studyDay?.minutes ?? 0,
   };
 }
 
 const over = (used: number, max: number) => !isUnlimited(max) && used >= max;
 
 function upgradeHint(a: Access) {
-  return a.reason === "expired" ? " Assine um plano para liberar." : a.planSlug === "intensivo" ? "" : " Faça upgrade do plano para aumentar.";
+  return a.reason === "free" ? " Assine o Eduvia para liberar mais." : "";
+}
+
+/** Mensagem de limite do dia atingido (a tela mostra o convite para descansar). */
+function dailyLimit(a: Access, what: string) {
+  return `Você chegou ao limite de hoje: ${what}. Descanse um pouco! Amanhã libera de novo.${upgradeHint(a)}`;
 }
 
 // ───────────── Regras (devolvem a mensagem de bloqueio ou null) ─────────────
@@ -142,21 +134,19 @@ export async function preparationLimitError(user: UserLike) {
   const a = await getAccess(user);
   const used = await db.preparation.count({ where: { userId: user.id, status: "ACTIVE" } });
   return over(used, a.limits.activePreparations)
-    ? `Seu plano ${a.planName} permite ${a.limits.activePreparations} preparação(ões) ativa(s). Arquive ou exclua uma para criar outra.${upgradeHint(a)}`
+    ? `O plano ${a.planName} permite ${a.limits.activePreparations} preparação(ões) ativa(s). Arquive ou exclua uma para criar outra.${upgradeHint(a)}`
     : null;
 }
 
-/** Envio de arquivo de conteúdo (conta PDFs guardados e páginas do mês). Edital/ementa só contam páginas. */
+/** Envio de arquivo de conteúdo (conta PDFs guardados e páginas do dia). Edital/ementa só contam páginas. */
 export async function uploadLimitError(user: UserLike, role: "CONTENT" | "EDITAL" | "EMENTA" = "CONTENT") {
   const a = await getAccess(user);
-  if (a.limits.pagesPerMonth === 0) return `Seu plano ${a.planName} não inclui envio de materiais.${upgradeHint(a)}`;
+  if (a.limits.pagesPerDay === 0) return `O plano ${a.planName} não inclui envio de materiais.${upgradeHint(a)}`;
   const u = await usage(user);
   if (role === "CONTENT" && over(u.materials, a.limits.materials)) {
-    return `Você chegou ao limite de ${a.limits.materials} arquivos do plano ${a.planName}. Exclua um material para enviar outro.${upgradeHint(a)}`;
+    return `Você chegou ao limite de ${a.limits.materials} arquivo(s) do plano ${a.planName}. Exclua um material para enviar outro.${upgradeHint(a)}`;
   }
-  if (over(u.pagesThisMonth, a.limits.pagesPerMonth)) {
-    return `Você já enviou ${u.pagesThisMonth} de ${a.limits.pagesPerMonth} páginas este mês no plano ${a.planName}.${upgradeHint(a)}`;
-  }
+  if (over(u.pagesToday, a.limits.pagesPerDay)) return dailyLimit(a, `${a.limits.pagesPerDay} páginas enviadas`);
   return null;
 }
 
@@ -164,16 +154,23 @@ export async function uploadLimitError(user: UserLike, role: "CONTENT" | "EDITAL
 export async function pageQuotaError(userId: string, materialId: string, pages: number) {
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
   const a = await getAccess(user);
-  if (isUnlimited(a.limits.pagesPerMonth)) return null;
-  const monthStart = localMonthStart(user.timezone);
-  const others = await db.material.findMany({
-    where: { uploaderId: userId, id: { not: materialId }, createdAt: { gte: monthStart }, status: { not: "ERROR" } },
-    select: { blob: { select: { pageCount: true } } },
-  });
-  const used = others.reduce((s, m) => s + (m.blob?.pageCount ?? 0), 0);
-  const left = Math.max(0, a.limits.pagesPerMonth - used);
+  if (isUnlimited(a.limits.pagesPerDay)) return null;
+  const used = (await pagesToday(userId, localDayStart(user.timezone), materialId)).pages;
+  const left = Math.max(0, a.limits.pagesPerDay - used);
   return pages > left
-    ? `Este arquivo tem ${pages} páginas, mas restam ${left} das ${a.limits.pagesPerMonth} páginas do mês no plano ${a.planName}. Divida o PDF ou faça upgrade do plano.`
+    ? `Este arquivo tem ${pages} páginas, mas hoje restam ${left} das ${a.limits.pagesPerDay} páginas por dia do plano ${a.planName}. Divida o PDF ou envie amanhã.${upgradeHint(a)}`
+    : null;
+}
+
+/** Páginas escaneadas (foto): a IA precisa ler cada uma. Checado antes do OCR. */
+export async function scannedQuotaError(userId: string, materialId: string, pages: number) {
+  const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  const a = await getAccess(user);
+  if (isUnlimited(a.limits.scannedPagesPerDay)) return null;
+  const used = (await pagesToday(userId, localDayStart(user.timezone), materialId)).scanned;
+  const left = Math.max(0, a.limits.scannedPagesPerDay - used);
+  return pages > left
+    ? `Este arquivo tem ${pages} página(s) escaneada(s) (foto), mas hoje restam ${left} das ${a.limits.scannedPagesPerDay} por dia do plano ${a.planName}. Envie um PDF com texto (não foto) ou tente amanhã.${upgradeHint(a)}`
     : null;
 }
 
@@ -182,44 +179,38 @@ export async function sessionLimitError(user: UserLike & { timezone: string }) {
   const a = await getAccess(user);
   const used = await db.studySession.count({ where: { userId: user.id, kind: "STUDY", startedAt: { gte: localDayStart(user.timezone) } } });
   if (a.limits.newSessionsPerDay === 0) return `No plano ${a.planName} você pode fazer revisões e o banco de erros, mas não sessões novas.${upgradeHint(a)}`;
-  return over(used, a.limits.newSessionsPerDay)
-    ? `Você já fez ${used} sessão(ões) nova(s) hoje (limite do plano ${a.planName}). Revisões continuam liberadas.${upgradeHint(a)}`
-    : null;
+  return over(used, a.limits.newSessionsPerDay) ? dailyLimit(a, `${a.limits.newSessionsPerDay} sessão(ões) nova(s). Revisões continuam liberadas`) : null;
 }
 
 export type Feature = "game" | "exam" | "essay" | "tutor";
 
-/** Jogos (por dia), simulados (por mês), redação e Professor IA (por mês). */
+const FEATURE: Record<Feature, { limit: keyof PlanLimits; used: "gamesToday" | "examsToday" | "essaysToday" | "tutorToday"; none: string; what: (n: number) => string }> = {
+  game: { limit: "gamesPerDay", used: "gamesToday", none: "Jogos não fazem parte", what: (n) => `${n} partida(s) de jogo` },
+  exam: { limit: "examsPerDay", used: "examsToday", none: "Simulados não fazem parte", what: (n) => `${n} simulado(s). Refazer simulados continua liberado` },
+  essay: { limit: "essaysPerDay", used: "essaysToday", none: "A correção de redação não faz parte", what: (n) => `${n} redação(ões) corrigida(s)` },
+  tutor: { limit: "tutorMessagesPerDay", used: "tutorToday", none: "O Professor IA não faz parte", what: (n) => `${n} mensagens ao Professor IA` },
+};
+
+/** Jogos, simulados, redação e Professor IA: limites por dia. */
 export async function featureLimitError(user: UserLike & { timezone: string }, feature: Feature) {
   const a = await getAccess(user);
+  const f = FEATURE[feature];
+  const max = a.limits[f.limit] as number;
+  if (max === 0) return `${f.none} do plano ${a.planName}.${upgradeHint(a)}`;
   const u = await usage(user);
-  const l = a.limits;
-  switch (feature) {
-    case "game":
-      if (l.gamesPerDay === 0) return `Jogos não fazem parte do plano ${a.planName}.${upgradeHint(a)}`;
-      return over(u.gamesToday, l.gamesPerDay) ? `Você jogou ${u.gamesToday} partida(s) hoje, o limite do plano ${a.planName}. Volte amanhã!${upgradeHint(a)}` : null;
-    case "exam":
-      if (l.examsPerMonth === 0) return `Simulados não fazem parte do plano ${a.planName}.${upgradeHint(a)}`;
-      return over(u.examsThisMonth, l.examsPerMonth) ? `Você já criou ${u.examsThisMonth} simulado(s) este mês, o limite do plano ${a.planName}. Refazer simulados continua liberado.${upgradeHint(a)}` : null;
-    case "essay":
-      if (!l.essays) return `A correção de redação não faz parte do plano ${a.planName}.${upgradeHint(a)}`;
-      return u.essaysToday >= ESSAY_SAFETY_PER_DAY ? "Você corrigiu muitas redações hoje. Volte amanhã!" : null;
-    case "tutor":
-      if (l.tutorMessagesPerMonth === 0) return `O Professor IA não faz parte do plano ${a.planName}.${upgradeHint(a)}`;
-      return over(u.tutorThisMonth, l.tutorMessagesPerMonth) ? `Você usou as ${l.tutorMessagesPerMonth} mensagens do mês do plano ${a.planName}.${upgradeHint(a)}` : null;
-  }
+  return over(u[f.used], max) ? dailyLimit(a, f.what(max)) : null;
 }
 
 export async function groupCreateError(user: UserLike) {
   const a = await getAccess(user);
-  if (!a.limits.groups) return `Grupos fazem parte dos planos pagos.${upgradeHint(a)}`;
+  if (!a.limits.groups) return `Grupos fazem parte do plano pago.${upgradeHint(a)}`;
   const owned = await db.group.count({ where: { ownerId: user.id } });
-  return over(owned, a.limits.groupsOwned) ? `Você já criou ${owned} grupo(s), o máximo do seu plano.` : null;
+  return over(owned, a.limits.groupsOwned) ? `Você já criou ${owned} grupo(s), o máximo do plano.` : null;
 }
 
 export async function groupAccessError(user: UserLike) {
   const a = await getAccess(user);
-  return a.limits.groups ? null : `Grupos fazem parte dos planos pagos.${upgradeHint(a)}`;
+  return a.limits.groups ? null : `Grupos fazem parte do plano pago.${upgradeHint(a)}`;
 }
 
 // ───────────── Datas ─────────────
@@ -243,19 +234,9 @@ function localMidnight(day: Date, tz: string) {
   return new Date(day.getTime() - offsetMin * 60_000);
 }
 
-/** Soma um período de cobrança (semana ou mês calendário). */
+/** Soma um período de cobrança: 7 dias (semanal) ou 30 dias (mensal). */
 export function addPeriod(from: Date, interval: "WEEK" | "MONTH"): Date {
-  const d = new Date(from);
-  if (interval === "WEEK") {
-    d.setUTCDate(d.getUTCDate() + 7);
-    return d;
-  }
-  const day = d.getUTCDate();
-  d.setUTCDate(1);
-  d.setUTCMonth(d.getUTCMonth() + 1);
-  const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-  d.setUTCDate(Math.min(day, lastDay));
-  return d;
+  return addDays(from, PERIOD_DAYS[interval]);
 }
 
 export function formatBRL(cents: number) {

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
-import { formatBRL, listPlans, localMonthStart } from "@/lib/billing";
+import { formatBRL, listPlans, localDayStart, localMonthStart } from "@/lib/billing";
 import { onlyDigits } from "@/lib/core/cpf";
 import { formatCpf, formatPhone } from "@/lib/core/phone";
 import { formatDay } from "@/lib/core/dates";
@@ -19,12 +19,9 @@ export const metadata = { title: "Admin" };
 const TABS = [
   { key: "alunos", label: "Alunos" },
   { key: "planos", label: "Planos" },
-  { key: "custos", label: "Custos de IA" },
+  { key: "ia", label: "Uso de IA" },
 ] as const;
 
-/** Cotação usada só para exibir o custo da IA (cobrado em dólar) em reais. */
-const USD_BRL = Number(process.env.USD_BRL || 5.5);
-const brlFromMicros = (micros: number) => formatBRL(Math.round((micros / 1_000_000) * USD_BRL * 100));
 const TASK_LABEL: Record<string, string> = {
   outline: "Organizar PDFs",
   edital: "Ler edital/ementa",
@@ -44,25 +41,26 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
   const monthStart = localMonthStart(admin.timezone);
   const plans = await listPlans();
 
-  const [total, inTrial, subscribers, revenue, aiMonth] = await Promise.all([
+  const dayStart = localDayStart(admin.timezone);
+  const [total, withAi, subscribers, revenue, aiToday] = await Promise.all([
     db.user.count({ where: { cpf: { not: null } } }),
-    db.user.count({ where: { trialEndsAt: { gt: now } } }),
+    db.user.count({ where: { cpf: { not: null }, geminiKey: { not: null } } }),
     db.subscription.count({ where: { status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: now } } }),
     db.payment.aggregate({ _sum: { valueCents: true }, where: { status: "PAID", paidAt: { gte: monthStart } } }),
-    db.aiUsage.aggregate({ _sum: { costMicros: true }, where: { createdAt: { gte: monthStart } } }),
+    db.aiUsage.count({ where: { createdAt: { gte: dayStart } } }),
   ]);
 
   const header = (
     <>
       <div>
         <h1 className="text-2xl font-bold">Admin</h1>
-        <p className="text-sm text-muted">Libere planos, ajuste preços e limites e acompanhe o custo da IA.</p>
+        <p className="text-sm text-muted">Libere planos, ajuste preços e limites e acompanhe o uso da IA dos alunos.</p>
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Contas" value={total} hint={`${inTrial} em teste`} />
+        <Stat label="Contas" value={total} hint={`${withAi} com IA conectada`} />
         <Stat label="Assinantes" value={subscribers} />
         <Stat label="Recebido no mês" value={formatBRL(revenue._sum.valueCents ?? 0)} />
-        <Stat label="Custo de IA no mês" value={brlFromMicros(aiMonth._sum.costMicros ?? 0)} hint="estimado" />
+        <Stat label="Usos de IA hoje" value={aiToday} hint="custo R$ 0 (chave do aluno)" />
       </div>
       <nav className="flex gap-1 border-b border-border">
         {TABS.map((t) => (
@@ -84,10 +82,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
     );
   }
 
-  if (tab === "custos") {
+  if (tab === "ia") {
     const [byTask, byUser] = await Promise.all([
-      db.aiUsage.groupBy({ by: ["task"], where: { createdAt: { gte: monthStart } }, _sum: { costMicros: true }, _count: true, orderBy: { _sum: { costMicros: "desc" } } }),
-      db.aiUsage.groupBy({ by: ["userId"], where: { createdAt: { gte: monthStart } }, _sum: { costMicros: true }, orderBy: { _sum: { costMicros: "desc" } }, take: 20 }),
+      db.aiUsage.groupBy({ by: ["task"], where: { createdAt: { gte: dayStart } }, _sum: { inputTokens: true, outputTokens: true }, _count: true, orderBy: { _count: { task: "desc" } } }),
+      db.aiUsage.groupBy({ by: ["userId"], where: { createdAt: { gte: dayStart } }, _count: true, orderBy: { _count: { userId: "desc" } }, take: 20 }),
     ]);
     const users = await db.user.findMany({
       where: { id: { in: byUser.flatMap((u) => (u.userId ? [u.userId] : [])) } },
@@ -97,16 +95,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
     return (
       <div className="space-y-6">
         {header}
-        <p className="text-xs text-muted">Valores estimados a partir dos tokens de cada chamada (cotação R$ {USD_BRL.toFixed(2).replace(".", ",")} por dólar; ajuste com a variável USD_BRL). Mês atual.</p>
+        <p className="text-xs text-muted">Hoje. Cada aluno usa a própria chave do Gemini, então a IA não custa nada para a plataforma. Serve para ver quem está perto dos limites.</p>
         <Card>
           <CardTitle>Por tarefa</CardTitle>
-          {!byTask.length && <p className="mt-2 text-sm text-muted">Nenhum uso de IA este mês (sem chave da Anthropic o app usa o modo de demonstração, sem custo).</p>}
+          {!byTask.length && <p className="mt-2 text-sm text-muted">Nenhum uso de IA hoje.</p>}
           <ul className="mt-3 divide-y divide-border text-sm">
             {byTask.map((t) => (
               <li key={t.task} className="flex items-center justify-between gap-3 py-2">
                 <span>{TASK_LABEL[t.task] ?? t.task}</span>
-                <span className="text-muted">{t._count} chamada(s)</span>
-                <span className="w-24 text-right font-medium">{brlFromMicros(t._sum.costMicros ?? 0)}</span>
+                <span className="text-muted">{(((t._sum.inputTokens ?? 0) + (t._sum.outputTokens ?? 0)) / 1000).toFixed(0)} mil tokens</span>
+                <span className="w-24 text-right font-medium">{t._count} uso(s)</span>
               </li>
             ))}
           </ul>
@@ -120,8 +118,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
               return (
                 <li key={u.userId ?? "sistema"} className="flex flex-wrap items-center justify-between gap-3 py-2">
                   <span className="min-w-0 flex-1 truncate">{info ? `${info.name} @${info.handle}` : "Sistema"}</span>
-                  <span className="text-xs text-muted">{plan ? `${plan.plan.name} · ${formatBRL(plan.interval === "WEEK" ? plan.plan.priceWeekCents : plan.plan.priceMonthCents)}/${plan.interval === "WEEK" ? "sem" : "mês"}` : "sem plano"}</span>
-                  <span className="w-24 text-right font-medium">{brlFromMicros(u._sum.costMicros ?? 0)}</span>
+                  <span className="text-xs text-muted">{plan ? `${plan.plan.name} ${plan.interval === "WEEK" ? "7 dias" : "30 dias"}` : "Grátis"}</span>
+                  <span className="w-24 text-right font-medium">{u._count} uso(s)</span>
                 </li>
               );
             })}
@@ -163,7 +161,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
         {!list.length && <Card className="text-sm text-muted">Ninguém encontrado.</Card>}
         {list.map((u) => {
           const sub = u.subscriptions[0];
-          const trial = u.trialEndsAt && u.trialEndsAt > now;
           return (
             <Card key={u.id} className="flex flex-col gap-3 lg:flex-row lg:items-center">
               <div className="min-w-0 flex-1">
@@ -172,11 +169,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
                   <span className="text-sm text-muted">@{u.handle}</span>
                   {sub ? (
                     <Badge tone="success">{sub.plan.name} {sub.interval === "WEEK" ? "semanal" : "mensal"} até {formatDay(sub.currentPeriodEnd, { day: "2-digit", month: "short" })}</Badge>
-                  ) : trial ? (
-                    <Badge tone="primary">Teste até {formatDay(u.trialEndsAt!, { day: "2-digit", month: "short" })}</Badge>
                   ) : (
-                    <Badge tone="danger">Grátis</Badge>
+                    <Badge tone="warning">Grátis</Badge>
                   )}
+                  {u.geminiKey ? <Badge tone="primary">IA conectada</Badge> : <Badge tone="danger">Sem IA</Badge>}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-muted">
                   <span>CPF {formatCpf(u.cpf!)}</span>

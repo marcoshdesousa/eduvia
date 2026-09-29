@@ -20,7 +20,8 @@ export default function Page() {
         <li>Dados de crianças e adolescentes: tratados no seu melhor interesse; o uso por menores exige autorização de um dos pais ou responsável (art. 14 da LGPD).</li>
       </ul>
       <h2>Compartilhamento</h2>
-      <p>Usamos fornecedores para hospedagem, armazenamento de arquivos e processamento por inteligência artificial. Pagamentos são combinados pelo WhatsApp. Eles tratam os dados apenas para executar esses serviços. Não vendemos dados pessoais.</p>
+      <p>O processamento por inteligência artificial é feito pelo Google Gemini, com a chave de API do próprio aluno: os trechos do material, as perguntas e as redações são enviados ao Google para gerar as respostas, conforme os termos do Google para a conta do aluno (na cota gratuita, o Google pode usar esses dados para melhorar os serviços dele). A chave fica guardada criptografada.</p>
+      <p>Usamos fornecedores para hospedagem e armazenamento de arquivos. Pagamentos são combinados pelo WhatsApp. Eles tratam os dados apenas para executar esses serviços. Não vendemos dados pessoais.</p>
       <h2>Seus direitos</h2>
       <p>Você pode acessar, corrigir, exportar e excluir seus dados, e revogar consentimentos, pelas configurações da conta ou pelo nosso WhatsApp de atendimento.</p>
       <h2>Retenção</h2>

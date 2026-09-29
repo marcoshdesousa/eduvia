@@ -40,6 +40,11 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
   await expect(page.getByText(/15 min/).first()).toBeVisible();
   await page.getByRole("link", { name: "Estudar" }).first().click();
 
+  // o aluno escolhe quanto tempo tem (5 a 45 min)
+  await expect(page.getByText("Quanto tempo você tem agora?")).toBeVisible();
+  await page.getByRole("radio", { name: "10 min" }).click();
+  await page.getByRole("button", { name: "Começar sessão de 10 min" }).click();
+
   // sessão: texto → recuperação ativa → questões → concluir
   await expect(page.getByRole("button", { name: /Já li|Continuar/ })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("Destaques")).toBeVisible();

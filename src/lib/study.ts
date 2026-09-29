@@ -16,6 +16,14 @@ export type SourceRef = { label: string; materialId: string; title: string; page
 
 const MAX_CONTEXT_CHARS = 60_000;
 
+/** Durações que o aluno pode escolher ao começar uma sessão. */
+export const SESSION_MINUTES = [5, 10, 15, 20, 30, 45] as const;
+
+/** Duração da lista mais próxima de um valor qualquer (ex.: o sugerido pelo plano). */
+export function nearestSessionMinutes(min: number) {
+  return SESSION_MINUTES.reduce((best, m) => (Math.abs(m - min) < Math.abs(best - min) ? m : best), SESSION_MINUTES[0]);
+}
+
 /** Carrega a sessão planejada garantindo que pertence ao usuário. */
 export async function getOwnedPlanned(plannedId: string, userId: string) {
   return db.plannedSession.findFirst({
@@ -45,8 +53,13 @@ export async function openSession(plannedId: string, userId: string) {
     });
     studyTextId = text.id;
     const qs = await db.question.findMany({ where: { studyTextId: text.id }, orderBy: { createdAt: "asc" }, select: { id: true, type: true } });
-    // recuperação ativa primeiro, depois objetivas
-    questionIds = [...qs.filter((q) => q.type === "OPEN_RECALL"), ...qs.filter((q) => q.type !== "OPEN_RECALL")].map((q) => q.id);
+    // recuperação ativa primeiro, depois objetivas; quantidade conforme o tempo escolhido (o texto pode vir do cache)
+    const recall = Math.min(3, Math.max(1, Math.round(planned.durationMin / 12)));
+    const objective = Math.min(10, Math.max(3, Math.round(planned.durationMin / 3)));
+    questionIds = [
+      ...qs.filter((q) => q.type === "OPEN_RECALL").slice(0, recall),
+      ...qs.filter((q) => q.type !== "OPEN_RECALL").slice(0, objective),
+    ].map((q) => q.id);
   } else {
     questionIds = await pickReviewQuestions(userId, planned.topicId, Math.max(4, Math.round(planned.durationMin / 2)));
   }

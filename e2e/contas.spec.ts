@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { PASSWORD, signUp } from "./helpers";
+import { GEMINI_KEY, PASSWORD, signUp } from "./helpers";
 
 const uid = Date.now().toString(36);
 
@@ -15,6 +15,7 @@ test("login por CPF ou @ e nova senha pelo CPF + telefone", async ({ page, brows
   await other.getByLabel("Telefone (WhatsApp)").fill("11912345678");
   await other.locator("#handle").fill(`outra.${uid}`);
   await other.getByLabel("Senha").fill(PASSWORD);
+  await other.getByLabel("Chave da API do Gemini").fill(GEMINI_KEY);
   await other.locator('input[name="terms"]').check();
   await other.getByRole("button", { name: /Criar conta/ }).click();
   await expect(other.getByText(/Já existe uma conta com esse CPF/)).toBeVisible();

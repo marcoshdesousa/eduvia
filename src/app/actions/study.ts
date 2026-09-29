@@ -1,17 +1,21 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireReadyUser } from "@/lib/session";
-import { answerQuestion, completeSession, openSession } from "@/lib/study";
+import { answerQuestion, completeSession, openSession, SESSION_MINUTES } from "@/lib/study";
 import { db } from "@/lib/db";
-import { AiRefusalError } from "@/lib/ai/client";
+import { aiErrorMessage } from "@/lib/ai/client";
 import { sessionLimitError } from "@/lib/billing";
 
-export async function startSessionAction(plannedId: string): Promise<{ ok: true } | { error: string; upgrade?: boolean }> {
+export async function startSessionAction(plannedId: string, minutes?: number): Promise<{ ok: true } | { error: string; upgrade?: boolean }> {
   const user = await requireReadyUser();
   const planned = await db.plannedSession.findFirst({ where: { id: plannedId, plan: { preparation: { userId: user.id } } }, include: { studySession: true } });
   if (planned?.kind === "STUDY" && !planned.studySession) {
     const limit = await sessionLimitError(user);
     if (limit) return { error: limit, upgrade: true };
+    // o aluno escolhe quanto tempo tem agora (5 a 45 min)
+    if (minutes && (SESSION_MINUTES as readonly number[]).includes(minutes) && minutes !== planned.durationMin) {
+      await db.plannedSession.update({ where: { id: planned.id }, data: { durationMin: minutes } });
+    }
   }
   try {
     const s = await openSession(plannedId, user.id);
@@ -19,8 +23,7 @@ export async function startSessionAction(plannedId: string): Promise<{ ok: true 
     return { ok: true };
   } catch (e) {
     console.error("[sessão]", e);
-    if (e instanceof AiRefusalError) return { error: e.message };
-    return { error: "Não foi possível preparar a sessão agora. Tente de novo em instantes." };
+    return { error: aiErrorMessage(e, "Não foi possível preparar a sessão agora. Tente de novo em instantes.") };
   }
 }
 
@@ -40,7 +43,7 @@ export async function answerAction(input: { sessionId: string | null; questionId
     return { result } as const;
   } catch (e) {
     console.error("[resposta]", e);
-    return { error: "Não foi possível corrigir agora. Tente de novo." } as const;
+    return { error: aiErrorMessage(e, "Não foi possível corrigir agora. Tente de novo.") } as const;
   }
 }
 

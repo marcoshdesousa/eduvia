@@ -7,7 +7,7 @@ Plataforma de estudos com IA para qualquer estudante. O aluno envia os próprios
 
 ## Stack
 
-Next.js 16 (App Router, TypeScript) · Tailwind CSS 4 · PostgreSQL 16 + pgvector · Prisma 7 · Better Auth (CPF/@ + senha) · pg-boss (fila no próprio Postgres) · Claude API (geração/correção/OCR) · Voyage AI (embeddings) · armazenamento S3-compatível (Cloudflare R2 em produção, disco local no desenvolvimento).
+Next.js 16 (App Router, TypeScript) · Tailwind CSS 4 · PostgreSQL 16 + pgvector · Prisma 7 · Better Auth (CPF/@ + senha) · pg-boss (fila no próprio Postgres) · Google Gemini com a chave de cada aluno (geração/correção/OCR) · embeddings locais (ou Voyage AI) · armazenamento S3-compatível (Cloudflare R2 em produção, disco local no desenvolvimento).
 
 ```
 src/
@@ -18,9 +18,10 @@ src/
     api/               upload, status de materiais, arquivos, exportação LGPD, auth
   lib/
     core/              regras puras e testadas: planner, revisão espaçada, perfis, @, CPF, telefone, datas
-    ai/                Claude (saída estruturada, cache, custo), embeddings, modo simulado
+    ai/                Gemini (chave do aluno, saída estruturada, cota), embeddings, modo simulado
     materials/         extração de texto/OCR, divisão em trechos, pipeline de processamento
-    billing.ts         teste grátis, modo limitado, planos, link do WhatsApp
+    billing.ts         plano Grátis/Eduvia, limites por dia, link do WhatsApp
+    rest.ts            aviso "Descanse" (tempo de estudo, sessões seguidas) e sugestões
     plan.ts, study.ts  plano de estudo e sessão (conteúdo, respostas, conclusão)
     question-bank.ts   questões por assunto para jogos e simulados (reaproveita; só gera o que falta)
     exams.ts, tutor.ts simulados (montagem por peso, correção) e Professor IA (RAG + streaming)
@@ -44,28 +45,32 @@ e2e/                   testes de ponta a ponta (Playwright)
 
 ## Assinatura (manual, pelo WhatsApp)
 
-- **Teste grátis de 3 dias** com os limites do plano Completo e um aviso fixo no topo ("Modo teste: faltam X dias · Assinar plano").
-- **Planos** (padrões em `src/lib/plans.ts`; os valores reais ficam no banco e são editados em **/admin → Planos**, onde -1 = ilimitado):
+- **IA com a chave do aluno:** o cadastro pede a chave da API do **Google Gemini** do próprio aluno (grátis em aistudio.google.com/apikey). A plataforma não paga IA. A chave é testada na hora, guardada criptografada (AES-256-GCM com `AI_KEY_SECRET` ou `BETTER_AUTH_SECRET`) e pode ser trocada em **Minha IA**. Contas sem chave são levadas para `/conectar-ia`.
+  - Modelos tentados em ordem (`GEMINI_MODELS`, padrão `gemini-2.5-flash,gemini-2.5-flash-lite`): a cota grátis do Google é por modelo, então quando um esgota o próximo assume.
+  - Se o Google recusar por cota (erro 429), a IA do aluno fica "em pausa" até a hora indicada (1 minuto, ou a meia-noite do Pacífico ≈ 4h/5h de Brasília para a cota diária) e o app mostra a tela **Descanse**.
+- **Planos** (padrões em `src/lib/plans.ts`; os valores reais ficam no banco e são editados em **/admin → Planos**, onde -1 = ilimitado). Limites **por dia**, pensados para caber na cota grátis do Gemini:
 
-  | | Grátis | Essencial | Completo | Intensivo |
-  |---|---|---|---|---|
-  | Preço | — | R$ 9,90/sem · R$ 29,90/mês | R$ 14,90/sem · R$ 49,90/mês | R$ 29,90/sem · R$ 99,90/mês |
-  | Preparações ativas (= PDFs guardados) | 1 (0 PDFs) | 5 | 10 | 25 |
-  | Páginas enviadas por mês | 0 | 500 | 700 | 900 |
-  | Sessões novas por dia (revisões ilimitadas) | 0 | 1 | 2 | 4 |
-  | Jogos por dia | 1 | 5 | 10 | 15 |
-  | Simulados por mês | 0 | 4 | 8 | 16 |
-  | Correção de redação | não | ilimitada* | ilimitada* | ilimitada* |
-  | Professor IA (mensagens/mês) | 0 | 100 | 200 | 300 |
-  | Grupos | não | cria até 5, entra ilimitado | idem | idem |
+  | | Grátis (teste) | Eduvia |
+  |---|---|---|
+  | Preço | — | R$ 7 por 7 dias · R$ 15 por 30 dias |
+  | Preparações ativas / PDFs guardados | 1 / 1 | à vontade |
+  | Páginas enviadas por dia (escaneadas) | 30 (5) | 300 (60) |
+  | Sessões novas por dia (revisões ilimitadas) | 1 | 6 |
+  | Jogos por dia | 2 | 10 |
+  | Simulados por dia | 0 | 2 |
+  | Redações corrigidas por dia | 1 | 3 |
+  | Professor IA (mensagens por dia) | 5 | 40 |
+  | Grupos | não | cria até 5, entra em quantos quiser |
+  | Sugerir descanso após | 3 h de estudo no dia | 3 h de estudo no dia |
 
-  \* trava anti-abuso de 30 redações por dia. Edital/ementa não contam como PDF. Excluir uma preparação ou arquivo libera a vaga.
-- Depois do teste, sem assinatura, a conta fica no plano **Grátis** (aviso no topo: "Teste encerrado — plano Grátis").
-- **Assinar:** em `/assinatura`, o aluno escolhe Semanal/Mensal e o plano; o botão abre o WhatsApp (`WHATSAPP_NUMBER`) com a mensagem pronta (plano, período, preço, nome e @). Não há cobrança automática.
+- Sem assinatura, a conta fica no plano **Grátis** (aviso no topo com o botão "Assinar").
+- **Descanse:** antes de uma sessão nova, se o aluno já estudou 3 h no dia (`restAfterMinutes`) ou fez 3 sessões seguidas sem pausa, aparece o convite para descansar (com "Continuar mesmo assim"). Limites do dia e pausas da IA também levam a `/descanse`. Sugestões que não gastam IA: ler o próprio PDF na página do assunto, livros recomendados da matéria (gerados junto com o índice do material, sem chamada extra) e revisões.
+- **Duração da sessão:** o aluno escolhe 5, 10, 15, 20, 30 ou 45 minutos ao começar; o texto e o nº de questões seguem o tempo.
+- **Assinar:** em `/assinatura`, o aluno escolhe semanal (7 dias) ou mensal (30 dias); o botão abre o WhatsApp (`WHATSAPP_NUMBER`) com a mensagem pronta (plano, período, preço, nome e @). Não há cobrança automática.
 - **Liberar o plano (admin):**
   1. Torne sua conta admin: `npm run admin -- @seu.usuario` (no Render: aba *Shell* do serviço web).
-  2. Abra `/admin` → **Alunos**, busque o aluno por @, nome, CPF ou telefone, escolha o plano e o período e clique em **Liberar**. Mesmo plano: o período é somado ao final; troca de plano: começa agora. **Encerrar** corta o acesso na hora.
-  3. **Planos:** edite nome, preços e limites. **Custos:** gasto de IA do mês por tarefa e por aluno (convertido com `USD_BRL`, padrão 5,5).
+  2. Abra `/admin` → **Alunos**, busque o aluno por @, nome, CPF ou telefone, escolha o período (7 ou 30 dias) e clique em **Liberar**. Se o aluno ainda tem dias pagos, o novo período é somado ao final. **Encerrar** corta o acesso na hora.
+  3. **Planos:** edite nome, preços e limites. **Uso de IA:** usos do dia por tarefa e por aluno (a IA não custa nada para a plataforma). A lista de alunos mostra quem está com a IA conectada.
 
 ## Fase 2 — praticar
 
@@ -75,12 +80,12 @@ e2e/                   testes de ponta a ponta (Playwright)
 - **Redação** (`/redacao`): tema escrito pelo aluno ou sugerido pela IA; correção **ENEM** (C1–C5, 0–1000), **discursiva de concurso** (conteúdo, estrutura, linguagem; 0–100) ou **qualidade do português** (0–10). O texto aparece com os trechos marcados (ortografia, pontuação, concordância, coesão...) e a sugestão ao lado; mais pontos fortes, dicas e histórico.
 - **Professor IA** (`/professor`): chat que responde com base nos materiais (citando a página), com resposta em tempo real e atalhos: Explicar, Me testar, Criar questões e Analisar meus erros. Conversas ficam salvas.
 - **Desempenho** (`/desempenho`): acerto geral, tempo de estudo, simulados e pontos críticos; acerto por semana, minutos por dia, e acerto por disciplina e assunto com recomendação.
-- **Custo de IA:** questões geradas ficam no banco e são reaproveitadas; limites diários para quem assina (`FULL_PER_DAY` em `src/lib/billing.ts`: 10 simulados, 5 redações, 100 mensagens ao Professor). No **modo limitado**: 1 jogo por dia; simulados, redação e Professor IA ficam só para assinantes.
+- **Uso da IA:** questões geradas ficam no banco e são reaproveitadas (jogos e simulados só chamam a IA quando faltam questões). Limites por dia na tabela de planos acima.
 
 ## Fase 3 — comunidade e engajamento
 
 - **Grupos** (`/grupos`):
-  - Qualquer pessoa com plano cria um grupo e convida pelo @, com confirmação em tempo real de que o @ existe. O convidado recebe uma notificação e aceita ou recusa. No modo limitado dá para entrar em grupos por convite, mas não criar.
+  - Qualquer pessoa com plano cria um grupo e convida pelo @, com confirmação em tempo real de que o @ existe. O convidado recebe uma notificação e aceita ou recusa. No plano Grátis não há grupos.
   - Papéis: **dono** (muda papéis, passa a posse, exclui o grupo), **administrador** (convida, remove membros, modera o mural) e **membro**.
   - Limites: até 50 pessoas por grupo e 20 grupos por dono.
   - **Mural:** mensagens com atualização automática; apagar as próprias (admins apagam qualquer uma).
@@ -95,7 +100,7 @@ e2e/                   testes de ponta a ponta (Playwright)
 - **Notificações:**
   - Sino com contador e central (`/notificacoes`).
   - Em Ajustes: **ativar notificações neste aparelho** (push via PWA) e ligar/desligar o **lembrete no horário de estudo**, que chega uma vez por dia se houver sessão pendente.
-  - Avisos de convite, entrada no grupo, simulado compartilhado, conquista, teste grátis acabando e plano vencendo.
+  - Avisos de convite, entrada no grupo, simulado compartilhado, conquista e plano vencendo.
   - No iPhone, o push funciona com o Eduvia **adicionado à tela de início** (iOS 16.4+).
 
 ## Rodar localmente
@@ -104,20 +109,20 @@ Requisitos: Node 22+, e PostgreSQL 16 com pgvector (o `docker-compose.yml` sobe 
 
 ```bash
 docker compose up -d            # Postgres (pgvector)
-cp .env.example .env            # sem chaves de IA roda em modo de demonstração
+cp .env.example .env            # AI_MODE=mock para testar sem chave do Gemini
 npm install
 npx prisma migrate deploy       # cria as tabelas (e a extensão vector)
-npm run db:seed                 # planos semanal e mensal
+npm run db:seed                 # planos Grátis e Eduvia
 
 npm run dev                     # app em http://localhost:3000
 npm run worker                  # em outro terminal: processa PDFs e planos (ou RUN_WORKER_IN_WEB=true)
 npm run admin -- @seu.usuario   # depois de criar sua conta, para acessar /admin
 ```
 
-- **Sem `ANTHROPIC_API_KEY`** o app funciona em **modo de demonstração**: o texto de estudo e as questões são montados com frases do próprio material (sem custo, bom para testar o fluxo). Com a chave, tudo é gerado pelo Claude.
+- Com `AI_MODE=mock` o app funciona em **modo de demonstração**: aceita qualquer chave no cadastro e monta o texto e as questões com frases do próprio material. Sem isso, cada aluno usa a IA de verdade com a chave do Gemini dele.
 - **Sem `VOYAGE_API_KEY`** a busca nos materiais usa vetores locais simples. Se ativar a Voyage depois, reenvie os materiais.
 - `WHATSAPP_NUMBER`: número que recebe os pedidos de assinatura (padrão: +55 62 99206-7369).
-- `BILLING_ENFORCED="false"` desliga o modo limitado (só para desenvolvimento).
+- `BILLING_ENFORCED="false"` libera o plano pago para todos (só para desenvolvimento).
 
 ## Testes
 
@@ -134,15 +139,15 @@ npm run test:e2e                # terminal 3
 
 ## O que testar
 
-1. **Cadastro:** nome, CPF, telefone, @ e senha. CPF inválido ou já usado é recusado; o @ mostra a disponibilidade em tempo real.
+1. **Cadastro:** nome, CPF, telefone, @, senha e a chave do Gemini (crie em aistudio.google.com/apikey). CPF inválido ou já usado é recusado; o @ mostra a disponibilidade em tempo real; chave errada é recusada.
 2. **Login e senha:** entre com o CPF e depois com o @. Em "Esqueci a senha", o telefone errado é recusado; com CPF + telefone certos, a senha nova funciona.
-3. **Modo teste:** o aviso aparece no topo de todas as telas, com o botão "Assinar plano".
+3. **Plano Grátis:** o aviso aparece no topo de todas as telas, com o botão "Assinar". Em **Minha IA** aparece a chave conectada (só o final) e os usos do dia.
 4. **Assinatura:** em `/assinatura`, o botão abre o WhatsApp com a mensagem pronta.
-5. **Modo limitado:** para simular o fim do teste, rode `UPDATE "user" SET "trialEndsAt" = now() WHERE handle = 'seu.usuario';`. Confira que não dá para enviar materiais, que não dá para criar uma 2ª preparação e que a 2ª sessão do dia é bloqueada.
-6. **Admin:** libere o plano em `/admin` e veja o aluno voltar a ter tudo liberado, com o histórico em `/assinatura`.
+5. **Limites do Grátis:** confira que não dá para criar uma 2ª preparação, que a 2ª sessão nova do dia é bloqueada e que o aviso leva à tela **Descanse**.
+6. **Admin:** libere o plano em `/admin` e veja o aluno ganhar os limites do plano Eduvia, com o histórico em `/assinatura`.
 7. **Preparação e materiais:** crie uma de cada tipo. Envie vários PDFs de uma vez, um DOCX e um texto colado e acompanhe *na fila → processando → pronto*. Para concurso, envie o edital e veja disciplinas, pesos e banca em "Assuntos".
 8. **Plano:** com 15 min/dia, cada sessão tem 15 min. Com uma prova próxima aparece o aviso de tempo insuficiente. Mudar dias ou horário em Ajustes refaz o plano.
-9. **Sessão de estudo:** texto com links para a página do PDF → destaques → recuperação ativa → objetivas → concluir.
+9. **Sessão de estudo:** escolha o tempo (5 a 45 min) → texto com links para a página do PDF → destaques → recuperação ativa → objetivas → concluir. Depois de 3 sessões seguidas sem pausa, aparece o convite para descansar.
 10. **Banco de erros e revisões:** as questões erradas aparecem em Revisões e saem depois de 2 acertos seguidos. As revisões R1–R4 entram no plano.
 11. **Configurações:** trocar @ e telefone, tema claro/escuro, exportar dados, excluir conta.
 12. **Jogo da cobrinha:** Praticar → Jogos → Jogar. Demore para responder e veja a cobra chegar; acerte e ela se afasta. Confira o resultado e o banco de erros.
@@ -168,8 +173,7 @@ Passo a passo:
 1. Suba o código para o GitHub (já está) e crie uma conta em https://render.com.
 2. No Render: **New → Blueprint** → conecte o GitHub e escolha o repositório `eduvia`. Ele lê o `render.yaml` e mostra o que vai criar (serviço `eduvia-web`, disco e banco `eduvia-db`). Confirme.
 3. Preencha as variáveis que ficaram em branco (eduvia → Environment). O endereço do app é detectado sozinho (`RENDER_EXTERNAL_URL`), então **não precisa** de `APP_URL`, a não ser com domínio próprio.
-   - `ANTHROPIC_API_KEY`: opcional no início. Sem ela o app roda em **modo de demonstração**.
-   - `VOYAGE_API_KEY`: opcional (melhora a busca nos materiais).
+   - IA: nada a configurar. Cada aluno informa a própria chave do Gemini no cadastro.
    - `VAPID_PRIVATE_KEY`: para as notificações no celular (a pública já está no `render.yaml`). Para trocar o par, gere com `npx web-push generate-vapid-keys`.
 4. Clique em **Manual Deploy → Deploy latest commit**. As migrações e o seed rodam sozinhos.
 5. Abra o app, crie sua conta e, em eduvia → **Shell**, rode `npm run admin -- @seu.usuario` para acessar `/admin`.
@@ -180,16 +184,15 @@ Custo aproximado: serviço *Starter* + disco de 5 GB + Postgres *Basic*. Confira
 
 **Quando crescer:** crie um *Background Worker* com `npm run worker` e ponha `RUN_WORKER_IN_WEB=false` no web. Isso permite mais de uma instância do app, mas o disco persistente não é compartilhado entre serviços, então os arquivos precisam ir para um armazenamento S3 (Cloudflare R2, AWS S3): `STORAGE_DRIVER=s3` e `S3_*` (ver `.env.example`).
 
-## Chave da Anthropic (IA de verdade)
+## IA (Google Gemini)
 
-1. Crie uma conta em https://console.anthropic.com e adicione créditos (Settings → Billing).
-2. Em **API Keys → Create Key**, copie a chave (começa com `sk-ant-`).
-3. Cole em `ANTHROPIC_API_KEY` no Render (ou no `.env` local) e faça um novo deploy. O aviso "Modo de demonstração" some.
-4. Custo: cada chamada fica registrada na tabela `AiUsage`, com o valor estimado. O padrão é o modelo `claude-opus-5-5`; para economizar, dá para usar um modelo mais barato em tarefas de volume (ex.: `AI_MODEL_GRADE`, `AI_MODEL_QUESTIONS`). Veja `src/lib/ai/client.ts`.
+- Cada aluno cria a chave grátis em https://aistudio.google.com/apikey e cola no cadastro (ou em **Minha IA**). A plataforma não tem custo de IA.
+- Para mais fôlego, o aluno pode ativar o faturamento no projeto dele no Google (paga só o que usar, direto ao Google; nesse modo o Google não usa os dados para treinar). Assinar o app Gemini (Google AI Pro) não aumenta a cota da API.
+- Os limites grátis do Google mudam de tempos em tempos. Se os alunos começarem a ver muito a tela "Descanse", baixe os limites em **/admin → Planos** ou mude a ordem dos modelos com `GEMINI_MODELS`.
 
 ## Notas de desenvolvimento
 
 - Ao criar migrações com `prisma migrate dev`, o Prisma tenta remover o índice vetorial `Chunk_embedding_hnsw_idx` (criado em SQL). Apague essa linha `DROP INDEX` da migração gerada.
-- Modelo e esforço da IA por tarefa: `src/lib/ai/client.ts` (variáveis `AI_MODEL_DEFAULT`, `AI_MODEL_SESSION`, `AI_MODEL_GRADE`...). O custo de cada chamada fica na tabela `AiUsage`.
+- Modelos da IA: `src/lib/ai/client.ts` (`GEMINI_MODELS`, `GEMINI_MODEL_<TAREFA>`). Cada chamada fica registrada na tabela `AiUsage` (tokens; custo zero para a plataforma).
 - Formulários com server action usam `ActionForm` (`src/components/action-form.tsx`), que não apaga os campos quando a ação devolve erro.
 - As tabelas `GuardianConsent` e as colunas `birthDate`/`guardianConsentStatus` ficaram sem uso depois da mudança para cadastro sem e-mail; podem ser removidas numa migração futura.

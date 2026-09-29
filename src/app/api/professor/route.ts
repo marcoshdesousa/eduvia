@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { aiErrorMessage } from "@/lib/ai/client";
 import { apiUser, jsonError } from "@/lib/api";
 import { db } from "@/lib/db";
 import { featureLimitError } from "@/lib/billing";
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(`\u0000${JSON.stringify({ messageId: saved.id, refs: used })}`));
       } catch (e) {
         console.error("[professor]", e);
-        controller.enqueue(encoder.encode(`\u0000${JSON.stringify({ error: "Não consegui responder agora. Tente de novo." })}`));
+        controller.enqueue(encoder.encode(`\u0000${JSON.stringify({ error: aiErrorMessage(e, "Não consegui responder agora. Tente de novo.") })}`));
       } finally {
         controller.close();
       }

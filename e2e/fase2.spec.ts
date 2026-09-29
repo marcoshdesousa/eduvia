@@ -84,11 +84,18 @@ test("fase 2: jogo, simulado, redação, professor e desempenho", async ({ page 
   await expect(page.getByRole("heading", { name: "Por disciplina" })).toBeVisible();
   await expect(page.getByText(/questões respondidas/)).toBeVisible();
 
-  // ── Plano Grátis bloqueia simulado, redação e professor
-  await sql(`UPDATE "user" SET "trialEndsAt" = now() - interval '1 minute' WHERE handle = $1`, [handle]);
-  await page.goto("/professor");
-  await expect(page.getByText(/O Professor IA não faz parte do plano Grátis/)).toBeVisible();
+  // ── Sem assinatura (plano Grátis): simulado bloqueado; limite do dia de redação leva ao "Descanse"
+  await sql(`DELETE FROM "Subscription" WHERE "userId" = (SELECT id FROM "user" WHERE handle = $1)`, [handle]);
   await page.goto("/simulados/novo");
   await page.getByRole("button", { name: "Montar simulado" }).click();
   await expect(page.getByText(/Simulados não fazem parte do plano Grátis/)).toBeVisible();
+  await page.goto("/redacao/nova");
+  await page.locator("#theme").fill("Tema livre");
+  await page.getByLabel("Seu texto").fill(texto);
+  await page.getByRole("button", { name: "Enviar para correção" }).click();
+  await expect(page.getByText(/limite de hoje: 1 redação/)).toBeVisible();
+  await page.getByRole("link", { name: "Ver sugestões para descansar" }).click();
+  await expect(page.getByRole("heading", { name: "Hora de descansar" })).toBeVisible();
+  await expect(page.getByText("Ler o seu PDF")).toBeVisible();
+  await expect(page.getByText("Fazer revisões")).toBeVisible();
 });

@@ -35,19 +35,8 @@ export async function sendStudyReminders(now = new Date()) {
   return sent;
 }
 
-/** Diário: teste grátis acabando (último dia) e plano vencendo em até 2 dias. */
+/** Diário: plano vencendo em até 2 dias. */
 export async function sendBillingReminders(now = new Date()) {
-  const soon = new Date(now.getTime() + 24 * 3600_000);
-  const trials = await db.user.findMany({ where: { trialEndsAt: { gt: now, lte: soon }, subscriptions: { none: { status: "ACTIVE", currentPeriodEnd: { gt: now } } } } });
-  for (const u of trials) {
-    await notify(u.id, {
-      type: "TRIAL_ENDING",
-      title: "Seu teste grátis termina amanhã",
-      body: "Assine pelo WhatsApp para continuar com tudo liberado.",
-      href: "/assinatura",
-      dedupeKey: `teste:${u.id}`,
-    });
-  }
   const subs = await db.subscription.findMany({ where: { status: "ACTIVE", currentPeriodEnd: { gt: now, lte: new Date(now.getTime() + 2 * 86_400_000) } }, include: { plan: true } });
   for (const s of subs) {
     await notify(s.userId, {
@@ -58,5 +47,5 @@ export async function sendBillingReminders(now = new Date()) {
       dedupeKey: `plano:${s.id}:${s.currentPeriodEnd.toISOString().slice(0, 10)}`,
     });
   }
-  return trials.length + subs.length;
+  return subs.length;
 }

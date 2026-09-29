@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { FormError } from "@/components/ui/form";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { Brain, HelpCircle, ListChecks, Send, Target } from "lucide-react";
@@ -148,7 +149,10 @@ export function TutorChat({
 
       <div className="space-y-2 border-t border-border p-3">
         {blocked ? (
-          <p className="text-sm text-danger">{blocked} <Link href="/assinatura" className="font-semibold text-primary">Assinar plano</Link></p>
+          <div className="space-y-1">
+            <FormError message={blocked} />
+            {/Assine|não faz parte/.test(blocked) && <Link href="/assinatura" className="text-sm font-semibold text-primary">Assinar plano</Link>}
+          </div>
         ) : (
           <>
             <div className="flex gap-2 overflow-x-auto pb-1">
@@ -164,7 +168,7 @@ export function TutorChat({
                 </button>
               ))}
             </div>
-            {error && <p className="text-sm text-danger">{error}</p>}
+            <FormError message={error} />
             <form
               className="flex items-end gap-2"
               onSubmit={(e) => {

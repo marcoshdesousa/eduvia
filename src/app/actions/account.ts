@@ -6,7 +6,8 @@ import { auth, internalEmail } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { checkHandleAvailable } from "@/lib/handles";
 import { requireUser } from "@/lib/session";
-import { trialEnd } from "@/lib/billing";
+import { checkGeminiKey } from "@/lib/ai/client";
+import { sealSecret } from "@/lib/secret-box";
 import { TERMS_VERSION } from "@/lib/terms";
 import { isValidCpf, onlyDigits } from "@/lib/core/cpf";
 import { normalizePhone } from "@/lib/core/phone";
@@ -43,6 +44,10 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
   if (!(await allowAttempt(`signup:${await clientIp()}`, 10, 60))) return { error: "Muitas tentativas. Tente de novo mais tarde." };
   const p = await validateProfile(f);
   if ("error" in p) return { error: p.error };
+  const geminiKey = field(f, "geminiKey");
+  if (!geminiKey) return { error: "Cole a chave da sua IA do Gemini para criar a conta." };
+  const check = await checkGeminiKey(geminiKey);
+  if (!check.ok) return { error: check.error };
 
   let userId: string;
   try {
@@ -55,7 +60,16 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
   try {
     await db.user.update({
       where: { id: userId },
-      data: { cpf: p.cpf, phone: p.phone, handle: p.handle, termsAcceptedAt: new Date(), termsVersion: TERMS_VERSION, trialEndsAt: trialEnd() },
+      data: {
+        cpf: p.cpf,
+        phone: p.phone,
+        handle: p.handle,
+        termsAcceptedAt: new Date(),
+        termsVersion: TERMS_VERSION,
+        geminiKey: sealSecret(geminiKey),
+        geminiKeyHint: geminiKey.slice(-4),
+        geminiConnectedAt: new Date(),
+      },
     });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -124,7 +138,7 @@ export async function completeProfileAction(_: FormState, f: FormData): Promise<
   try {
     await db.user.update({
       where: { id: user.id },
-      data: { cpf: p.cpf, phone: p.phone, handle: p.handle, termsAcceptedAt: new Date(), termsVersion: TERMS_VERSION, trialEndsAt: user.trialEndsAt ?? trialEnd() },
+      data: { cpf: p.cpf, phone: p.phone, handle: p.handle, termsAcceptedAt: new Date(), termsVersion: TERMS_VERSION },
     });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { error: "Esse @ ou CPF já está em uso." };

@@ -1,4 +1,5 @@
 "use server";
+import { aiErrorMessage } from "@/lib/ai/client";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -33,7 +34,7 @@ export async function suggestThemeAction(preparationId: string | null, rubric: R
     return await suggestEssayTheme({ userId: user.id, voice, rubricLabel: RUBRICS[rubric].label, genre: RUBRICS[rubric].genre, context });
   } catch (e) {
     console.error("[tema]", e);
-    return { error: "Não foi possível sugerir um tema agora." };
+    return { error: aiErrorMessage(e, "Não foi possível sugerir um tema agora.") };
   }
 }
 
@@ -94,7 +95,7 @@ export async function submitEssayAction(_: FormState, f: FormData): Promise<Form
   } catch (e) {
     console.error("[redação]", e);
     await db.essay.update({ where: { id: essay.id }, data: { status: "ERROR" } });
-    return { error: "Não foi possível corrigir agora. Seu texto foi salvo; tente de novo em instantes." };
+    return { error: aiErrorMessage(e, "Não foi possível corrigir agora. Seu texto foi salvo; tente de novo em instantes.") };
   }
   await checkAchievementsSafe(user.id);
   redirect(`/redacao/${essay.id}`);

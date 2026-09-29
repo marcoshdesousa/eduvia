@@ -9,7 +9,7 @@ function timeLeft(until: Date) {
   return d === 1 ? "1 dia" : `${d} dias`;
 }
 
-/** Aviso fixo no topo: modo teste, modo limitado ou assinatura perto de vencer. */
+/** Aviso fixo no topo: plano Grátis ou assinatura perto de vencer. */
 export function AccessBanner({ access }: { access: Access }) {
   if (access.reason === "dev") return null;
   if (access.reason === "subscription") {
@@ -19,10 +19,7 @@ export function AccessBanner({ access }: { access: Access }) {
       <Bar tone="warning" icon={<Sparkles size={15} />} text={`Seu plano ${access.planName} vence em ${timeLeft(access.until)}.`} cta="Renovar" />
     );
   }
-  if (access.reason === "trial") {
-    return <Bar tone="primary" icon={<Sparkles size={15} />} text={`Modo teste: faltam ${timeLeft(access.until)} do seu teste grátis.`} cta="Assinar plano" />;
-  }
-  return <Bar tone="danger" icon={<Lock size={15} />} text="Teste encerrado — plano Grátis: só revisões, banco de erros e 1 jogo por dia." cta="Ver planos" />;
+  return <Bar tone="warning" icon={<Lock size={15} />} text="Plano Grátis (teste): recursos bem limitados. Assine e use sua IA de verdade." cta="Assinar" />;
 }
 
 function Bar({ tone, icon, text, cta }: { tone: "primary" | "warning" | "danger"; icon: React.ReactNode; text: string; cta: string }) {

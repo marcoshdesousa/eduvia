@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/session";
 
 const FEATURES = [
-  { icon: FileUp, title: "Seu material, sem limite", text: "Envie quantos PDFs quiser — inclusive escaneados. A IA lê, organiza em assuntos e cita a página de origem." },
+  { icon: FileUp, title: "Seu material", text: "Envie seus PDFs, inclusive escaneados. A IA lê, organiza em assuntos e cita a página de origem." },
   { icon: CalendarClock, title: "Plano que cabe no seu dia", text: "15 minutos ou 4 horas: o plano divide o conteúdo em sessões do seu tamanho, até a data da prova." },
   { icon: BookOpen, title: "Sessões de estudo prontas", text: "Texto explicativo, destaques, perguntas para responder sem consultar e questões objetivas." },
   { icon: RotateCcw, title: "Revisão espaçada", text: "Revisões automáticas em 1, 7, 15 e 30 dias. O que você erra volta mais vezes." },
@@ -34,8 +34,8 @@ export default async function Home() {
           Do ensino fundamental ao concurso público: textos de estudo, perguntas e revisões feitos a partir dos seus PDFs, no tempo que você tem.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link href="/cadastro" className={buttonClass("primary", "lg")}>Testar 3 dias grátis</Link>
-          <span className="text-sm text-muted">Depois, planos a partir de R$ 9,90/semana ou R$ 29,90/mês.</span>
+          <Link href="/cadastro" className={buttonClass("primary", "lg")}>Começar grátis</Link>
+          <span className="text-sm text-muted">Tudo liberado por R$ 7/semana ou R$ 15/mês, com a sua IA do Gemini.</span>
         </div>
       </section>
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

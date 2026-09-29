@@ -16,15 +16,18 @@ export async function extractPages(
   mimeType: string,
   userId: string,
   onProgress: (msg: string) => Promise<void>,
+  /** Chamado antes do OCR com o nº de páginas escaneadas (pode lançar erro de limite). */
+  beforeOcr: (pages: number) => Promise<void> = async () => {},
 ): Promise<ExtractedPage[]> {
   switch (kind) {
     case "PDF":
-      return extractPdf(data, userId, onProgress);
+      return extractPdf(data, userId, onProgress, beforeOcr);
     case "DOCX": {
       const { value } = await mammoth.extractRawText({ buffer: data });
       return pseudoPages(value);
     }
     case "IMAGE": {
+      await beforeOcr(1);
       await onProgress("Lendo texto da imagem (OCR)");
       const mediaType = (["image/png", "image/jpeg", "image/webp"].includes(mimeType) ? mimeType : "image/jpeg") as
         | "image/png"
@@ -54,13 +57,14 @@ export async function countPages(kind: MaterialKind, data: Buffer): Promise<numb
   }
 }
 
-async function extractPdf(data: Buffer, userId: string, onProgress: (msg: string) => Promise<void>) {
+async function extractPdf(data: Buffer, userId: string, onProgress: (msg: string) => Promise<void>, beforeOcr: (pages: number) => Promise<void>) {
   const pdf = await getDocumentProxy(new Uint8Array(data));
   const { text } = await extractText(pdf, { mergePages: false });
   const pages: ExtractedPage[] = text.map((t, i) => ({ page: i + 1, text: cleanText(t), ocr: false }));
 
   const scanned = pages.filter((p) => p.text.length < OCR_MIN_CHARS).map((p) => p.page);
   if (scanned.length) {
+    await beforeOcr(scanned.length);
     const source = await PDFDocument.load(data, { ignoreEncryption: true });
     for (let i = 0; i < scanned.length; i += OCR_BATCH) {
       const batch = scanned.slice(i, i + OCR_BATCH);

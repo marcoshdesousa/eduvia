@@ -11,18 +11,20 @@ export function AdminUserActions({ userId, name, hasPlan, plans }: { userId: str
   const chosen = plans.find((p) => p.slug === plan);
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Select value={plan} onChange={(e) => setPlan(e.target.value)} className="h-8 w-auto text-xs" aria-label="Plano">
-        {plans.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}
-      </Select>
+      {plans.length > 1 && (
+        <Select value={plan} onChange={(e) => setPlan(e.target.value)} className="h-8 w-auto text-xs" aria-label="Plano">
+          {plans.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}
+        </Select>
+      )}
       <Select value={interval} onChange={(e) => setInterval(e.target.value as "WEEK" | "MONTH")} className="h-8 w-auto text-xs" aria-label="Período">
-        <option value="WEEK">Semanal ({chosen?.week})</option>
-        <option value="MONTH">Mensal ({chosen?.month})</option>
+        <option value="WEEK">7 dias ({chosen?.week})</option>
+        <option value="MONTH">30 dias ({chosen?.month})</option>
       </Select>
       <Button
         size="sm"
         disabled={pending || !plan}
         onClick={() =>
-          confirm(`Confirmar pagamento e liberar o plano ${chosen?.name} ${interval === "WEEK" ? "semanal" : "mensal"} para ${name}?`) &&
+          confirm(`Confirmar pagamento e liberar o plano ${chosen?.name} por ${interval === "WEEK" ? "7" : "30"} dias para ${name}?`) &&
           start(async () => void (await grantPlanAction(userId, plan, interval)))
         }
       >

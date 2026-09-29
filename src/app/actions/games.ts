@@ -1,4 +1,5 @@
 "use server";
+import { aiErrorMessage } from "@/lib/ai/client";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { featureLimitError } from "@/lib/billing";
@@ -35,7 +36,7 @@ export async function startGameAction(input: { slug: string; preparationId: stri
     questionIds = await ensureQuestionPool({ userId: user.id, prep, topicIds, needed: game.questionCount, purpose: "jogo" });
   } catch (e) {
     console.error("[jogo]", e);
-    return { error: "Não foi possível preparar as perguntas agora. Tente de novo." };
+    return { error: aiErrorMessage(e, "Não foi possível preparar as perguntas agora. Tente de novo.") };
   }
   if (questionIds.length < MIN_QUESTIONS) return { error: "Ainda há poucas perguntas sobre esses assuntos. Estude mais sessões ou envie mais material." };
 

@@ -11,6 +11,10 @@ export const OutlineSchema = z.object({
       difficulty: z.number().int().describe("1 (fácil) a 5 (difícil)"),
     }),
   ),
+  books: z
+    .array(z.object({ subject: z.string(), title: z.string(), author: z.string() }))
+    .default([])
+    .describe("Livros recomendados para ler no descanso, por disciplina"),
 });
 export type Outline = z.infer<typeof OutlineSchema>;
 

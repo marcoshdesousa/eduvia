@@ -23,16 +23,16 @@ describe("telefone", () => {
 });
 
 describe("assinatura", () => {
-  it("soma semana e mês", () => {
+  it("soma 7 ou 30 dias", () => {
     expect(addPeriod(new Date("2026-10-01T10:00:00Z"), "WEEK").toISOString()).toBe("2026-10-08T10:00:00.000Z");
-    expect(addPeriod(new Date("2026-01-31T10:00:00Z"), "MONTH").toISOString()).toBe("2026-02-28T10:00:00.000Z");
+    expect(addPeriod(new Date("2026-01-31T10:00:00Z"), "MONTH").toISOString()).toBe("2026-03-02T10:00:00.000Z");
   });
   it("monta o link do WhatsApp com a mensagem do plano", () => {
-    const completo = DEFAULT_PLANS.find((p) => p.slug === "completo")!;
-    const link = whatsappLink(subscribeMessage(completo, "MONTH", { name: "Ana", handle: "ana.silva" }));
+    const eduvia = DEFAULT_PLANS.find((p) => p.slug === "eduvia")!;
+    const link = whatsappLink(subscribeMessage(eduvia, "MONTH", { name: "Ana", handle: "ana.silva" }));
     expect(link).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
-    expect(decodeURIComponent(link.split("text=")[1])).toContain("plano Completo mensal");
-    expect(decodeURIComponent(link.split("text=")[1])).toContain("49,90");
+    expect(decodeURIComponent(link.split("text=")[1])).toContain("plano Eduvia mensal (30 dias)");
+    expect(decodeURIComponent(link.split("text=")[1])).toContain("15,00");
     expect(decodeURIComponent(link.split("text=")[1])).toContain("@ana.silva");
   });
   it("início do dia em São Paulo é 03:00 UTC", () => {
@@ -47,16 +47,16 @@ describe("assinatura", () => {
 
 describe("planos", () => {
   it("completa limites faltando com os padrões e aceita ilimitado", () => {
-    const l = normalizeLimits({ gamesPerDay: -1, essays: "sim", examsPerMonth: 2.4 }, "essencial");
+    const l = normalizeLimits({ gamesPerDay: -1, groups: "sim", examsPerDay: 2.4 }, "eduvia");
     expect(l.gamesPerDay).toBe(-1);
-    expect(l.essays).toBe(true);
-    expect(l.examsPerMonth).toBe(2);
-    expect(l.tutorMessagesPerMonth).toBe(100);
+    expect(l.groups).toBe(true);
+    expect(l.examsPerDay).toBe(2);
+    expect(l.tutorMessagesPerDay).toBe(40);
   });
   it("lista os benefícios do plano", () => {
     const f = planFeatures(DEFAULT_PLANS[0].limits);
     expect(f).toContain("Sem grupos");
-    expect(f).toContain("1 jogo por dia");
-    expect(planFeatures(DEFAULT_PLANS[3].limits)).toContain("16 simulados por mês");
+    expect(f).toContain("2 jogos por dia");
+    expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Professor IA: 40 mensagens por dia");
   });
 });

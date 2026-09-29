@@ -8,7 +8,8 @@ import { PROFILES } from "@/lib/core/profiles";
 import { estimateMinutes } from "@/lib/core/planner";
 import { cosine, loadChunkEmbeddings } from "@/lib/rag";
 import { chunkPages, countPages, extractPages } from "./extract";
-import { pageQuotaError } from "@/lib/billing";
+import { pageQuotaError, scannedQuotaError } from "@/lib/billing";
+import { AiUserError } from "@/lib/ai/client";
 import { generatePlan } from "@/lib/plan";
 
 export async function processMaterial(materialId: string) {
@@ -45,7 +46,10 @@ export async function processMaterial(materialId: string) {
       } else {
         if (!existing) await db.materialBlob.update({ where: { id: blob.id }, data: { sha256 } });
         await step("Extraindo texto");
-        const pages = await extractPages(material.kind, data, blob.mimeType, material.uploaderId, step);
+        const pages = await extractPages(material.kind, data, blob.mimeType, material.uploaderId, step, async (scanned) => {
+          const quota = await scannedQuotaError(material.uploaderId, materialId, scanned);
+          if (quota) throw new UserFacingError(quota);
+        });
         if (!pages.some((p) => p.text.trim().length > 30)) {
           throw new UserFacingError(
             "Não encontramos texto neste arquivo. Se for escaneado, confira se a IA está configurada (OCR) ou envie uma versão com melhor qualidade.",
@@ -80,9 +84,10 @@ export async function processMaterial(materialId: string) {
     await db.material.update({ where: { id: materialId }, data: { status: "READY", progressStep: null, errorMessage: null } });
   } catch (err) {
     console.error(`[material ${materialId}]`, err);
-    const message = err instanceof UserFacingError ? err.message : "Não foi possível processar este arquivo. Tente novamente.";
+    const userFacing = err instanceof UserFacingError || err instanceof AiUserError;
+    const message = userFacing ? err.message : "Não foi possível processar este arquivo. Tente novamente.";
     await db.material.update({ where: { id: materialId }, data: { status: "ERROR", errorMessage: message, progressStep: null } });
-    if (!(err instanceof UserFacingError)) throw err; // deixa a fila tentar de novo
+    if (!userFacing) throw err; // deixa a fila tentar de novo
   }
 }
 
@@ -140,6 +145,26 @@ async function organizeContent(materialId: string) {
       },
     });
   }
+  await saveBooks(prep.id, material.subject, outline.books);
+}
+
+export type Book = { title: string; author: string };
+
+/** Guarda os livros recomendados por disciplina (vêm junto com o índice, sem chamada extra de IA). */
+async function saveBooks(preparationId: string, fixed: { id: string } | null, books: { subject: string; title: string; author: string }[]) {
+  const bySubject = new Map<string, Book[]>();
+  for (const b of books) {
+    if (!b.title?.trim()) continue;
+    const key = fixed ? "" : b.subject || "Geral";
+    bySubject.set(key, [...(bySubject.get(key) ?? []), { title: b.title.trim().slice(0, 160), author: (b.author ?? "").trim().slice(0, 120) }]);
+  }
+  for (const [name, list] of bySubject) {
+    const subject = fixed ?? (await upsertSubject(preparationId, name));
+    const current = await db.subject.findUnique({ where: { id: subject.id }, select: { books: true } });
+    const merged = [...((current?.books as Book[] | null) ?? []), ...list];
+    const unique = merged.filter((b, i) => merged.findIndex((x) => x.title.toLowerCase() === b.title.toLowerCase()) === i).slice(0, 4);
+    await db.subject.update({ where: { id: subject.id }, data: { books: unique } });
+  }
 }
 
 /**
@@ -179,6 +204,14 @@ async function copyTopicsFromTwin(material: { id: string; blobId: string | null;
       },
     });
   }
+  // livros recomendados das disciplinas de origem
+  const seen = new Set<string>();
+  const books = fromOne.flatMap((t) => {
+    if (seen.has(t.subject.id)) return [];
+    seen.add(t.subject.id);
+    return ((t.subject.books as Book[] | null) ?? []).map((b) => ({ ...b, subject: t.subject.name }));
+  });
+  if (books.length) await saveBooks(material.preparationId, material.subject, books);
   return true;
 }
 

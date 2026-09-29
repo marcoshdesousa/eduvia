@@ -1,4 +1,5 @@
 "use server";
+import { aiErrorMessage } from "@/lib/ai/client";
 import { redirect } from "next/navigation";
 import { requireReadyUser } from "@/lib/session";
 import { featureLimitError } from "@/lib/billing";
@@ -27,7 +28,7 @@ export async function createExamAction(_: FormState, f: FormData): Promise<FormS
   } catch (e) {
     if (e instanceof ExamError) return { error: e.message };
     console.error("[simulado]", e);
-    return { error: "Não foi possível montar o simulado agora. Tente de novo." };
+    return { error: aiErrorMessage(e, "Não foi possível montar o simulado agora. Tente de novo.") };
   }
   redirect(`/simulados/${examId}`);
 }

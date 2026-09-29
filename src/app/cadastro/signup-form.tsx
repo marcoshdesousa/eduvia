@@ -6,6 +6,7 @@ import { signUpAction } from "@/app/actions/account";
 import { Button } from "@/components/ui/button";
 import { Field, FormError, Input } from "@/components/ui/form";
 import { ProfileFields } from "@/components/profile-fields";
+import { GeminiKeyFields } from "@/components/gemini-key-fields";
 
 export function SignupForm() {
   const [state, action, pending] = useActionState(signUpAction, undefined);
@@ -20,7 +21,8 @@ export function SignupForm() {
         <Field label="Senha" htmlFor="password" hint="Mínimo de 8 caracteres.">
           <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
         </Field>
-        <Button className="w-full" disabled={pending}>{pending ? "Criando conta..." : "Criar conta e testar 3 dias grátis"}</Button>
+        <GeminiKeyFields />
+        <Button className="w-full" disabled={pending}>{pending ? "Testando a chave e criando a conta..." : "Criar conta grátis"}</Button>
       </ActionForm>
       <p className="text-center text-sm text-muted">
         Já tem conta? <Link href="/entrar" className="font-medium text-primary">Entrar</Link>

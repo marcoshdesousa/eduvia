@@ -27,6 +27,10 @@ export default async function Page() {
         <PasswordForm />
       </Card>
       <Card className="flex flex-wrap items-center justify-between gap-3">
+        <CardTitle>Minha IA (Gemini)</CardTitle>
+        <Link href="/minha-ia" className={buttonClass("outline")}>Ver ou trocar chave</Link>
+      </Card>
+      <Card className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle>Assinatura</CardTitle>
         <Link href="/assinatura" className={buttonClass("outline")}>Gerenciar assinatura</Link>
       </Card>

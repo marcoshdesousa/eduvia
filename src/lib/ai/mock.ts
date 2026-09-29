@@ -14,7 +14,7 @@ const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,
 
 export function extractOutline(input: { subjectHint: string | null; pages: { page: number; text: string }[]; materialTitle: string }): Outline {
   const pages = input.pages.filter((p) => p.text.trim().length > 30);
-  if (!pages.length) return { topics: [] };
+  if (!pages.length) return { topics: [], books: [] };
   const size = pages.length <= 3 ? pages.length : 4;
   const topics: Outline["topics"] = [];
   for (let i = 0; i < pages.length; i += size) {
@@ -29,7 +29,8 @@ export function extractOutline(input: { subjectHint: string | null; pages: { pag
       difficulty: 3,
     });
   }
-  return { topics };
+  const subject = input.subjectHint ?? "Geral";
+  return { topics, books: [{ subject, title: `Guia de estudos de ${subject}`, author: "Autor de exemplo" }] };
 }
 
 export function analyzeSyllabus(text: string): Syllabus {

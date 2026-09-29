@@ -50,7 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <AccessBanner access={access} />
         {isMockAi() && (
           <div className="border-b border-warning/30 bg-warning/10 px-4 py-2 text-center text-xs text-warning">
-            Modo de demonstração: IA simulada (configure ANTHROPIC_API_KEY para textos e questões reais).
+            Modo de demonstração: IA simulada (AI_MODE=mock). Textos e questões não vêm do Gemini.
           </div>
         )}
         <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:px-8 md:pb-12">{children}</main>

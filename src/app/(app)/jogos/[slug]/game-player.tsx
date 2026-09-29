@@ -8,7 +8,7 @@ import type { GameMeta } from "@/games/catalog";
 import type { GameEndReason, GameQuestion } from "@/games/types";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, Stat } from "@/components/ui/card";
-import { Field, Select } from "@/components/ui/form";
+import { Field, FormError, Select } from "@/components/ui/form";
 
 type Prep = { id: string; title: string; subjects: { id: string; name: string }[] };
 const REASON: Record<GameEndReason, string> = {
@@ -98,9 +98,10 @@ export function GamePlayer({ game, preparations }: { game: GameMeta; preparation
         ))}
       </div>
       {error && (
-        <p className="text-sm text-danger">
-          {error.message} {error.upgrade && <Link href="/assinatura" className="font-semibold text-primary">Assinar plano</Link>}
-        </p>
+        <div className="space-y-1">
+          <FormError message={error.message} />
+          {error.upgrade && /Assine|não fazem parte/.test(error.message) && <Link href="/assinatura" className="text-sm font-semibold text-primary">Assinar plano</Link>}
+        </div>
       )}
       <Button size="lg" className="w-full" onClick={play} disabled={pending}>
         {pending ? <><Loader2 size={18} className="animate-spin" /> Preparando perguntas...</> : "Começar"}
