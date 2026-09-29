@@ -15,8 +15,13 @@ test("login por CPF ou @ e nova senha pelo CPF + telefone", async ({ page, brows
   await other.getByLabel("Telefone (WhatsApp)").fill("11912345678");
   await other.locator("#handle").fill(`outra.${uid}`);
   await other.getByLabel("Senha").fill(PASSWORD);
-  await other.getByLabel("Chave da API do Gemini").fill(GEMINI_KEY);
   await other.locator('input[name="terms"]').check();
+  await other.getByRole("button", { name: "Continuar" }).click();
+  // "Voltar" volta ao passo 1 sem perder o que foi digitado
+  await other.getByRole("button", { name: "Voltar" }).click();
+  await expect(other.getByLabel("Nome", { exact: true })).toHaveValue("Outra Pessoa");
+  await other.getByRole("button", { name: "Continuar" }).click();
+  await other.getByLabel("Chave da API do Gemini").fill(GEMINI_KEY);
   await other.getByRole("button", { name: /Criar conta/ }).click();
   await expect(other.getByText(/Já existe uma conta com esse CPF/)).toBeVisible();
   await other.close();

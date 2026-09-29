@@ -67,6 +67,47 @@ test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", as
   await admin.goto("/admin?aba=ia");
   await expect(admin.getByText("Alunos que mais usaram")).toBeVisible();
 
+  // redes sociais: o admin cadastra e o botão aparece no rodapé da página inicial
+  await admin.goto("/admin?aba=site");
+  await admin.getByLabel("Instagram").fill("@eduvia.teste");
+  await admin.getByRole("button", { name: "Salvar redes sociais" }).click();
+  await expect(admin.getByText(/Redes sociais salvas/)).toBeVisible();
+  const visitor = await (await browser.newContext()).newPage();
+  await visitor.goto("/");
+  await expect(visitor.getByRole("link", { name: "Instagram" })).toHaveAttribute("href", "https://instagram.com/eduvia.teste");
+  await expect(visitor.getByRole("link", { name: "TikTok" })).toHaveCount(0);
+  await visitor.getByText("Por que vocês pedem o CPF?").click();
+  await expect(visitor.getByText(/uma conta por pessoa/)).toBeVisible();
+  await visitor.close();
+  await admin.goto("/admin?aba=site");
+  await admin.getByLabel("Instagram").fill("");
+  await admin.getByRole("button", { name: "Salvar redes sociais" }).click();
+  await expect(admin.getByText(/Redes sociais salvas/)).toBeVisible();
+
+  // suporte: aluno escreve, admin responde no painel, aluno vê a resposta
+  await page.goto("/suporte");
+  await page.getByLabel("Mensagem").fill("Como troco minha chave do Gemini?");
+  await page.getByRole("button", { name: "Enviar" }).click();
+  await expect(page.getByText(/Mensagem enviada/)).toBeVisible();
+  await admin.goto("/admin?aba=suporte");
+  await admin.getByRole("link", { name: /Aluno Pagante/ }).click();
+  await expect(admin.getByText("Como troco minha chave do Gemini?")).toBeVisible();
+  await admin.getByLabel("Mensagem").fill("É em Mais → Minha IA.");
+  await admin.getByRole("button", { name: "Enviar" }).click();
+  await expect(admin.getByText(/Resposta enviada/)).toBeVisible();
+  await page.goto("/suporte");
+  await expect(page.getByText("É em Mais → Minha IA.")).toBeVisible();
+
+  // foto de perfil e nome (o @ não muda)
+  await page.goto("/configuracoes");
+  await page.getByRole("radio", { name: "Pandinha" }).click();
+  await page.getByLabel("Nome", { exact: true }).fill("Aluno Pagante Silva");
+  await expect(page.locator("#handle")).toBeDisabled();
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(page.getByText("Dados salvos.")).toBeVisible();
+  const saved = await sql<{ avatar: string; name: string; handle: string }>(`SELECT avatar, name, handle FROM "user" WHERE handle = $1`, [handle]);
+  expect(saved[0]).toEqual({ avatar: "panda", name: "Aluno Pagante Silva", handle });
+
   // aluno passa a ter o plano Eduvia
   await page.goto("/assinatura");
   await expect(page.getByText("Seu plano: Eduvia")).toBeVisible();
@@ -76,7 +117,8 @@ test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", as
   await page.locator('input[type="file"][multiple]').setInputFiles({ name: "aula.pdf", mimeType: "application/pdf", buffer: await makeStudyPdf(2) });
   await expect(page.getByText("Pronto", { exact: true })).toBeVisible({ timeout: 60_000 });
 
-  // não-admin não acessa /admin
+  // não-admin não acessa /admin (a 1ª conta de um banco vazio vira admin; garante que este aluno não é)
+  await sql(`UPDATE "user" SET "isAdmin" = false WHERE handle = $1`, [handle]);
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/inicio/);
 });

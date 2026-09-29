@@ -49,6 +49,8 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
   const check = await checkGeminiKey(geminiKey);
   if (!check.ok) return { error: check.error };
 
+  // a primeira conta de um banco vazio vira administradora (depois: npm run admin -- @usuario)
+  const firstAccount = (await db.user.count()) === 0;
   let userId: string;
   try {
     const res = await auth.api.signUpEmail({ body: { name, email: internalEmail(p.cpf), password }, headers: await headers() });
@@ -69,6 +71,7 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
         geminiKey: sealSecret(geminiKey),
         geminiKeyHint: geminiKey.slice(-4),
         geminiConnectedAt: new Date(),
+        isAdmin: firstAccount,
       },
     });
   } catch (e) {

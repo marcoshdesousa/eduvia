@@ -22,8 +22,10 @@ export async function signUp(page: Page, opts: { name: string; handle: string; p
   await page.locator("#handle").fill(opts.handle);
   await expect(page.getByText("Disponível!")).toBeVisible();
   await page.getByLabel("Senha").fill(PASSWORD);
-  await page.getByLabel("Chave da API do Gemini").fill(GEMINI_KEY);
   await page.locator('input[name="terms"]').check();
+  // passo 2: chave do Gemini
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Chave da API do Gemini").fill(GEMINI_KEY);
   await page.getByRole("button", { name: /Criar conta/ }).click();
   await expect(page).toHaveURL(/\/inicio/);
   if ((opts.plan ?? "eduvia") === "eduvia") await grantPlan(opts.handle);

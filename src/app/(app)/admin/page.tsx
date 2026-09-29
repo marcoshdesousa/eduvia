@@ -13,13 +13,20 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AdminUserActions } from "./user-actions";
 import { PlanEditor } from "./plan-editor";
+import { SiteForm } from "./site-form";
+import { SupportChat } from "@/components/support-chat";
+import { Avatar } from "@/components/avatar";
+import { replySupportAction } from "@/app/actions/support";
+import { markUserMessagesRead, supportInbox, supportThread, supportUnreadForStaff } from "@/lib/support";
 
 export const metadata = { title: "Admin" };
 
 const TABS = [
   { key: "alunos", label: "Alunos" },
+  { key: "suporte", label: "Suporte" },
   { key: "planos", label: "Planos" },
   { key: "ia", label: "Uso de IA" },
+  { key: "site", label: "Site" },
 ] as const;
 
 const TASK_LABEL: Record<string, string> = {
@@ -33,7 +40,7 @@ const TASK_LABEL: Record<string, string> = {
   tutor: "Professor IA",
 };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ q?: string; aba?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ q?: string; aba?: string; aluno?: string }> }) {
   const admin = await requireAdmin();
   const sp = await searchParams;
   const tab = TABS.find((t) => t.key === sp.aba)?.key ?? "alunos";
@@ -42,12 +49,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
   const plans = await listPlans();
 
   const dayStart = localDayStart(admin.timezone);
-  const [total, withAi, subscribers, revenue, aiToday] = await Promise.all([
+  const [total, withAi, subscribers, revenue, aiToday, supportUnread] = await Promise.all([
     db.user.count({ where: { cpf: { not: null } } }),
     db.user.count({ where: { cpf: { not: null }, geminiKey: { not: null } } }),
     db.subscription.count({ where: { status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: now } } }),
     db.payment.aggregate({ _sum: { valueCents: true }, where: { status: "PAID", paidAt: { gte: monthStart } } }),
     db.aiUsage.count({ where: { createdAt: { gte: dayStart } } }),
+    supportUnreadForStaff(),
   ]);
 
   const header = (
@@ -62,15 +70,82 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
         <Stat label="Recebido no mês" value={formatBRL(revenue._sum.valueCents ?? 0)} />
         <Stat label="Usos de IA hoje" value={aiToday} hint="custo R$ 0 (chave do aluno)" />
       </div>
-      <nav className="flex gap-1 border-b border-border">
+      <nav className="flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
-          <Link key={t.key} href={`/admin?aba=${t.key}`} className={cn("border-b-2 px-3 py-2 text-sm font-medium", tab === t.key ? "border-primary text-primary" : "border-transparent text-muted hover:text-foreground")}>
+          <Link key={t.key} href={`/admin?aba=${t.key}`} className={cn("inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium", tab === t.key ? "border-primary text-primary" : "border-transparent text-muted hover:text-foreground")}>
             {t.label}
+            {t.key === "suporte" && supportUnread > 0 && <span className="rounded-full bg-danger px-1.5 text-[11px] font-bold text-white">{supportUnread}</span>}
           </Link>
         ))}
       </nav>
     </>
   );
+
+  if (tab === "suporte") {
+    const chosen = sp.aluno ? await db.user.findUnique({ where: { id: sp.aluno }, select: { id: true, name: true, handle: true, phone: true } }) : null;
+    if (chosen) {
+      await markUserMessagesRead(chosen.id);
+      const messages = await supportThread(chosen.id);
+      const at = (d: Date) => d.toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: admin.timezone });
+      return (
+        <div className="space-y-6">
+          {header}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <Link href="/admin?aba=suporte" className="text-sm text-primary">← Todas as conversas</Link>
+              <h2 className="text-lg font-semibold">{chosen.name} <span className="text-sm font-normal text-muted">@{chosen.handle}</span></h2>
+            </div>
+            {chosen.phone && <a href={`https://wa.me/55${chosen.phone}`} target="_blank" rel="noreferrer" className="text-sm text-primary">WhatsApp {formatPhone(chosen.phone)}</a>}
+          </div>
+          <SupportChat
+            messages={messages.map((m) => ({ id: m.id, body: m.body, mine: m.fromStaff, author: m.fromStaff ? "Equipe" : chosen.name.split(" ")[0], at: at(m.createdAt) }))}
+            action={replySupportAction.bind(null, chosen.id)}
+            placeholder="Escreva a resposta..."
+            empty="Sem mensagens."
+          />
+        </div>
+      );
+    }
+    const inbox = await supportInbox();
+    return (
+      <div className="space-y-6">
+        {header}
+        {!inbox.length && <Card className="text-sm text-muted">Nenhuma mensagem de suporte ainda.</Card>}
+        <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
+          {inbox.map((c) => (
+            <li key={c.user.id}>
+              <Link href={`/admin?aba=suporte&aluno=${c.user.id}`} className="flex items-center gap-3 p-4 hover:bg-surface-2">
+                <Avatar id={c.user.avatar} name={c.user.name} size={40} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{c.user.name} <span className="text-sm font-normal text-muted">@{c.user.handle}</span></p>
+                  <p className="truncate text-sm text-muted">{c.last.fromStaff ? "Você: " : ""}{c.last.body}</p>
+                </div>
+                <span className="shrink-0 text-xs text-muted">{formatDay(c.last.createdAt, { day: "2-digit", month: "short" })}</span>
+                {c.unread > 0 && <span className="rounded-full bg-danger px-2 text-xs font-bold text-white">{c.unread}</span>}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  if (tab === "site") {
+    const rows = await db.siteSetting.findMany({ where: { key: { startsWith: "social." } } });
+    const values = Object.fromEntries(rows.map((r) => [r.key.slice("social.".length), r.value]));
+    return (
+      <div className="space-y-6">
+        {header}
+        <Card className="space-y-4">
+          <div>
+            <CardTitle>Redes sociais</CardTitle>
+            <p className="text-sm text-muted">Os links cadastrados aparecem como botões no rodapé da página inicial e das páginas públicas.</p>
+          </div>
+          <SiteForm values={values} />
+        </Card>
+      </div>
+    );
+  }
 
   if (tab === "planos") {
     const counts = await db.subscription.groupBy({ by: ["planSlug"], where: { status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: now } }, _count: true });

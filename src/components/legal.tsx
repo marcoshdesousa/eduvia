@@ -1,7 +1,9 @@
 import { Logo } from "@/components/brand";
+import { SiteFooter } from "@/components/site-footer";
 
 export function LegalPage({ title, updated, children }: { title: string; updated: string; children: React.ReactNode }) {
   return (
+    <>
     <main className="mx-auto max-w-3xl px-4 py-10">
       <Logo />
       <h1 className="mt-8 text-3xl font-bold">{title}</h1>
@@ -11,5 +13,7 @@ export function LegalPage({ title, updated, children }: { title: string; updated
         Modelo inicial para revisão jurídica antes do lançamento.
       </p>
     </main>
+    <SiteFooter />
+    </>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Award, BarChart3, BrainCircuit, ChevronRight, Users, CreditCard, PenLine, RotateCcw, Settings, Shield } from "lucide-react";
+import { Award, BarChart3, BrainCircuit, ChevronRight, LifeBuoy, Users, CreditCard, PenLine, RotateCcw, Settings, Shield } from "lucide-react";
 import { requireReadyUser } from "@/lib/session";
 import { ThemeToggle } from "@/components/theme";
 
@@ -15,6 +15,7 @@ export default async function Page() {
     { href: "/revisoes", label: "Revisões e banco de erros", icon: RotateCcw },
     { href: "/minha-ia", label: "Minha IA (Gemini)", icon: BrainCircuit },
     { href: "/assinatura", label: "Assinatura", icon: CreditCard },
+    { href: "/suporte", label: "Suporte (fale com a gente)", icon: LifeBuoy },
     { href: "/configuracoes", label: "Ajustes", icon: Settings },
     ...(user.isAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
   ];

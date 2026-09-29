@@ -68,9 +68,18 @@ e2e/                   testes de ponta a ponta (Playwright)
 - **Duração da sessão:** o aluno escolhe 5, 10, 15, 20, 30 ou 45 minutos ao começar; o texto e o nº de questões seguem o tempo.
 - **Assinar:** em `/assinatura`, o aluno escolhe semanal (7 dias) ou mensal (30 dias); o botão abre o WhatsApp (`WHATSAPP_NUMBER`) com a mensagem pronta (plano, período, preço, nome e @). Não há cobrança automática.
 - **Liberar o plano (admin):**
-  1. Torne sua conta admin: `npm run admin -- @seu.usuario` (no Render: aba *Shell* do serviço web).
+  1. A **primeira conta criada** num banco vazio vira admin sozinha. Para outras: `npm run admin -- @usuario` (no Render: aba *Shell* do serviço web).
   2. Abra `/admin` → **Alunos**, busque o aluno por @, nome, CPF ou telefone, escolha o período (7 ou 30 dias) e clique em **Liberar**. Se o aluno ainda tem dias pagos, o novo período é somado ao final. **Encerrar** corta o acesso na hora.
   3. **Planos:** edite nome, preços e limites. **Uso de IA:** usos do dia por tarefa e por aluno (a IA não custa nada para a plataforma). A lista de alunos mostra quem está com a IA conectada.
+
+## Marca, site e atendimento
+
+- **Logo:** um "e" que vira caminho ("via"), com o ponto de chegada. Símbolo em `src/components/brand.tsx` (`LogoMark`), favicon em `src/app/icon.svg`, ícones do app em `public/`.
+- **Página inicial** (`src/app/page.tsx`): apresentação, como funciona, recursos, preço (lido do plano no banco), perguntas frequentes (inclui "por que pedimos o CPF") e rodapé.
+- **Redes sociais:** em **/admin → Site**, cadastre Instagram, WhatsApp, TikTok e X. Só as preenchidas aparecem no rodapé.
+- **Suporte:** o aluno escreve em **Mais → Suporte** (`/suporte`); a equipe vê as conversas em **/admin → Suporte** (com o nº de não lidas), responde por lá e o aluno recebe uma notificação.
+- **Foto de perfil:** 10 personagens (5 meninas, 5 meninos) em `public/avatars/`, escolhidos em Ajustes. O aluno muda o nome; o @ não pode ser trocado.
+- **Cadastro em 2 passos:** dados da conta → chave do Gemini, com botão "Voltar" que mantém o que foi digitado.
 
 ## Fase 2 — praticar
 

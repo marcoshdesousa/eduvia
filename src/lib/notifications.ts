@@ -11,7 +11,9 @@ export type NotificationType =
   | "GROUP_SHARE"
   | "ACHIEVEMENT"
   | "PLAN_EXPIRING"
-  | "TRIAL_ENDING";
+  | "TRIAL_ENDING"
+  | "SUPPORT_REPLY"
+  | "SUPPORT_MESSAGE";
 
 let vapidReady: boolean | null = null;
 export function pushConfigured() {

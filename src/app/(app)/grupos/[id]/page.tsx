@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Avatar } from "@/components/avatar";
 import { notFound } from "next/navigation";
 import { ClipboardCheck, FileText, ListChecks, NotebookText } from "lucide-react";
 import { db } from "@/lib/db";
@@ -157,7 +158,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
 
   // membros
   const [members, invites] = await Promise.all([
-    db.groupMember.findMany({ where: { groupId: id }, include: { user: { select: { id: true, name: true, handle: true, xp: true } } }, orderBy: [{ role: "asc" }, { joinedAt: "asc" }] }),
+    db.groupMember.findMany({ where: { groupId: id }, include: { user: { select: { id: true, name: true, handle: true, xp: true, avatar: true } } }, orderBy: [{ role: "asc" }, { joinedAt: "asc" }] }),
     db.groupInvite.findMany({ where: { groupId: id, status: "PENDING" }, include: { invitee: { select: { handle: true } } } }),
   ]);
   return (
@@ -179,7 +180,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <ul className="mt-3 divide-y divide-border">
           {members.map((m) => (
             <li key={m.userId} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-              <div className="grid size-8 place-items-center rounded-full bg-primary/15 font-semibold text-primary">{m.user.name[0]?.toUpperCase()}</div>
+              <Avatar id={m.user.avatar} name={m.user.name} size={32} />
               <Link href={`/u/${m.user.handle}`} className="min-w-0 flex-1 truncate hover:text-primary">{m.user.name} <span className="text-muted">@{m.user.handle}</span></Link>
               <Badge tone={m.role === "MEMBER" ? "neutral" : "primary"}>{ROLE[m.role]}</Badge>
               {m.userId !== user.id && (

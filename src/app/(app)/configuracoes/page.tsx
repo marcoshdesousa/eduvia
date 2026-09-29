@@ -20,7 +20,7 @@ export default async function Page() {
       <Card className="space-y-4">
         <CardTitle>Conta</CardTitle>
         <p className="text-sm text-muted">CPF {maskCpf(user.cpf!)}</p>
-        <ProfileForm name={user.name} handle={user.handle!} phone={user.phone!} visibility={user.profileVisibility} timezone={user.timezone} />
+        <ProfileForm name={user.name} handle={user.handle!} phone={user.phone!} visibility={user.profileVisibility} timezone={user.timezone} avatar={user.avatar} />
       </Card>
       <Card className="space-y-4">
         <CardTitle>Senha</CardTitle>

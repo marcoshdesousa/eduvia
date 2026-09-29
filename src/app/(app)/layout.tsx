@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Avatar } from "@/components/avatar";
 import { Flame, Zap } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { BottomNav, SideNav } from "@/components/app-nav";
@@ -28,7 +29,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <div className="space-y-3 border-t border-border pt-4">
           <div className="flex items-center justify-between text-sm">
-            <Link href="/perfil" className="truncate font-medium hover:text-primary">@{user.handle}</Link>
+            <Link href="/perfil" className="flex min-w-0 items-center gap-2 font-medium hover:text-primary">
+              <Avatar id={user.avatar} name={user.name} size={28} />
+              <span className="truncate">@{user.handle}</span>
+            </Link>
             <span className="text-xs text-muted">nível {level}</span>
           </div>
           <div className="flex items-center gap-4 text-xs text-muted">
@@ -45,6 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="inline-flex items-center gap-1"><Flame size={14} className="text-warning" />{user.currentStreak}</span>
             <span className="inline-flex items-center gap-1"><Zap size={14} className="text-primary" />{user.xp}</span>
             <NotificationBell count={unread} />
+            <Link href="/perfil" aria-label="Meu perfil"><Avatar id={user.avatar} name={user.name} size={28} /></Link>
           </div>
         </header>
         <AccessBanner access={access} />

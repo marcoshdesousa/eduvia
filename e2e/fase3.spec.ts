@@ -120,7 +120,7 @@ test("fase 3: grupo com convite, mural, compartilhamento, simulado com ranking, 
 
   // perfil privado
   await b.goto("/configuracoes");
-  await b.getByLabel("Perfil").selectOption("PRIVATE");
+  await b.getByLabel("Perfil", { exact: true }).selectOption("PRIVATE");
   await b.getByRole("button", { name: "Salvar" }).click();
   await expect(b.getByText("Dados salvos.")).toBeVisible();
   await a.goto(`/u/${hb}`);

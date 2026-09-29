@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Award, Bell, CalendarClock, CreditCard, Share2, UserPlus, Users } from "lucide-react";
+import { Award, Bell, CalendarClock, CreditCard, Share2, UserPlus, Users, LifeBuoy } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { formatDateTime } from "@/lib/core/dates";
@@ -16,6 +16,8 @@ const ICON: Record<string, typeof Bell> = {
   ACHIEVEMENT: Award,
   PLAN_EXPIRING: CreditCard,
   TRIAL_ENDING: CreditCard,
+  SUPPORT_REPLY: LifeBuoy,
+  SUPPORT_MESSAGE: LifeBuoy,
 };
 
 export default async function Page() {

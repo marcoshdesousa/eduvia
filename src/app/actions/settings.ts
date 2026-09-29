@@ -1,4 +1,5 @@
 "use server";
+import { isAvatarId } from "@/lib/avatars";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -6,7 +7,6 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
-import { checkHandleAvailable } from "@/lib/handles";
 import { deleteUserData } from "@/lib/cleanup";
 import { normalizePhone } from "@/lib/core/phone";
 import type { FormState } from "./account";
@@ -15,8 +15,7 @@ export async function updateProfileAction(_: FormState, formData: FormData): Pro
   const user = await requireReadyUser();
   const name = String(formData.get("name") ?? "").trim();
   if (name.length < 2) return { error: "Informe seu nome." };
-  const handle = await checkHandleAvailable(String(formData.get("handle") ?? ""), user.id);
-  if (!handle.ok) return { error: handle.reason };
+  const avatar = String(formData.get("avatar") ?? "");
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   if (!phone) return { error: "Telefone inválido. Use DDD + número." };
   const visibility = formData.get("profileVisibility") === "PRIVATE" ? "PRIVATE" : "PUBLIC";
@@ -26,7 +25,7 @@ export async function updateProfileAction(_: FormState, formData: FormData): Pro
   } catch {
     return { error: "Fuso horário inválido." };
   }
-  await db.user.update({ where: { id: user.id }, data: { name, handle: handle.handle, phone, profileVisibility: visibility, timezone: tz } });
+  await db.user.update({ where: { id: user.id }, data: { name: name.slice(0, 80), phone, profileVisibility: visibility, timezone: tz, avatar: isAvatarId(avatar) ? avatar : null } });
   revalidatePath("/", "layout");
   return { ok: true, message: "Dados salvos." };
 }

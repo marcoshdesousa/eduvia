@@ -55,6 +55,8 @@ model User {
   geminiConnectedAt     DateTime?
   /// A IA do aluno pediu pausa (cota do Google) até este horário.
   aiPausedUntil         DateTime?
+  /// Foto de perfil: um dos personagens de /public/avatars (ex.: "gata").
+  avatar                String?
 
   xp            Int       @default(0)
   currentStreak Int       @default(0)
@@ -63,6 +65,7 @@ model User {
 
   sessions         Session[]
   accounts         Account[]
+  supportMessages  SupportMessage[]
   guardianConsents GuardianConsent[]
   preparations     Preparation[]
   materials        Material[]
@@ -978,4 +981,29 @@ model PushSubscription {
   auth      String
   userAgent String?
   createdAt DateTime @default(now())
+}
+
+// ───────────────────────── Site e suporte ─────────────────────────
+
+/// Configurações do site editáveis no /admin (ex.: links das redes sociais do rodapé).
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// Canal de suporte: uma conversa por aluno, respondida pela equipe no /admin.
+model SupportMessage {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// true = resposta da equipe; false = mensagem do aluno.
+  fromStaff Boolean   @default(false)
+  body      String
+  /// Quando a outra parte leu (o aluno lê as respostas; a equipe lê as mensagens).
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([fromStaff, readAt])
 }

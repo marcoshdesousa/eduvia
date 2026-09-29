@@ -4,7 +4,7 @@ import { Field, Input } from "@/components/ui/form";
 export const AI_STUDIO_URL = "https://aistudio.google.com/apikey";
 
 /** Passo a passo + campo da chave do Gemini (cadastro, conectar IA e Perfil → Minha IA). */
-export function GeminiKeyFields({ hint }: { hint?: string | null }) {
+export function GeminiKeyFields({ hint, required = !hint }: { hint?: string | null; required?: boolean }) {
   return (
     <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
       <div className="flex items-center gap-2 font-semibold">
@@ -25,7 +25,7 @@ export function GeminiKeyFields({ hint }: { hint?: string | null }) {
         <li>Copie a chave (começa com <code className="rounded bg-surface px-1">AIza</code>) e cole aqui embaixo.</li>
       </ol>
       <Field label="Chave da API do Gemini" htmlFor="geminiKey" hint={hint ? `Chave atual termina em …${hint}. Cole uma nova para trocar.` : "Guardamos a chave criptografada. Ninguém vê, nem a equipe do Eduvia."}>
-        <Input id="geminiKey" name="geminiKey" autoComplete="off" spellCheck={false} placeholder="AIza..." required={!hint} className="font-mono" />
+        <Input id="geminiKey" name="geminiKey" autoComplete="off" spellCheck={false} placeholder="AIza..." required={required} className="font-mono" />
       </Field>
     </div>
   );

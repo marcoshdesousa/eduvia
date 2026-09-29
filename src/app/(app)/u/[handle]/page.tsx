@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Avatar } from "@/components/avatar";
 import { notFound } from "next/navigation";
 import { Flame, Lock, Zap } from "lucide-react";
 import { db } from "@/lib/db";
@@ -26,7 +27,7 @@ export default async function Page({ params }: { params: Promise<{ handle: strin
 
   const header = (
     <Card className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
-      <div className="grid size-20 shrink-0 place-items-center rounded-full bg-primary/20 text-3xl font-bold text-primary">{user.name[0]?.toUpperCase()}</div>
+      <Avatar id={user.avatar} name={user.name} size={80} />
       <div className="min-w-0 flex-1">
         <h1 className="text-2xl font-bold">{user.name}</h1>
         <p className="text-muted">@{user.handle}</p>
