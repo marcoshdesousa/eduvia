@@ -11,7 +11,7 @@ import { levelFromXp } from "@/lib/gamification";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { InviteForm } from "../forms";
+import { GroupCode, InviteForm } from "../forms";
 import { GroupWall } from "./wall";
 import { DangerZone, MemberActions, ShareForm, SharedItemActions } from "./group-client";
 
@@ -56,6 +56,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <Badge tone="primary">{ROLE[me.role]}</Badge>
       </div>
       {group.description && <p className="text-sm text-muted">{group.description}</p>}
+      <GroupCode code={group.code} />
       <nav className="mt-4 flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
           <Link key={t.key} href={`/grupos/${id}?aba=${t.key}`} className={cn("whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium", tab === t.key ? "border-primary text-primary" : "border-transparent text-muted hover:text-foreground")}>

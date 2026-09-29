@@ -92,20 +92,29 @@ test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", as
   await admin.getByRole("button", { name: "Salvar redes sociais" }).click();
   await expect(admin.getByText(/Redes sociais salvas/)).toBeVisible();
 
-  // suporte: aluno escreve, admin responde no painel, aluno vê a resposta
+  // suporte por chamados: aluno abre, admin responde e finaliza; chamado finalizado não aceita mensagens
   await page.goto("/suporte");
+  await page.getByLabel("Tipo").selectOption("Dúvida");
   await page.getByLabel("Mensagem").fill("Como troco minha chave do Gemini?");
+  await page.getByRole("button", { name: "Abrir chamado" }).click();
+  await expect(page).toHaveURL(/\/suporte\/[^/]+$/);
+  await expect(page.getByText("Como troco minha chave do Gemini?")).toBeVisible();
+  await page.getByLabel("Mensagem").fill("Pode me ajudar?");
   await page.getByRole("button", { name: "Enviar" }).click();
   await expect(page.getByText(/Mensagem enviada/)).toBeVisible();
   await admin.goto("/admin?aba=suporte");
-  await admin.getByRole("link", { name: `@${handle}` }).click();
-  await expect(admin).toHaveURL(/aluno=/);
-  await expect(admin.getByText("Como troco minha chave do Gemini?")).toBeVisible();
-  await admin.getByLabel("Mensagem").fill("É em Mais → Minha IA.");
+  await admin.getByRole("link", { name: `@${handle}` }).first().click();
+  await expect(admin).toHaveURL(/chamado=/);
+  await expect(admin.getByText("Pode me ajudar?")).toBeVisible();
+  await admin.getByLabel("Mensagem").fill("É em Ajustes → Chave de acesso.");
   await admin.getByRole("button", { name: "Enviar" }).click();
   await expect(admin.getByText(/Resposta enviada/)).toBeVisible();
-  await page.goto("/suporte");
-  await expect(page.getByText("É em Mais → Minha IA.")).toBeVisible();
+  await admin.getByRole("button", { name: "Finalizar chamado" }).click();
+  await expect(admin.getByText(/Chamado finalizado. O aluno não pode mais/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("É em Ajustes → Chave de acesso.")).toBeVisible();
+  await expect(page.getByText(/Este chamado foi finalizado/)).toBeVisible();
+  await expect(page.getByLabel("Mensagem")).toHaveCount(0);
 
   // foto de perfil e nome (o @ não muda)
   await page.goto("/configuracoes");

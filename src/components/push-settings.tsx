@@ -13,6 +13,14 @@ function urlBase64ToUint8Array(base64: string) {
 export function RegisterServiceWorker() {
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    // guarda o convite de instalação do navegador (Android/Chrome) para o botão "Instalar"
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      (window as unknown as { __eduviaInstall?: Event }).__eduviaInstall = e;
+      window.dispatchEvent(new Event("eduvia-install-ready"));
+    };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, []);
   return null;
 }

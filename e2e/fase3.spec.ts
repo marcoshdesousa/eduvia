@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { makeStudyPdf } from "./fixtures";
-import { signUp } from "./helpers";
+import { signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
 
@@ -51,8 +51,26 @@ test("fase 3: grupo com convite, mural, compartilhamento, simulado com ranking, 
   await b.goto("/notificacoes");
   await expect(b.getByText(`@${ha} convidou você para o grupo "Turma de Biologia"`)).toBeVisible();
   await b.goto("/grupos");
+  await expect(b.getByText("Você foi convidado")).toBeVisible();
   await b.getByRole("button", { name: "Aceitar" }).click();
   await expect(b).toHaveURL(/\/grupos\/[^/?]+/);
+
+  // Carla entra pelo código do grupo
+  const code = (await sql<{ code: string }>(`SELECT code FROM "Group" WHERE name = 'Turma de Biologia' ORDER BY "createdAt" DESC LIMIT 1`))[0].code;
+  await expect(a.getByText(code)).toBeVisible();
+  const c = await (await browser.newContext()).newPage();
+  await signUp(c, { name: "Carla Código", handle: `carla.${uid}` });
+  await c.goto("/grupos");
+  await c.getByLabel("Código do grupo").fill("ZZZZZZ");
+  await c.getByRole("button", { name: "Entrar no grupo" }).click();
+  await expect(c.getByText("Não encontramos nenhum grupo com esse código.")).toBeVisible();
+  await c.getByLabel("Código do grupo").fill(code.toLowerCase());
+  await c.getByRole("button", { name: "Entrar no grupo" }).click();
+  await expect(c).toHaveURL(/\/grupos\/[^/?]+/);
+  await expect(c.getByRole("heading", { name: "Turma de Biologia" })).toBeVisible();
+  await c.close();
+  // Carla sai (o resto do teste conta só Ana e Beto)
+  await sql(`DELETE FROM "GroupMember" WHERE "userId" = (SELECT id FROM "user" WHERE handle = $1)`, [`carla.${uid}`]);
 
   // mural
   await b.getByLabel("Mensagem para o grupo").fill("Oi, pessoal!");

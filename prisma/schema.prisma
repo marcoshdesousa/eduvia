@@ -66,6 +66,7 @@ model User {
   sessions         Session[]
   accounts         Account[]
   supportMessages  SupportMessage[]
+  supportTickets   SupportTicket[]
   guardianConsents GuardianConsent[]
   preparations     Preparation[]
   materials        Material[]
@@ -863,6 +864,8 @@ model TutorMessage {
 model Group {
   id          String   @id @default(cuid())
   name        String
+  /// Código para entrar no grupo (ex.: K7M2QX).
+  code        String   @unique
   description String?
   ownerId     String
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -996,11 +999,35 @@ model SiteSetting {
   updatedAt DateTime @updatedAt
 }
 
-/// Canal de suporte: uma conversa por aluno, respondida pela equipe no /admin.
-model SupportMessage {
-  id        String    @id @default(cuid())
+enum TicketStatus {
+  OPEN
+  CLOSED
+}
+
+/// Chamado de suporte: o aluno abre com um tipo; a equipe responde e finaliza (depois disso não aceita mensagens).
+model SupportTicket {
+  id        String           @id @default(cuid())
   userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Tipo escolhido pelo aluno (dúvida, problema, pagamento...).
+  kind      String
+  status    TicketStatus     @default(OPEN)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  closedAt  DateTime?
+  messages  SupportMessage[]
+
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
+}
+
+/// Mensagem de um chamado de suporte.
+model SupportMessage {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   /// true = resposta da equipe; false = mensagem do aluno.
   fromStaff Boolean   @default(false)
   body      String
@@ -1009,5 +1036,6 @@ model SupportMessage {
   createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
+  @@index([ticketId, createdAt])
   @@index([fromStaff, readAt])
 }

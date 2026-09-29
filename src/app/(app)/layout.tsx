@@ -10,13 +10,20 @@ import { isMockAi } from "@/lib/ai/client";
 import { getAccess } from "@/lib/billing";
 import { AccessBanner } from "@/components/access-banner";
 import { unreadCount } from "@/lib/notifications";
+import { db } from "@/lib/db";
 import { RegisterServiceWorker } from "@/components/push-settings";
 import { NotificationBell } from "@/components/notification-bell";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireReadyUser();
   const { level } = levelFromXp(user.xp);
-  const [access, unread] = await Promise.all([getAccess(user), unreadCount(user.id)]);
+  const [access, unread, invites, supportReplies] = await Promise.all([
+    getAccess(user),
+    unreadCount(user.id),
+    db.groupInvite.count({ where: { inviteeId: user.id, status: "PENDING" } }),
+    db.supportMessage.count({ where: { fromStaff: true, readAt: null, ticket: { userId: user.id } } }),
+  ]);
+  const badges = { "/grupos": invites, "/suporte": supportReplies, "/mais": invites + supportReplies };
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[240px_1fr]">
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-border bg-surface p-4 md:flex">
@@ -25,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <NotificationBell count={unread} />
         </div>
         <div className="mt-8 flex-1">
-          <SideNav isAdmin={user.isAdmin} />
+          <SideNav isAdmin={user.isAdmin} badges={badges} />
         </div>
         <div className="space-y-3 border-t border-border pt-4">
           <div className="flex items-center justify-between text-sm">
@@ -60,7 +67,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         )}
         <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:px-8 md:pb-12">{children}</main>
       </div>
-      <BottomNav />
+      <BottomNav badges={badges} />
       <RegisterServiceWorker />
     </div>
   );

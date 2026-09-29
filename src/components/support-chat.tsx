@@ -15,11 +15,14 @@ export function SupportChat({
   action,
   placeholder,
   empty,
+  closed,
 }: {
   messages: ChatMessage[];
   action: (state: FormState, f: FormData) => Promise<FormState>;
   placeholder: string;
   empty: string;
+  /** Chamado finalizado: mostra o aviso no lugar do campo de mensagem. */
+  closed?: string | null;
 }) {
   const [state, send, pending] = useActionState(action, undefined);
   const formRef = useRef<HTMLFormElement>(null);
@@ -42,12 +45,16 @@ export function SupportChat({
         ))}
         <div ref={endRef} />
       </div>
+      {closed ? (
+        <p className="rounded-lg border border-border bg-surface-2 p-3 text-center text-sm text-muted">{closed}</p>
+      ) : (
       <ActionForm ref={formRef} action={send} className="space-y-2">
         <FormError message={state?.error} />
         {state?.ok && <p className="text-sm text-success">{state.message}</p>}
         <Textarea name="body" rows={3} placeholder={placeholder} aria-label="Mensagem" required maxLength={2000} />
         <Button disabled={pending}><Send size={16} /> {pending ? "Enviando..." : "Enviar"}</Button>
       </ActionForm>
+      )}
     </div>
   );
 }

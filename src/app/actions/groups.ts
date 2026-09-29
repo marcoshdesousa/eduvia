@@ -1,4 +1,5 @@
 "use server";
+import { allowAttempt } from "@/lib/rate-limit";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
@@ -17,6 +18,7 @@ import {
   postMessage,
   removeMember,
   respondInvite,
+  joinByCode,
   setRole,
   shareResource,
   transferOwnership,
@@ -48,6 +50,19 @@ export async function createGroupAction(_: FormState, f: FormData): Promise<Form
     throw e;
   }
   redirect(`/grupos/${id}?aba=membros`);
+}
+
+export async function joinByCodeAction(_: FormState, f: FormData): Promise<FormState> {
+  const user = await requireReadyUser();
+  if (!(await allowAttempt(`join:${user.id}`, 20, 10))) return { error: "Muitas tentativas. Aguarde alguns minutos." };
+  let id: string;
+  try {
+    id = await joinByCode(user, String(f.get("code") ?? ""));
+  } catch (e) {
+    if (e instanceof GroupError) return { error: e.message };
+    throw e;
+  }
+  redirect(`/grupos/${id}`);
 }
 
 export async function inviteAction(groupId: string, handle: string): Promise<Result> {

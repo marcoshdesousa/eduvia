@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Flame, Play, RotateCcw, Target, Zap } from "lucide-react";
 import { db } from "@/lib/db";
+import { InstallAppBanner } from "@/components/install-app";
 import { requireReadyUser } from "@/lib/session";
 import { ensurePlanFresh } from "@/lib/plan";
 import { addDays, today, weekday } from "@/lib/core/dates";
@@ -50,6 +51,7 @@ export default async function Page() {
 
   return (
     <div className="space-y-6">
+      <InstallAppBanner />
       <div>
         <h1 className="text-2xl font-bold">Olá, {user.name.split(" ")[0]}!</h1>
         <p className="text-sm text-muted">

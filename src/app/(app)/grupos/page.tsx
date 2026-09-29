@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { Users } from "lucide-react";
+import { BellRing, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { groupAccessError, groupCreateError } from "@/lib/billing";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
-import { CreateGroupForm, InviteResponse } from "./forms";
+import { CreateGroupForm, InviteResponse, JoinByCodeForm } from "./forms";
 
 export const metadata = { title: "Grupos" };
 
@@ -36,11 +36,11 @@ export default async function Page() {
         </Card>
       )}
       {invites.length > 0 && (
-        <Card className="space-y-3 border-primary/40">
-          <CardTitle>Convites</CardTitle>
+        <Card className="space-y-3 border-primary bg-primary/5">
+          <CardTitle className="flex items-center gap-2"><BellRing size={18} className="text-primary" /> Você foi convidado{invites.length > 1 ? ` (${invites.length})` : ""}</CardTitle>
           {invites.map((i) => (
-            <div key={i.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
-              <span><strong>@{i.inviter.handle}</strong> convidou você para <strong>{i.group.name}</strong></span>
+            <div key={i.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-3 text-sm">
+              <span><strong>@{i.inviter.handle}</strong> convidou você para o grupo <strong>{i.group.name}</strong></span>
               <InviteResponse inviteId={i.id} />
             </div>
           ))}
@@ -63,10 +63,16 @@ export default async function Page() {
         {!groups.length && <Card className="text-sm text-muted sm:col-span-2">Você ainda não está em nenhum grupo.</Card>}
       </div>
 
-      <Card className="space-y-3">
-        <CardTitle>Criar grupo</CardTitle>
-        {!createBlocked ? <CreateGroupForm /> : <p className="text-sm text-muted">{createBlocked} <Link href="/assinatura" className="font-semibold text-primary">Ver planos</Link></p>}
-      </Card>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="space-y-3">
+          <CardTitle>Entrar em um grupo</CardTitle>
+          {!accessBlocked ? <JoinByCodeForm /> : <p className="text-sm text-muted">{accessBlocked} <Link href="/assinatura" className="font-semibold text-primary">Ver planos</Link></p>}
+        </Card>
+        <Card className="space-y-3">
+          <CardTitle>Criar grupo</CardTitle>
+          {!createBlocked ? <CreateGroupForm /> : <p className="text-sm text-muted">{createBlocked} <Link href="/assinatura" className="font-semibold text-primary">Ver planos</Link></p>}
+        </Card>
+      </div>
     </div>
   );
 }

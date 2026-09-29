@@ -1,8 +1,8 @@
 "use client";
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Copy, Loader2, X } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
-import { createGroupAction, inviteAction, respondInviteAction } from "@/app/actions/groups";
+import { createGroupAction, inviteAction, joinByCodeAction, respondInviteAction } from "@/app/actions/groups";
 import { Button } from "@/components/ui/button";
 import { Field, FormError, Input, Textarea } from "@/components/ui/form";
 
@@ -87,5 +87,42 @@ export function InviteForm({ groupId }: { groupId: string }) {
       {result?.error && <p className="text-sm text-danger">{result.error}</p>}
       {result?.message && <p className="text-sm text-success">{result.message}</p>}
     </form>
+  );
+}
+
+/** Entrar num grupo pelo código. */
+export function JoinByCodeForm() {
+  const [state, action, pending] = useActionState(joinByCodeAction, undefined);
+  return (
+    <ActionForm action={action} className="space-y-3">
+      <FormError message={state?.error} />
+      <Field label="Código do grupo" htmlFor="group-code" hint="Peça o código para alguém do grupo (6 letras e números).">
+        <Input id="group-code" name="code" required maxLength={8} placeholder="Ex.: K7M2QX" className="font-mono uppercase tracking-widest" autoComplete="off" />
+      </Field>
+      <Button disabled={pending}>{pending ? "Entrando..." : "Entrar no grupo"}</Button>
+    </ActionForm>
+  );
+}
+
+/** Código do grupo com botão de copiar (para chamar amigos). */
+export function GroupCode({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm">
+      <span className="text-muted">Código do grupo:</span>
+      <span className="font-mono font-bold tracking-widest">{code}</span>
+      <button
+        type="button"
+        aria-label="Copiar código"
+        className="text-muted hover:text-primary"
+        onClick={async () => {
+          await navigator.clipboard?.writeText(code).catch(() => {});
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? <Check size={15} className="text-success" /> : <Copy size={15} />}
+      </button>
+    </div>
   );
 }

@@ -42,7 +42,7 @@ export const DEFAULT_PLANS: PlanDef[] = [
     order: 1,
     priceWeekCents: 700,
     priceMonthCents: 1500,
-    limits: { activePreparations: -1, materials: -1, pagesPerDay: 300, scannedPagesPerDay: 60, newSessionsPerDay: 6, gamesPerDay: -1, examsPerMonth: 8, essaysPerDay: 3, tutorMessagesPerDay: 40, groups: true, groupsOwned: 5, restAfterMinutes: 180 },
+    limits: { activePreparations: -1, materials: -1, pagesPerDay: 700, scannedPagesPerDay: 150, newSessionsPerDay: 6, gamesPerDay: -1, examsPerMonth: 8, essaysPerDay: 3, tutorMessagesPerDay: 40, groups: true, groupsOwned: 5, restAfterMinutes: 180 },
   },
 ];
 

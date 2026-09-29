@@ -17,7 +17,8 @@ import { SiteForm } from "./site-form";
 import { SupportChat } from "@/components/support-chat";
 import { Avatar } from "@/components/avatar";
 import { replySupportAction } from "@/app/actions/support";
-import { markUserMessagesRead, supportInbox, supportThread, supportUnreadForStaff } from "@/lib/support";
+import { markUserMessagesRead, staffTickets, supportUnreadForStaff, ticketFor } from "@/lib/support";
+import { CloseTicketButton } from "./close-ticket-button";
 
 export const metadata = { title: "Admin" };
 
@@ -40,7 +41,7 @@ const TASK_LABEL: Record<string, string> = {
   tutor: "Professor IA",
 };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ q?: string; aba?: string; aluno?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ q?: string; aba?: string; chamado?: string }> }) {
   const admin = await requireAdmin();
   const sp = await searchParams;
   const tab = TABS.find((t) => t.key === sp.aba)?.key ?? "alunos";
@@ -82,46 +83,50 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
   );
 
   if (tab === "suporte") {
-    const chosen = sp.aluno ? await db.user.findUnique({ where: { id: sp.aluno }, select: { id: true, name: true, handle: true, phone: true } }) : null;
-    if (chosen) {
-      await markUserMessagesRead(chosen.id);
-      const messages = await supportThread(chosen.id);
+    const ticket = sp.chamado ? await ticketFor(sp.chamado) : null;
+    if (ticket) {
+      await markUserMessagesRead(ticket.id);
       const at = (d: Date) => d.toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: admin.timezone });
       return (
         <div className="space-y-6">
           {header}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <Link href="/admin?aba=suporte" className="text-sm text-primary">← Todas as conversas</Link>
-              <h2 className="text-lg font-semibold">{chosen.name} <span className="text-sm font-normal text-muted">@{chosen.handle}</span></h2>
+              <Link href="/admin?aba=suporte" className="text-sm text-primary">← Todos os chamados</Link>
+              <h2 className="text-lg font-semibold">{ticket.kind} · {ticket.user.name} <span className="text-sm font-normal text-muted">@{ticket.user.handle}</span></h2>
             </div>
-            {chosen.phone && <a href={`https://wa.me/55${chosen.phone}`} target="_blank" rel="noreferrer" className="text-sm text-primary">WhatsApp {formatPhone(chosen.phone)}</a>}
+            <div className="flex items-center gap-3">
+              {ticket.user.phone && <a href={`https://wa.me/55${ticket.user.phone}`} target="_blank" rel="noreferrer" className="text-sm text-primary">WhatsApp {formatPhone(ticket.user.phone)}</a>}
+              {ticket.status === "OPEN" ? <CloseTicketButton ticketId={ticket.id} /> : <Badge>Finalizado</Badge>}
+            </div>
           </div>
           <SupportChat
-            messages={messages.map((m) => ({ id: m.id, body: m.body, mine: m.fromStaff, author: m.fromStaff ? "Equipe" : chosen.name.split(" ")[0], at: at(m.createdAt) }))}
-            action={replySupportAction.bind(null, chosen.id)}
+            messages={ticket.messages.map((m) => ({ id: m.id, body: m.body, mine: m.fromStaff, author: m.fromStaff ? "Equipe" : ticket.user.name.split(" ")[0], at: at(m.createdAt) }))}
+            action={replySupportAction.bind(null, ticket.id)}
             placeholder="Escreva a resposta..."
             empty="Sem mensagens."
+            closed={ticket.status === "CLOSED" ? "Chamado finalizado. O aluno não pode mais enviar mensagens nele." : null}
           />
         </div>
       );
     }
-    const inbox = await supportInbox();
+    const tickets = await staffTickets();
     return (
       <div className="space-y-6">
         {header}
-        {!inbox.length && <Card className="text-sm text-muted">Nenhuma mensagem de suporte ainda.</Card>}
+        {!tickets.length && <Card className="text-sm text-muted">Nenhum chamado ainda.</Card>}
         <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
-          {inbox.map((c) => (
-            <li key={c.user.id}>
-              <Link href={`/admin?aba=suporte&aluno=${c.user.id}`} className="flex items-center gap-3 p-4 hover:bg-surface-2">
-                <Avatar id={c.user.avatar} name={c.user.name} size={40} />
+          {tickets.map((t) => (
+            <li key={t.id}>
+              <Link href={`/admin?aba=suporte&chamado=${t.id}`} className="flex items-center gap-3 p-4 hover:bg-surface-2">
+                <Avatar id={t.user.avatar} name={t.user.name} size={40} />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{c.user.name} <span className="text-sm font-normal text-muted">@{c.user.handle}</span></p>
-                  <p className="truncate text-sm text-muted">{c.last.fromStaff ? "Você: " : ""}{c.last.body}</p>
+                  <p className="font-medium">{t.kind} · {t.user.name} <span className="text-sm font-normal text-muted">@{t.user.handle}</span></p>
+                  <p className="truncate text-sm text-muted">{t.messages[0]?.fromStaff ? "Você: " : ""}{t.messages[0]?.body}</p>
                 </div>
-                <span className="shrink-0 text-xs text-muted">{formatDay(c.last.createdAt, { day: "2-digit", month: "short" })}</span>
-                {c.unread > 0 && <span className="rounded-full bg-danger px-2 text-xs font-bold text-white">{c.unread}</span>}
+                <span className="shrink-0 text-xs text-muted">{formatDay(t.updatedAt, { day: "2-digit", month: "short" })}</span>
+                {t._count.messages > 0 && <span className="rounded-full bg-danger px-2 text-xs font-bold text-white">{t._count.messages}</span>}
+                <Badge tone={t.status === "OPEN" ? "success" : "neutral"}>{t.status === "OPEN" ? "Aberto" : "Finalizado"}</Badge>
               </Link>
             </li>
           ))}

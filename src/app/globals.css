@@ -104,3 +104,13 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .px-idle, .px-jump, .px-fall, .px-balloon, .px-cloud { animation: none; }
 }
+
+/* Robozinho narrador da aula */
+@keyframes robot-mouth { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(2.2); } }
+@keyframes robot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes robot-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.robot-mouth { transform-box: fill-box; transform-origin: center; }
+.robot-mouth-talk { animation: robot-mouth 0.28s ease-in-out infinite; }
+.robot-talk { animation: robot-bob 0.6s ease-in-out infinite; }
+.robot-blink { animation: robot-blink 0.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .robot-mouth-talk, .robot-talk, .robot-blink { animation: none; } }

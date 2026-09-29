@@ -27,13 +27,27 @@ async function requireManager(groupId: string, userId: string) {
   return m;
 }
 
-export async function createGroup(user: { id: string; trialEndsAt: Date | null }, name: string, description?: string) {
+/** Código de 6 caracteres sem letras/números que confundem (0/O, 1/I). */
+function newGroupCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+async function uniqueGroupCode() {
+  for (let i = 0; i < 10; i++) {
+    const code = newGroupCode();
+    if (!(await db.group.findUnique({ where: { code } }))) return code;
+  }
+  throw new GroupError("Não foi possível gerar o código do grupo. Tente de novo.");
+}
+
+export async function createGroup(user: { id: string }, name: string, description?: string) {
   const clean = name.trim();
   if (clean.length < 3 || clean.length > 60) throw new GroupError("O nome do grupo precisa ter de 3 a 60 caracteres.");
   const blocked = await groupCreateError(user);
   if (blocked) throw new GroupError(blocked);
   const group = await db.group.create({
-    data: { name: clean, description: description?.trim().slice(0, 300) || null, ownerId: user.id, members: { create: { userId: user.id, role: "OWNER" } } },
+    data: { name: clean, code: await uniqueGroupCode(), description: description?.trim().slice(0, 300) || null, ownerId: user.id, members: { create: { userId: user.id, role: "OWNER" } } },
   });
   await checkAchievementsSafe(user.id);
   return group;
@@ -85,6 +99,26 @@ export async function respondInvite(inviteId: string, userId: string, accept: bo
     await db.groupInvite.update({ where: { id: inviteId }, data: { status: "DECLINED", respondedAt: new Date() } });
   }
   return invite.groupId;
+}
+
+/** Entrar num grupo usando o código dele (ex.: K7M2QX). */
+export async function joinByCode(user: { id: string; handle: string | null }, rawCode: string) {
+  const code = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length !== 6) throw new GroupError("O código do grupo tem 6 letras/números.");
+  const group = await db.group.findUnique({ where: { code } });
+  if (!group) throw new GroupError("Não encontramos nenhum grupo com esse código.");
+  if (await getMembership(group.id, user.id)) return group.id;
+  const me = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+  const blocked = await groupAccessError(me);
+  if (blocked) throw new GroupError(blocked);
+  const count = await db.groupMember.count({ where: { groupId: group.id } });
+  if (count >= MAX_MEMBERS) throw new GroupError("O grupo está cheio.");
+  await db.groupMember.create({ data: { groupId: group.id, userId: user.id } });
+  // convites pendentes para este grupo viram "aceitos"
+  await db.groupInvite.updateMany({ where: { groupId: group.id, inviteeId: user.id, status: "PENDING" }, data: { status: "ACCEPTED", respondedAt: new Date() } });
+  await notify(group.ownerId, { type: "INVITE_ACCEPTED", title: `@${user.handle} entrou no grupo "${group.name}" pelo código`, href: `/grupos/${group.id}`, dedupeKey: `codigo:${group.id}:${user.id}` });
+  await checkAchievementsSafe(user.id);
+  return group.id;
 }
 
 export async function cancelInvite(inviteId: string, actorId: string) {

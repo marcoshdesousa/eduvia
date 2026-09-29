@@ -2,6 +2,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
+import { LessonNarrator } from "@/components/lesson-narrator";
 import { BookOpen, Brain, CheckCircle2, Lightbulb, PartyPopper } from "lucide-react";
 import { completeSessionAction } from "@/app/actions/study";
 import { QuestionCard, SourceLinks, type QuestionData, type SourceRef } from "@/components/question-card";
@@ -60,6 +61,7 @@ export function SessionView({ header, sessionId, completed, text, questions }: {
 
       {current === "texto" && text && (
         <div className="space-y-4">
+          {text.content && <LessonNarrator text={text.content} />}
           {text.content && (
             <Card>
               <article className="prose-study">

@@ -54,7 +54,7 @@ e2e/                   testes de ponta a ponta (Playwright)
   |---|---|---|
   | Preço | — | R$ 7 por 7 dias · R$ 15 por 30 dias |
   | Preparações ativas / PDFs guardados | 1 / 1 | à vontade |
-  | Páginas enviadas por dia (escaneadas) | 30 (5) | 300 (60) |
+  | Páginas enviadas por dia (escaneadas) | 30 (5) | 700 (150) |
   | Sessões novas por dia (revisões ilimitadas) | 1 | 6 |
   | Testes rápidos por dia | 3 | à vontade |
   | Simulados por mês | 0 | 8 |
@@ -77,7 +77,10 @@ e2e/                   testes de ponta a ponta (Playwright)
 - **Logo:** raposa geométrica laranja sobre fundo grafite; paleta do site em laranja (`--primary` em `src/app/globals.css`). Símbolo em `src/components/brand.tsx` (`LogoMark`), favicon em `src/app/icon.svg`, ícones do app em `public/`.
 - **Página inicial** (`src/app/page.tsx`): apresentação, como funciona, recursos, preço (lido do plano no banco), perguntas frequentes (inclui "por que pedimos o CPF") e rodapé.
 - **Redes sociais:** em **/admin → Site**, cadastre Instagram, WhatsApp, TikTok e X. Só as preenchidas aparecem no rodapé.
-- **Suporte:** o aluno escreve em **Mais → Suporte** (`/suporte`); a equipe vê as conversas em **/admin → Suporte** (com o nº de não lidas), responde por lá e o aluno recebe uma notificação.
+- **Suporte por chamados:** o aluno abre um chamado em **Mais → Suporte** (`/suporte`) escolhendo o tipo (dúvida, problema técnico, pagamento, sugestão, outro). A equipe vê os chamados em **/admin → Suporte** (abertos primeiro, com nº de não lidas), responde e clica em **Finalizar chamado**: depois disso o aluno não consegue mais mandar mensagens nele (para outro assunto, abre outro chamado).
+- **Ouvir a aula:** na sessão de estudo, um robozinho lê o texto em voz alta com a voz em português do próprio aparelho (sem custo; escolhe a voz mais natural disponível, com velocidade ajustável).
+- **Instalar o app:** `/instalar` (e um aviso na tela inicial do celular) ensina a instalar pelo navegador (Android/Chrome com botão direto; iPhone pelo Safari → Compartilhar → Adicionar à Tela de Início) e ativar as notificações.
+- **Grupos:** cada grupo tem um **código** de 6 caracteres (aparece no topo do grupo, com botão de copiar). Em `/grupos` dá para **entrar com o código** ou **criar** um grupo; convites pelo @ aparecem em "Você foi convidado", com aviso vermelho no menu.
 - **Foto de perfil:** 40 personagens em 4 categorias (Bichinhos, Heróis, MVP e Halloween; 5 femininos e 5 masculinos cada) em `public/avatars/`, lista em `src/lib/avatars.ts`. No plano Grátis só 1 feminino e 1 masculino de cada categoria ficam liberados (`free: true`); assinantes usam todos. O aluno muda o nome; o @ não pode ser trocado.
 - **Cadastro em 2 passos:** dados da conta → chave do Gemini, com botão "Voltar" que mantém o que foi digitado.
 
