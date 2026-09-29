@@ -13,5 +13,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!material?.blob) return jsonError("Material não encontrado", 404);
   const page = Number(new URL(req.url).searchParams.get("page")) || null;
   const url = await downloadUrl(material.blob.storageKey, material.title);
-  return NextResponse.redirect(material.kind === "PDF" && page ? `${url}#page=${page}` : url);
+  const target = new URL(url, req.url); // URL relativa (disco local) ou assinada (S3)
+  if (material.kind === "PDF" && page) target.hash = `page=${page}`;
+  return NextResponse.redirect(target);
 }

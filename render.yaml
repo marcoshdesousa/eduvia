@@ -1,14 +1,15 @@
-# Blueprint do Render: um serviço web (app + processamento em segundo plano) com disco
+# Blueprint do Render: um serviço web ("eduvia") (app + processamento em segundo plano) com disco
 # para os arquivos enviados, e o PostgreSQL.
 # No painel do Render: New → Blueprint → escolha este repositório.
-# Depois preencha as variáveis marcadas com sync: false (painel → eduvia-web → Environment).
+# Depois preencha as variáveis marcadas com sync: false (painel → eduvia → Environment).
 #
 # Quando o app crescer, dá para separar o worker (npm run worker) e mover os arquivos
 # para um armazenamento S3/Cloudflare R2 (STORAGE_DRIVER=s3) — ver README.
 
 services:
   - type: web
-    name: eduvia-web
+    # o nome vira o endereço gratuito: https://eduvia.onrender.com (se o nome estiver livre no Render)
+    name: eduvia
     runtime: node
     plan: starter # discos persistentes exigem plano pago
     region: virginia
@@ -27,10 +28,8 @@ services:
           property: connectionString
       - key: NODE_VERSION
         value: "22"
-      - key: APP_URL
-        sync: false # ex.: https://eduvia-web.onrender.com (ou seu domínio)
-      - key: BETTER_AUTH_URL
-        sync: false # igual ao APP_URL
+      # O endereço do app é detectado sozinho (RENDER_EXTERNAL_URL). Só preencha APP_URL
+      # quando tiver domínio próprio (ex.: https://eduvia.com.br).
       - key: BETTER_AUTH_SECRET
         generateValue: true
       # processamento de PDFs, planos e lembretes dentro do próprio app
@@ -51,9 +50,9 @@ services:
         sync: false
       # notificações push: gere com `npx web-push generate-vapid-keys`
       - key: VAPID_PUBLIC_KEY
-        sync: false
+        value: BAHR0NyTSbKzMlU5z66DwDtMNfv9ZFZaIN5ps1bBecDlsDDACe4LAR9Bu0zk4N2ZSIlm0_V8yYn87uphNOr9vYQ # pública (pode ficar no código)
       - key: VAPID_PRIVATE_KEY
-        sync: false
+        sync: false # secreta: preencha no painel
       - key: VAPID_SUBJECT
         value: mailto:suporte@eduvia.app
 

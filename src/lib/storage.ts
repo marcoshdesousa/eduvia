@@ -8,7 +8,6 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 const driver = () => (process.env.STORAGE_DRIVER === "s3" ? "s3" : "local");
 const localDir = () => path.resolve(/*turbopackIgnore: true*/ process.env.STORAGE_LOCAL_DIR || ".data/uploads");
 const secret = () => process.env.BETTER_AUTH_SECRET || "dev-secret";
-const appUrl = () => process.env.APP_URL || "http://localhost:3000";
 
 let s3: S3Client | null = null;
 function s3Client() {
@@ -41,7 +40,7 @@ export async function uploadUrl(key: string, contentType: string): Promise<strin
     return getSignedUrl(s3Client(), new PutObjectCommand({ Bucket: bucket(), Key: key, ContentType: contentType }), { expiresIn: 3600 });
   }
   const exp = Math.floor(Date.now() / 1000) + 3600;
-  return `${appUrl()}/api/storage/${encodeURIComponent(key)}?exp=${exp}&sig=${sign(key, "put", exp)}`;
+  return `/api/storage/${encodeURIComponent(key)}?exp=${exp}&sig=${sign(key, "put", exp)}`;
 }
 
 /** URL temporária para abrir o arquivo (gerada só depois de checar permissão). */
@@ -54,7 +53,7 @@ export async function downloadUrl(key: string, filename: string, expiresIn = 600
     );
   }
   const exp = Math.floor(Date.now() / 1000) + expiresIn;
-  return `${appUrl()}/api/storage/${encodeURIComponent(key)}?exp=${exp}&sig=${sign(key, "get", exp)}`;
+  return `/api/storage/${encodeURIComponent(key)}?exp=${exp}&sig=${sign(key, "get", exp)}`;
 }
 
 export async function readObject(key: string): Promise<Buffer> {

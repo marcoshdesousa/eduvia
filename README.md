@@ -145,22 +145,23 @@ npm run test:e2e                # terminal 3
 
 ## Deploy no Render
 
-O `render.yaml` cria **um serviço web** e o **PostgreSQL** (que suporta pgvector). O serviço web:
+O `render.yaml` cria **um serviço web** chamado `eduvia` (endereço gratuito `https://eduvia.onrender.com`, se o nome estiver livre) e o **PostgreSQL** (que suporta pgvector). O serviço web:
 - roda o app **e** o processamento em segundo plano (`RUN_WORKER_IN_WEB=true`): PDFs, planos e lembretes;
 - guarda os arquivos enviados num **disco persistente** de 5 GB (`/var/data`), sem precisar de S3/R2.
 
 Passo a passo:
 1. Suba o código para o GitHub (já está) e crie uma conta em https://render.com.
 2. No Render: **New → Blueprint** → conecte o GitHub e escolha o repositório `eduvia`. Ele lê o `render.yaml` e mostra o que vai criar (serviço `eduvia-web`, disco e banco `eduvia-db`). Confirme.
-3. Preencha as variáveis que ficaram em branco (eduvia-web → Environment):
-   - `APP_URL` e `BETTER_AUTH_URL`: o endereço do app, ex.: `https://eduvia-web.onrender.com` (aparece no topo da página do serviço).
+3. Preencha as variáveis que ficaram em branco (eduvia → Environment). O endereço do app é detectado sozinho (`RENDER_EXTERNAL_URL`), então **não precisa** de `APP_URL`, a não ser com domínio próprio.
    - `ANTHROPIC_API_KEY`: opcional no início. Sem ela o app roda em **modo de demonstração**.
    - `VOYAGE_API_KEY`: opcional (melhora a busca nos materiais).
-   - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`: para as notificações no celular. Gere no seu computador com `npx web-push generate-vapid-keys`.
+   - `VAPID_PRIVATE_KEY`: para as notificações no celular (a pública já está no `render.yaml`). Para trocar o par, gere com `npx web-push generate-vapid-keys`.
 4. Clique em **Manual Deploy → Deploy latest commit**. As migrações e o seed rodam sozinhos.
-5. Abra o app, crie sua conta e, em eduvia-web → **Shell**, rode `npm run admin -- @seu.usuario` para acessar `/admin`.
+5. Abra o app, crie sua conta e, em eduvia → **Shell**, rode `npm run admin -- @seu.usuario` para acessar `/admin`.
 
 Custo aproximado: serviço *Starter* + disco de 5 GB + Postgres *Basic*. Confira os valores atuais em https://render.com/pricing.
+
+**Domínio próprio (ex.: eduvia.com.br):** compre o domínio (registro.br), adicione em eduvia → Settings → Custom Domains, copie os registros DNS que o Render mostrar e defina `APP_URL=https://eduvia.com.br`.
 
 **Quando crescer:** crie um *Background Worker* com `npm run worker` e ponha `RUN_WORKER_IN_WEB=false` no web. Isso permite mais de uma instância do app, mas o disco persistente não é compartilhado entre serviços, então os arquivos precisam ir para um armazenamento S3 (Cloudflare R2, AWS S3): `STORAGE_DRIVER=s3` e `S3_*` (ver `.env.example`).
 

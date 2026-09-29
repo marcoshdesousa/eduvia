@@ -1,6 +1,7 @@
 // Notificações: ficam na central do app e, se o aluno ativou, chegam por push no celular/navegador.
 import webpush from "web-push";
 import { db } from "@/lib/db";
+import { appUrl } from "@/lib/app-url";
 import { Prisma } from "@/generated/prisma/client";
 
 export type NotificationType =
@@ -19,7 +20,7 @@ export function pushConfigured() {
     vapidReady = !!(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
     if (vapidReady) {
       // o "subject" precisa ser https: ou mailto: (localhost em http não serve)
-      const candidates = [process.env.VAPID_SUBJECT, process.env.APP_URL, "mailto:suporte@eduvia.app"];
+      const candidates = [process.env.VAPID_SUBJECT, appUrl(), "mailto:suporte@eduvia.app"];
       const subject = candidates.find((c) => c && /^(https:|mailto:)/.test(c))!;
       try {
         webpush.setVapidDetails(subject, VAPID_PUBLIC_KEY!, VAPID_PRIVATE_KEY!);
