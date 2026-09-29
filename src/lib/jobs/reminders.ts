@@ -53,7 +53,7 @@ export async function sendBillingReminders(now = new Date()) {
     await notify(s.userId, {
       type: "PLAN_EXPIRING",
       title: `Seu plano ${s.plan.name} vence em breve`,
-      body: "Renove pelo WhatsApp para não cair no modo limitado.",
+      body: "Renove pelo WhatsApp para não voltar ao plano Grátis.",
       href: "/assinatura",
       dedupeKey: `plano:${s.id}:${s.currentPeriodEnd.toISOString().slice(0, 10)}`,
     });

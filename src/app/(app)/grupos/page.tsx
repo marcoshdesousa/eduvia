@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
-import { hasAccess } from "@/lib/billing";
+import { groupAccessError, groupCreateError } from "@/lib/billing";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 import { CreateGroupForm, InviteResponse } from "./forms";
@@ -13,14 +13,15 @@ const ROLE = { OWNER: "Dono", ADMIN: "Admin", MEMBER: "Membro" } as const;
 
 export default async function Page() {
   const user = await requireReadyUser();
-  const [groups, invites, canCreate] = await Promise.all([
+  const [groups, invites, createBlocked, accessBlocked] = await Promise.all([
     db.groupMember.findMany({
       where: { userId: user.id },
       include: { group: { include: { _count: { select: { members: true, shares: true } } } } },
       orderBy: { joinedAt: "desc" },
     }),
     db.groupInvite.findMany({ where: { inviteeId: user.id, status: "PENDING" }, include: { group: true, inviter: { select: { handle: true } } }, orderBy: { createdAt: "desc" } }),
-    hasAccess(user),
+    groupCreateError(user),
+    groupAccessError(user),
   ]);
   return (
     <div className="space-y-6">
@@ -29,6 +30,11 @@ export default async function Page() {
         <p className="text-sm text-muted">Estude com amigos: compartilhem materiais, resumos e simulados, conversem no mural e disputem o ranking.</p>
       </div>
 
+      {accessBlocked && (
+        <Card className="border-warning/40 bg-warning/10 text-sm">
+          {accessBlocked} Seus grupos ficam guardados e voltam quando você assinar. <Link href="/assinatura" className="font-semibold text-primary">Ver planos</Link>
+        </Card>
+      )}
       {invites.length > 0 && (
         <Card className="space-y-3 border-primary/40">
           <CardTitle>Convites</CardTitle>
@@ -59,7 +65,7 @@ export default async function Page() {
 
       <Card className="space-y-3">
         <CardTitle>Criar grupo</CardTitle>
-        {canCreate ? <CreateGroupForm /> : <p className="text-sm text-muted">Criar grupos faz parte do plano. Você ainda pode entrar em grupos pelos convites. <Link href="/assinatura" className="font-semibold text-primary">Assinar plano</Link></p>}
+        {!createBlocked ? <CreateGroupForm /> : <p className="text-sm text-muted">{createBlocked} <Link href="/assinatura" className="font-semibold text-primary">Ver planos</Link></p>}
       </Card>
     </div>
   );

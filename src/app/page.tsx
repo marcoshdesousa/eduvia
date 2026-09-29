@@ -35,7 +35,7 @@ export default async function Home() {
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link href="/cadastro" className={buttonClass("primary", "lg")}>Testar 3 dias grátis</Link>
-          <span className="text-sm text-muted">Depois, R$ 7/semana ou R$ 15/mês.</span>
+          <span className="text-sm text-muted">Depois, planos a partir de R$ 9,90/semana ou R$ 29,90/mês.</span>
         </div>
       </section>
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

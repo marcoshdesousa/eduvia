@@ -20,11 +20,11 @@ const Body = z.object({
 export async function POST(req: Request) {
   const { user, error } = await apiUser();
   if (error) return error;
-  const limit = await uploadLimitError(user);
-  if (limit) return jsonError(limit, 402);
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return jsonError(parsed.error.issues[0].message);
   const b = parsed.data;
+  const limit = await uploadLimitError(user, b.role);
+  if (limit) return jsonError(limit, 402);
   const prep = await getOwnedPreparation(b.preparationId, user.id);
   if (!prep) return jsonError("Preparação não encontrada", 404);
 

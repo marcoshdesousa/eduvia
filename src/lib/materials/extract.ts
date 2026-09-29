@@ -38,6 +38,22 @@ export async function extractPages(
   }
 }
 
+/** Conta páginas sem usar IA (para aplicar o limite mensal antes de processar). */
+export async function countPages(kind: MaterialKind, data: Buffer): Promise<number> {
+  switch (kind) {
+    case "PDF":
+      return (await PDFDocument.load(data, { ignoreEncryption: true, updateMetadata: false })).getPageCount();
+    case "IMAGE":
+      return 1;
+    case "DOCX": {
+      const { value } = await mammoth.extractRawText({ buffer: data });
+      return Math.max(1, pseudoPages(value).length);
+    }
+    case "TEXT":
+      return Math.max(1, pseudoPages(data.toString("utf8")).length);
+  }
+}
+
 async function extractPdf(data: Buffer, userId: string, onProgress: (msg: string) => Promise<void>) {
   const pdf = await getDocumentProxy(new Uint8Array(data));
   const { text } = await extractText(pdf, { mergePages: false });

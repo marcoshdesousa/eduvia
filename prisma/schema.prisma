@@ -594,14 +594,16 @@ enum BillingInterval {
   MONTH
 }
 
+/// Níveis de plano (grátis, essencial, completo, intensivo). Preços e limites são editáveis no /admin.
 model Plan {
-  slug       String          @id
-  name       String
-  priceCents Int
-  interval   BillingInterval
-  /// Limites configuráveis. Quantidade de PDFs nunca é limitada.
-  limits     Json            @default("{}")
-  active     Boolean         @default(true)
+  slug            String  @id
+  name            String
+  order           Int     @default(0)
+  priceWeekCents  Int     @default(0)
+  priceMonthCents Int     @default(0)
+  /// Limites do plano (ver PlanLimits em src/lib/plans.ts). -1 = ilimitado.
+  limits          Json    @default("{}")
+  active          Boolean @default(true)
 
   subscriptions Subscription[]
 }
@@ -623,6 +625,7 @@ model Subscription {
   providerCustomerId     String?
   providerSubscriptionId String?            @unique
   status                 SubscriptionStatus
+  interval               BillingInterval    @default(MONTH)
   billingType            BillingType
   /// Fim do período já pago. O acesso vale até esta data (mesmo após cancelar).
   currentPeriodEnd       DateTime

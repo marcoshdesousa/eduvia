@@ -84,11 +84,11 @@ test("fase 2: jogo, simulado, redação, professor e desempenho", async ({ page 
   await expect(page.getByRole("heading", { name: "Por disciplina" })).toBeVisible();
   await expect(page.getByText(/questões respondidas/)).toBeVisible();
 
-  // ── Modo limitado bloqueia simulado, redação e professor
+  // ── Plano Grátis bloqueia simulado, redação e professor
   await sql(`UPDATE "user" SET "trialEndsAt" = now() - interval '1 minute' WHERE handle = $1`, [handle]);
   await page.goto("/professor");
-  await expect(page.getByText(/fazem parte do plano/)).toBeVisible();
+  await expect(page.getByText(/O Professor IA não faz parte do plano Grátis/)).toBeVisible();
   await page.goto("/simulados/novo");
   await page.getByRole("button", { name: "Montar simulado" }).click();
-  await expect(page.getByText(/Simulados fazem parte do plano/)).toBeVisible();
+  await expect(page.getByText(/Simulados não fazem parte do plano Grátis/)).toBeVisible();
 });

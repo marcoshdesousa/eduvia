@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Lock, Sparkles } from "lucide-react";
 import type { Access } from "@/lib/billing";
-import { LIMITED_SUMMARY } from "@/lib/billing";
 
 function timeLeft(until: Date) {
   const h = Math.max(0, Math.floor((until.getTime() - Date.now()) / 3_600_000));
@@ -23,7 +22,7 @@ export function AccessBanner({ access }: { access: Access }) {
   if (access.reason === "trial") {
     return <Bar tone="primary" icon={<Sparkles size={15} />} text={`Modo teste: faltam ${timeLeft(access.until)} do seu teste grátis.`} cta="Assinar plano" />;
   }
-  return <Bar tone="danger" icon={<Lock size={15} />} text={`Teste encerrado — modo limitado: ${LIMITED_SUMMARY}.`} cta="Assinar plano" />;
+  return <Bar tone="danger" icon={<Lock size={15} />} text="Teste encerrado — plano Grátis: só revisões, banco de erros e 1 jogo por dia." cta="Ver planos" />;
 }
 
 function Bar({ tone, icon, text, cta }: { tone: "primary" | "warning" | "danger"; icon: React.ReactNode; text: string; cta: string }) {

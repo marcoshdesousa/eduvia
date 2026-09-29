@@ -7,7 +7,8 @@ import { analyzeSyllabus, extractOutline } from "@/lib/ai/tasks";
 import { PROFILES } from "@/lib/core/profiles";
 import { estimateMinutes } from "@/lib/core/planner";
 import { cosine, loadChunkEmbeddings } from "@/lib/rag";
-import { chunkPages, extractPages } from "./extract";
+import { chunkPages, countPages, extractPages } from "./extract";
+import { pageQuotaError } from "@/lib/billing";
 import { generatePlan } from "@/lib/plan";
 
 export async function processMaterial(materialId: string) {
@@ -21,6 +22,10 @@ export async function processMaterial(materialId: string) {
 
   try {
     let blob = material.blob;
+    if (blob.processedAt && blob.pageCount) {
+      const quota = await pageQuotaError(material.uploaderId, materialId, blob.pageCount);
+      if (quota) throw new UserFacingError(quota);
+    }
     if (!blob.processedAt) {
       await step("Lendo arquivo");
       const data = await readObject(blob.storageKey);
@@ -28,6 +33,10 @@ export async function processMaterial(materialId: string) {
 
       // Mesmo arquivo já processado antes (por qualquer usuário): reaproveita tudo, custo zero.
       const existing = await db.materialBlob.findUnique({ where: { sha256 } });
+      // limite de páginas do mês: checado antes de gastar qualquer IA
+      const pages = existing?.processedAt && existing.pageCount ? existing.pageCount : await countPages(material.kind, data);
+      const quota = await pageQuotaError(material.uploaderId, materialId, pages);
+      if (quota) throw new UserFacingError(quota);
       if (existing?.processedAt && existing.id !== blob.id) {
         await db.material.update({ where: { id: materialId }, data: { blobId: existing.id } });
         await db.materialBlob.delete({ where: { id: blob.id } }).catch(() => {});

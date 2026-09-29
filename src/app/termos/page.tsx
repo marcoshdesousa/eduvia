@@ -15,7 +15,7 @@ export default function Page() {
       <h2>4. Conteúdo gerado pela IA</h2>
       <p>Textos, questões e correções são gerados automaticamente a partir do seu material e podem conter imprecisões. Use-os como apoio ao estudo e confira as informações importantes na fonte indicada.</p>
       <h2>5. Planos e pagamento</h2>
-      <p>Novas contas têm 3 dias de teste grátis. Depois disso, sem assinatura, a conta continua disponível em modo limitado (1 preparação, 1 sessão de estudo por dia e sem envio de novos materiais). A assinatura semanal (R$ 7) ou mensal (R$ 15) é contratada e paga pelo WhatsApp e liberada manualmente após a confirmação do pagamento. Não há renovação automática: ao fim do período, basta renovar.</p>
+      <p>Novas contas têm 3 dias de teste grátis. Depois disso, sem assinatura, a conta continua disponível no plano Grátis (1 preparação, revisões, banco de erros e 1 jogo por dia, sem envio de novos materiais). Os planos pagos (Essencial, Completo e Intensivo, com preços e limites mostrados na página de assinatura) podem ser semanais ou mensais e são contratados e paga pelo WhatsApp e liberada manualmente após a confirmação do pagamento. Não há renovação automática: ao fim do período, basta renovar.</p>
       <h2>6. Uso adequado</h2>
       <p>Não é permitido tentar acessar dados de outros usuários, sobrecarregar o serviço, usar robôs para extrair conteúdo ou revender o acesso.</p>
       <h2>7. Encerramento</h2>

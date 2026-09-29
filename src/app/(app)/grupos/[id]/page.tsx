@@ -4,6 +4,7 @@ import { ClipboardCheck, FileText, ListChecks, NotebookText } from "lucide-react
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { getMembership, weeklyXpRanking } from "@/lib/groups";
+import { groupAccessError } from "@/lib/billing";
 import { formatDay } from "@/lib/core/dates";
 import { levelFromXp } from "@/lib/gamification";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,15 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const { id } = await params;
   const me = await getMembership(id, user.id);
   if (!me) notFound();
+  const blocked = await groupAccessError(user);
+  if (blocked) {
+    return (
+      <Card className="mx-auto max-w-lg space-y-3 text-center">
+        <p className="font-medium">{blocked}</p>
+        <Link href="/assinatura" className="font-semibold text-primary">Ver planos</Link>
+      </Card>
+    );
+  }
   const group = await db.group.findUniqueOrThrow({ where: { id } });
   const aba = (await searchParams).aba;
   const tab = TABS.find((t) => t.key === aba)?.key ?? "mural";

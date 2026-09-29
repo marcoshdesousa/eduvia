@@ -44,13 +44,28 @@ e2e/                   testes de ponta a ponta (Playwright)
 
 ## Assinatura (manual, pelo WhatsApp)
 
-- **Teste grátis de 3 dias** com tudo liberado e um aviso fixo no topo ("Modo teste: faltam X dias · Assinar plano").
-- Depois do teste, sem plano, a conta entra no **modo limitado**: 1 preparação ativa, 1 sessão de estudo por dia e sem envio de novos materiais (limites em `src/lib/billing.ts`, constante `LIMITED`). O aviso no topo muda para "Teste encerrado — modo limitado".
-- **Assinar:** em `/assinatura`, o botão "Assinar pelo WhatsApp" abre o WhatsApp (`WHATSAPP_NUMBER`) com a mensagem pronta (plano, nome e @). Planos: Semanal R$ 7 e Mensal R$ 15. Não há cobrança automática.
+- **Teste grátis de 3 dias** com os limites do plano Completo e um aviso fixo no topo ("Modo teste: faltam X dias · Assinar plano").
+- **Planos** (padrões em `src/lib/plans.ts`; os valores reais ficam no banco e são editados em **/admin → Planos**, onde -1 = ilimitado):
+
+  | | Grátis | Essencial | Completo | Intensivo |
+  |---|---|---|---|---|
+  | Preço | — | R$ 9,90/sem · R$ 29,90/mês | R$ 14,90/sem · R$ 49,90/mês | R$ 29,90/sem · R$ 99,90/mês |
+  | Preparações ativas (= PDFs guardados) | 1 (0 PDFs) | 5 | 10 | 25 |
+  | Páginas enviadas por mês | 0 | 500 | 700 | 900 |
+  | Sessões novas por dia (revisões ilimitadas) | 0 | 1 | 2 | 4 |
+  | Jogos por dia | 1 | 5 | 10 | 15 |
+  | Simulados por mês | 0 | 4 | 8 | 16 |
+  | Correção de redação | não | ilimitada* | ilimitada* | ilimitada* |
+  | Professor IA (mensagens/mês) | 0 | 100 | 200 | 300 |
+  | Grupos | não | cria até 5, entra ilimitado | idem | idem |
+
+  \* trava anti-abuso de 30 redações por dia. Edital/ementa não contam como PDF. Excluir uma preparação ou arquivo libera a vaga.
+- Depois do teste, sem assinatura, a conta fica no plano **Grátis** (aviso no topo: "Teste encerrado — plano Grátis").
+- **Assinar:** em `/assinatura`, o aluno escolhe Semanal/Mensal e o plano; o botão abre o WhatsApp (`WHATSAPP_NUMBER`) com a mensagem pronta (plano, período, preço, nome e @). Não há cobrança automática.
 - **Liberar o plano (admin):**
   1. Torne sua conta admin: `npm run admin -- @seu.usuario` (no Render: aba *Shell* do serviço web).
-  2. Abra `/admin` (aparece no menu lateral), busque o aluno por @, nome, CPF ou telefone e clique em **+ Semanal** ou **+ Mensal**. Se o aluno ainda tem dias pagos, o novo período é somado ao final. **Encerrar** corta o acesso na hora.
-  3. A tela também mostra contas, pessoas em teste, assinantes e o valor recebido no mês.
+  2. Abra `/admin` → **Alunos**, busque o aluno por @, nome, CPF ou telefone, escolha o plano e o período e clique em **Liberar**. Mesmo plano: o período é somado ao final; troca de plano: começa agora. **Encerrar** corta o acesso na hora.
+  3. **Planos:** edite nome, preços e limites. **Custos:** gasto de IA do mês por tarefa e por aluno (convertido com `USD_BRL`, padrão 5,5).
 
 ## Fase 2 — praticar
 

@@ -3,10 +3,9 @@ import { db } from "@/lib/db";
 import type { GroupRole, ShareType } from "@/generated/prisma/enums";
 import { notify } from "@/lib/notifications";
 import { checkAchievementsSafe } from "@/lib/achievements";
-import { hasAccess } from "@/lib/billing";
+import { groupAccessError, groupCreateError } from "@/lib/billing";
 
 export const MAX_MEMBERS = 50;
-export const MAX_GROUPS_OWNED = 20;
 
 export class GroupError extends Error {}
 
@@ -31,9 +30,8 @@ async function requireManager(groupId: string, userId: string) {
 export async function createGroup(user: { id: string; trialEndsAt: Date | null }, name: string, description?: string) {
   const clean = name.trim();
   if (clean.length < 3 || clean.length > 60) throw new GroupError("O nome do grupo precisa ter de 3 a 60 caracteres.");
-  if (!(await hasAccess(user))) throw new GroupError("Criar grupos faz parte do plano. Você ainda pode entrar em grupos pelos convites.");
-  const owned = await db.group.count({ where: { ownerId: user.id } });
-  if (owned >= MAX_GROUPS_OWNED) throw new GroupError(`Você pode ser dono de até ${MAX_GROUPS_OWNED} grupos.`);
+  const blocked = await groupCreateError(user);
+  if (blocked) throw new GroupError(blocked);
   const group = await db.group.create({
     data: { name: clean, description: description?.trim().slice(0, 300) || null, ownerId: user.id, members: { create: { userId: user.id, role: "OWNER" } } },
   });
@@ -68,6 +66,8 @@ export async function respondInvite(inviteId: string, userId: string, accept: bo
   const invite = await db.groupInvite.findFirst({ where: { id: inviteId, inviteeId: userId, status: "PENDING" }, include: { group: true, invitee: true } });
   if (!invite) throw new GroupError("Convite não encontrado.");
   if (accept) {
+    const blocked = await groupAccessError(invite.invitee);
+    if (blocked) throw new GroupError(blocked);
     const count = await db.groupMember.count({ where: { groupId: invite.groupId } });
     if (count >= MAX_MEMBERS) throw new GroupError("O grupo está cheio.");
     await db.$transaction([

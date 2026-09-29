@@ -8,8 +8,11 @@ import { sessionLimitError } from "@/lib/billing";
 
 export async function startSessionAction(plannedId: string): Promise<{ ok: true } | { error: string; upgrade?: boolean }> {
   const user = await requireReadyUser();
-  const limit = await sessionLimitError(user);
-  if (limit) return { error: limit, upgrade: true };
+  const planned = await db.plannedSession.findFirst({ where: { id: plannedId, plan: { preparation: { userId: user.id } } }, include: { studySession: true } });
+  if (planned?.kind === "STUDY" && !planned.studySession) {
+    const limit = await sessionLimitError(user);
+    if (limit) return { error: limit, upgrade: true };
+  }
   try {
     const s = await openSession(plannedId, user.id);
     if (!s) return { error: "Sessão não encontrada." };
