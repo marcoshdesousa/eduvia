@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { BookOpen, Brain, CheckCircle2, Lightbulb, PartyPopper } from "lucide-react";
 import { completeSessionAction } from "@/app/actions/study";
 import { QuestionCard, SourceLinks, type QuestionData, type SourceRef } from "@/components/question-card";
+import { linkSources } from "@/lib/sources";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/badge";
@@ -14,15 +15,6 @@ export type SessionQuestion = QuestionData;
 
 type Header = { topic: string; subject: string; preparation: string; preparationId: string; kind: string; label: string; minutes: number };
 type Text = { content: string | null; highlights: string[]; keyPoints: { term: string; explanation: string }[]; refs: SourceRef[] } | null;
-
-/** Troca [T1] no texto por links para o trecho original do material. */
-function linkSources(md: string, refs: SourceRef[]) {
-  const byLabel = new Map(refs.map((r) => [r.label, r]));
-  return md.replace(/\[(T\d+)\]/g, (m, label: string) => {
-    const r = byLabel.get(label);
-    return r ? `[↗ p.${r.pageStart}](/api/materials/${r.materialId}/file?page=${r.pageStart})` : "";
-  });
-}
 
 export function SessionView({ header, sessionId, completed, text, questions }: { header: Header; sessionId: string; completed: boolean; text: Text; questions: SessionQuestion[] }) {
   const recall = questions.filter((q) => q.type === "OPEN_RECALL");

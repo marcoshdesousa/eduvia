@@ -137,11 +137,12 @@ async function getOrCreateStudyText(input: {
 }
 
 /** Trechos da parte da sessão: os ligados ao assunto (divididos entre as partes) ou, se não houver, busca semântica. */
-async function chunksForPart(
+export async function chunksForPart(
   preparationId: string,
   topic: { id: string; title: string; description: string | null; subject: { name: string } },
   part: number,
   partCount: number,
+  maxChars = MAX_CONTEXT_CHARS,
 ): Promise<(RetrievedChunk & { materialId: string })[]> {
   const linked = await db.topicChunk.findMany({
     where: { topicId: topic.id },
@@ -163,7 +164,7 @@ async function chunksForPart(
   const out: (RetrievedChunk & { materialId: string })[] = [];
   let total = 0;
   for (const r of rows) {
-    if (total + r.content.length > MAX_CONTEXT_CHARS) break;
+    if (total + r.content.length > maxChars) break;
     total += r.content.length;
     out.push({ ...r, label: `T${out.length + 1}` });
   }

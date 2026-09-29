@@ -4,7 +4,7 @@ import type { z } from "zod";
 import { db } from "@/lib/db";
 
 /** Tarefas de IA. Cada uma pode ter modelo e esforço próprios (via env), para equilibrar custo e qualidade. */
-export type AiTask = "outline" | "edital" | "session" | "grade" | "ocr";
+export type AiTask = "outline" | "edital" | "session" | "grade" | "ocr" | "questions" | "essay" | "tutor";
 
 const DEFAULT_MODEL = "claude-opus-5-5";
 
@@ -14,6 +14,9 @@ const EFFORT: Record<AiTask, "low" | "medium" | "high"> = {
   session: "medium",
   grade: "low",
   ocr: "low",
+  questions: "medium",
+  essay: "medium",
+  tutor: "medium",
 };
 
 /** Preço por milhão de tokens (US$): entrada, saída, leitura de cache. */
@@ -97,4 +100,34 @@ async function recordUsage(
       costMicros: micros,
     },
   });
+}
+
+/**
+ * Resposta em texto livre com streaming (chat do Professor IA).
+ * `onText` recebe cada pedaço conforme chega; retorna o texto completo.
+ */
+export async function streamText(opts: {
+  task: AiTask;
+  userId?: string | null;
+  system: string;
+  messages: { role: "user" | "assistant"; content: string }[];
+  onText: (delta: string) => void;
+  maxTokens?: number;
+}): Promise<string> {
+  const model = modelFor(opts.task);
+  const stream = anthropic().beta.messages.stream({
+    model,
+    max_tokens: opts.maxTokens ?? 8000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    cache_control: { type: "ephemeral" },
+    system: opts.system,
+    messages: opts.messages,
+    output_config: { effort: EFFORT[opts.task] },
+  });
+  stream.on("text", (delta) => opts.onText(delta));
+  const response = await stream.finalMessage();
+  await recordUsage(opts.task, response.model ?? model, opts.userId ?? null, response.usage);
+  if (response.stop_reason === "refusal") throw new AiRefusalError("A IA não conseguiu responder a esta mensagem.");
+  return response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
 }

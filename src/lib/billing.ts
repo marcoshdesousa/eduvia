@@ -14,9 +14,13 @@ export const LIMITED = {
   activePreparations: 1,
   sessionsPerDay: 1,
   uploads: false,
+  perDay: { game: 1, exam: 0, essay: 0, tutor: 0 },
 } as const;
 
-export const LIMITED_SUMMARY = "1 preparação, 1 sessão de estudo por dia e sem envio de novos materiais";
+/** Limites diários de quem tem acesso completo (proteção de custo de IA). */
+export const FULL_PER_DAY = { game: 50, exam: 10, essay: 5, tutor: 100 } as const;
+
+export const LIMITED_SUMMARY = "1 preparação, 1 sessão e 1 jogo por dia, sem novos materiais, simulados, redação ou Professor IA";
 
 /** Número de WhatsApp que recebe os pedidos de assinatura (DDI + DDD + número, só dígitos). */
 export function whatsappNumber() {
@@ -116,4 +120,27 @@ export function addPeriod(from: Date, interval: "WEEK" | "MONTH"): Date {
 
 export function formatBRL(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+type Feature = keyof typeof FULL_PER_DAY;
+const FEATURE_LABEL: Record<Feature, string> = { game: "jogos", exam: "simulados", essay: "correções de redação", tutor: "mensagens ao Professor IA" };
+
+/** Mensagem de bloqueio (ou null) para jogos, simulados, redação e Professor IA. */
+export async function featureLimitError(user: { id: string; trialEndsAt: Date | null; timezone: string }, feature: Feature) {
+  const full = await hasAccess(user);
+  const max = full ? FULL_PER_DAY[feature] : LIMITED.perDay[feature];
+  if (max === 0) return `${FEATURE_LABEL[feature][0].toUpperCase()}${FEATURE_LABEL[feature].slice(1)} fazem parte do plano. Assine para liberar.`;
+  const since = localDayStart(user.timezone);
+  const used =
+    feature === "game"
+      ? await db.gameRun.count({ where: { userId: user.id, startedAt: { gte: since } } })
+      : feature === "exam"
+        ? await db.exam.count({ where: { ownerId: user.id, createdAt: { gte: since } } })
+        : feature === "essay"
+          ? await db.essay.count({ where: { userId: user.id, status: { not: "DRAFT" }, createdAt: { gte: since } } })
+          : await db.tutorMessage.count({ where: { role: "user", createdAt: { gte: since }, thread: { userId: user.id } } });
+  if (used < max) return null;
+  return full
+    ? `Você chegou ao limite de ${max} ${FEATURE_LABEL[feature]} por dia. Volte amanhã!`
+    : `No modo limitado o limite é de ${max} por dia (${FEATURE_LABEL[feature]}). Assine para liberar.`;
 }

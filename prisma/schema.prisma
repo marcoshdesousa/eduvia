@@ -67,6 +67,11 @@ model User {
   studyDays        StudyDay[]
   subscriptions    Subscription[]
   aiUsage          AiUsage[]
+  gameRuns         GameRun[]
+  exams            Exam[]
+  examAttempts     ExamAttempt[]
+  essays           Essay[]
+  tutorThreads     TutorThread[]
   usageCounters    UsageCounter[]
 
   @@map("user")
@@ -173,6 +178,10 @@ model Preparation {
   materials      Material[]
   plans          StudyPlan[]
   editalAnalysis EditalAnalysis?
+  gameRuns       GameRun[]
+  exams          Exam[]
+  essays         Essay[]
+  tutorThreads   TutorThread[]
 
   @@index([userId, status])
 }
@@ -693,4 +702,129 @@ model AiCache {
   task      String
   value     Json
   createdAt DateTime @default(now())
+}
+
+// ───────────────────────── Fase 2: jogos, simulados, redação, Professor IA ─────────────────────────
+
+model GameRun {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preparationId String
+  preparation   Preparation @relation(fields: [preparationId], references: [id], onDelete: Cascade)
+  gameSlug      String
+  topicIds      String[]
+  questionIds   String[]
+  config        Json        @default("{}")
+  score         Int         @default(0)
+  correct       Int         @default(0)
+  wrong         Int         @default(0)
+  avgTimeMs     Int?
+  endedReason   String?
+  startedAt     DateTime    @default(now())
+  endedAt       DateTime?
+
+  @@index([userId, gameSlug, startedAt])
+}
+
+enum ExamStyle {
+  MULTIPLE_CHOICE
+  CERTO_ERRADO
+}
+
+model Exam {
+  id            String      @id @default(cuid())
+  ownerId       String
+  owner         User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  preparationId String
+  preparation   Preparation @relation(fields: [preparationId], references: [id], onDelete: Cascade)
+  title         String
+  style         ExamStyle
+  durationMin   Int
+  subjectIds    String[]
+  questionIds   String[]
+  createdAt     DateTime    @default(now())
+
+  attempts ExamAttempt[]
+
+  @@index([ownerId, createdAt])
+}
+
+model ExamAttempt {
+  id           String    @id @default(cuid())
+  examId       String
+  exam         Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers      Json      @default("{}")
+  startedAt    DateTime  @default(now())
+  deadline     DateTime
+  finishedAt   DateTime?
+  correct      Int?
+  total        Int?
+  score        Float?
+  perSubject   Json?
+  timeSpentSec Int?
+
+  @@index([userId, startedAt])
+}
+
+enum EssayRubric {
+  ENEM
+  DISCURSIVA
+  GERAL
+}
+
+enum EssayStatus {
+  DRAFT
+  EVALUATING
+  EVALUATED
+  ERROR
+}
+
+model Essay {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preparationId String?
+  preparation   Preparation? @relation(fields: [preparationId], references: [id], onDelete: SetNull)
+  rubric        EssayRubric
+  theme         String
+  instructions  String?
+  text          String
+  status        EssayStatus  @default(DRAFT)
+  score         Float?
+  maxScore      Float?
+  evaluation    Json?
+  createdAt     DateTime     @default(now())
+  evaluatedAt   DateTime?
+
+  @@index([userId, createdAt])
+}
+
+model TutorThread {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preparationId String
+  preparation   Preparation   @relation(fields: [preparationId], references: [id], onDelete: Cascade)
+  title         String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  messages TutorMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model TutorMessage {
+  id         String      @id @default(cuid())
+  threadId   String
+  thread     TutorThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role       String
+  content    String
+  sourceRefs Json        @default("[]")
+  createdAt  DateTime    @default(now())
+
+  @@index([threadId, createdAt])
 }

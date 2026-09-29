@@ -3,7 +3,7 @@
 Plataforma de estudos com IA para qualquer estudante. O aluno envia os próprios materiais (PDF, DOCX, imagens, texto) e a IA monta o plano de estudo, as sessões com texto e perguntas, as revisões espaçadas e o banco de erros.
 
 - Arquitetura, modelo de dados, telas e fases: [docs/ARQUITETURA.md](docs/ARQUITETURA.md)
-- Status: **Fase 1 (MVP) concluída**, com contas por CPF e assinatura manual pelo WhatsApp. Próximas: Fase 2 (jogo da cobrinha, simulados, redação, painel de desempenho, Professor IA) e Fase 3 (grupos, notificações, conquistas).
+- Status: **Fases 1 e 2 concluídas** (contas por CPF, assinatura manual pelo WhatsApp, plano de estudo, sessões, revisões, jogo da cobrinha, simulados, redação, desempenho e Professor IA). Próxima: Fase 3 (grupos, notificações, conquistas).
 
 ## Stack
 
@@ -12,7 +12,8 @@ Next.js 16 (App Router, TypeScript) · Tailwind CSS 4 · PostgreSQL 16 + pgvecto
 ```
 src/
   app/                 telas e rotas de API (Next.js)
-    (app)/             área logada: início, preparações, estudar, revisões, ajustes, assinatura, admin
+    (app)/             área logada: início, preparações, estudar, praticar (revisões, jogos, simulados),
+                       redação, professor, desempenho, ajustes, assinatura, admin
     actions/           server actions
     api/               upload, status de materiais, arquivos, exportação LGPD, auth
   lib/
@@ -21,6 +22,9 @@ src/
     materials/         extração de texto/OCR, divisão em trechos, pipeline de processamento
     billing.ts         teste grátis, modo limitado, planos, link do WhatsApp
     plan.ts, study.ts  plano de estudo e sessão (conteúdo, respostas, conclusão)
+    question-bank.ts   questões por assunto para jogos e simulados (reaproveita; só gera o que falta)
+    exams.ts, tutor.ts simulados (montagem por peso, correção) e Professor IA (RAG + streaming)
+  games/               jogos plugáveis: catálogo (catalog.ts) + componente de cada jogo
   worker/              processo da fila: materiais, planos, replanejamento diário
 prisma/                schema, migrações, seed
 scripts/               make-admin (dá acesso à tela /admin)
@@ -43,6 +47,16 @@ e2e/                   testes de ponta a ponta (Playwright)
   1. Torne sua conta admin: `npm run admin -- @seu.usuario` (no Render: aba *Shell* do serviço web).
   2. Abra `/admin` (aparece no menu lateral), busque o aluno por @, nome, CPF ou telefone e clique em **+ Semanal** ou **+ Mensal**. Se o aluno ainda tem dias pagos, o novo período é somado ao final. **Encerrar** corta o acesso na hora.
   3. A tela também mostra contas, pessoas em teste, assinantes e o valor recebido no mês.
+
+## Fase 2 — praticar
+
+- **Jogo da cobrinha** (`/jogos`): a cobra persegue o ratinho e se aproxima enquanto o aluno pensa. Acerto afasta a cobra (e ela acelera um pouco); erro custa uma vida. Acaba ao atingir o limite de erros (1, 3 ou 5) ou quando a cobra alcança. Pontos: 100 por acerto + bônus de rapidez. Resultado com acertos, erros, tempo médio e recorde; os erros vão para o banco de erros. Atalhos de teclado 1–5 / A–E.
+  - **Novo jogo:** adicione a definição em `src/games/catalog.ts` (nome, configurações, nº de questões) e o componente em `src/games/components.tsx`. O componente recebe as perguntas e as funções `onAnswer`/`onFinish`; a correção e a pontuação ficam no servidor.
+- **Simulados** (`/simulados`): escolha disciplinas, 10/20/30/50 questões e o tempo. As questões são divididas pelo peso de cada disciplina (edital) e seguem o estilo da banca (múltipla escolha ou certo/errado). Cronômetro com entrega automática, respostas salvas a cada 5 s, nota 0–10, % por disciplina com etiqueta (crítico/em desenvolvimento/bom), tempo gasto, gabarito comentado com link para a página do material e gráfico de evolução.
+- **Redação** (`/redacao`): tema escrito pelo aluno ou sugerido pela IA; correção **ENEM** (C1–C5, 0–1000), **discursiva de concurso** (conteúdo, estrutura, linguagem; 0–100) ou **qualidade do português** (0–10). O texto aparece com os trechos marcados (ortografia, pontuação, concordância, coesão...) e a sugestão ao lado; mais pontos fortes, dicas e histórico.
+- **Professor IA** (`/professor`): chat que responde com base nos materiais (citando a página), com resposta em tempo real e atalhos: Explicar, Me testar, Criar questões e Analisar meus erros. Conversas ficam salvas.
+- **Desempenho** (`/desempenho`): acerto geral, tempo de estudo, simulados e pontos críticos; acerto por semana, minutos por dia, e acerto por disciplina e assunto com recomendação.
+- **Custo de IA:** questões geradas ficam no banco e são reaproveitadas; limites diários para quem assina (`FULL_PER_DAY` em `src/lib/billing.ts`: 10 simulados, 5 redações, 100 mensagens ao Professor). No **modo limitado**: 1 jogo por dia; simulados, redação e Professor IA ficam só para assinantes.
 
 ## Rodar localmente
 
@@ -91,6 +105,11 @@ npm run test:e2e                # terminal 3
 9. **Sessão de estudo:** texto com links para a página do PDF → destaques → recuperação ativa → objetivas → concluir.
 10. **Banco de erros e revisões:** as questões erradas aparecem em Revisões e saem depois de 2 acertos seguidos. As revisões R1–R4 entram no plano.
 11. **Configurações:** trocar @ e telefone, tema claro/escuro, exportar dados, excluir conta.
+12. **Jogo da cobrinha:** Praticar → Jogos → Jogar. Demore para responder e veja a cobra chegar; acerte e ela se afasta. Confira o resultado e o banco de erros.
+13. **Simulado:** monte um de 10 questões, responda, deixe uma em branco e entregue. Veja nota, disciplinas e gabarito. Faça outro para ver o gráfico de evolução.
+14. **Redação:** peça um tema, escreva com alguns erros de propósito ("a gente vamos", "haviam", espaço antes da vírgula) e veja as marcações.
+15. **Professor IA:** pergunte algo do seu material; teste "Me testar" e "Analisar meus erros" (depois de errar algumas questões).
+16. **Desempenho:** confira os gráficos e o detalhamento por assunto (toque na disciplina).
 
 ## Deploy no Render
 

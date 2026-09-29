@@ -65,3 +65,37 @@ export type Grade = z.infer<typeof GradeSchema>;
 export const OcrSchema = z.object({
   pages: z.array(z.object({ page: z.number().int(), text: z.string() })),
 });
+
+export const ObjectiveQuestionSchema = z.object({
+  statement: z.string(),
+  options: z.array(z.string()),
+  correctIndex: z.number().int(),
+  explanation: z.string().describe("Por que a correta está certa e as outras erradas"),
+  difficulty: z.number().int().describe("1 a 5"),
+  source: z.string().describe("Rótulo do trecho usado, ex.: T3"),
+});
+
+export const QuestionSetSchema = z.object({ questions: z.array(ObjectiveQuestionSchema) });
+export type QuestionSet = z.infer<typeof QuestionSetSchema>;
+
+export const EssayThemeSchema = z.object({
+  theme: z.string().describe("Tema/proposta, em uma frase"),
+  instructions: z.string().describe("Instruções da proposta e, se fizer sentido, um texto motivador curto"),
+});
+export type EssayTheme = z.infer<typeof EssayThemeSchema>;
+
+export const EssayEvaluationSchema = z.object({
+  criteria: z.array(z.object({ key: z.string(), score: z.number(), comment: z.string() })),
+  annotations: z.array(
+    z.object({
+      quote: z.string().describe("Trecho EXATO copiado do texto do aluno (curto, até ~12 palavras)"),
+      category: z.enum(["ORTOGRAFIA", "PONTUACAO", "CONCORDANCIA", "COESAO", "COERENCIA", "ESTRUTURA", "TEMA", "ESTILO"]),
+      message: z.string().describe("O problema, explicado ao aluno"),
+      suggestion: z.string().describe("Como o trecho ficaria corrigido"),
+    }),
+  ),
+  strengths: z.array(z.string()),
+  tips: z.array(z.string()),
+  summary: z.string(),
+});
+export type EssayEvaluation = z.infer<typeof EssayEvaluationSchema>;

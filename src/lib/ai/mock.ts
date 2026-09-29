@@ -1,6 +1,6 @@
 // Gerador local usado quando não há chave da Anthropic (AI_MODE=mock).
 // Não é inteligente: serve para rodar e testar o fluxo completo do app sem custo.
-import type { Grade, Outline, SessionContent, Syllabus } from "./schemas";
+import type { EssayEvaluation, EssayTheme, Grade, Outline, SessionContent, Syllabus } from "./schemas";
 import type { RetrievedChunk } from "./tasks";
 
 const sentencesOf = (text: string) =>
@@ -168,4 +168,47 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 function shuffle<T>(arr: T[]): T[] {
   // determinístico (para cache e testes): rotação simples
   return arr.length ? [...arr.slice(arr.length / 2), ...arr.slice(0, arr.length / 2)] : arr;
+}
+
+const THEMES = [
+  "Os desafios da educação digital no Brasil",
+  "O impacto das redes sociais na saúde mental dos jovens",
+  "A importância da leitura na formação do cidadão",
+  "Caminhos para reduzir o desperdício de alimentos no Brasil",
+];
+
+export function suggestEssayTheme(rubricLabel: string): EssayTheme {
+  const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+  return { theme, instructions: `Escreva um texto (${rubricLabel}) de 20 a 30 linhas sobre o tema "${theme}". (Modo de demonstração: tema escolhido de uma lista fixa.)` };
+}
+
+// Erros comuns detectáveis sem IA (modo de demonstração).
+const RULES: { re: RegExp; category: EssayEvaluation["annotations"][number]["category"]; message: string; fix: (m: string) => string }[] = [
+  { re: /\s+,/g, category: "PONTUACAO", message: "Não use espaço antes da vírgula.", fix: (m) => m.trim() },
+  { re: /\b[Aa] gente vamos\b/g, category: "CONCORDANCIA", message: "\"A gente\" pede o verbo na 3ª pessoa do singular.", fix: (m) => m.replace(/vamos/, "vai") },
+  { re: /\bhaviam\b/gi, category: "CONCORDANCIA", message: "O verbo haver no sentido de existir é impessoal.", fix: () => "havia" },
+  { re: /\bmenas\b/gi, category: "ORTOGRAFIA", message: "A palavra \"menos\" não varia.", fix: () => "menos" },
+  { re: /\bpra\b/gi, category: "ESTILO", message: "Em texto formal, use \"para\".", fix: () => "para" },
+  { re: /\bconcerteza\b/gi, category: "ORTOGRAFIA", message: "Escreve-se separado.", fix: () => "com certeza" },
+  { re: /\bmais porém\b/gi, category: "COESAO", message: "Redundância: use só \"porém\" ou \"mas\".", fix: () => "porém" },
+  { re: /[.!?]\s+[a-zà-ú]\w*/g, category: "ORTOGRAFIA", message: "Inicie a frase com letra maiúscula.", fix: (m) => m.replace(/([.!?]\s+)(\p{Ll})/u, (_, p, c) => p + c.toUpperCase()) },
+];
+
+export function evaluateEssay(input: { text: string; criteria: { key: string; max: number; step?: number }[] }): EssayEvaluation {
+  const annotations: EssayEvaluation["annotations"] = [];
+  for (const r of RULES) {
+    for (const m of input.text.matchAll(r.re)) {
+      annotations.push({ quote: m[0].trim() || m[0], category: r.category, message: r.message, suggestion: r.fix(m[0]).trim() });
+      if (annotations.length >= 20) break;
+    }
+  }
+  const words = input.text.trim().split(/\s+/).length;
+  const quality = Math.max(0.2, Math.min(1, (words / 250) * 0.6 + 0.6 - annotations.length * 0.05));
+  return {
+    criteria: input.criteria.map((c) => ({ key: c.key, score: c.max * quality, comment: "Avaliação automática de demonstração (configure a IA para uma correção real)." })),
+    annotations,
+    strengths: ["Você concluiu o texto e se manteve no assunto."],
+    tips: ["Revise a pontuação antes de entregar.", "Varie os conectivos entre os parágrafos.", "Configure a chave da IA para uma correção completa."],
+    summary: `Modo de demonstração: encontramos ${annotations.length} ponto(s) de atenção com regras simples.`,
+  };
 }
