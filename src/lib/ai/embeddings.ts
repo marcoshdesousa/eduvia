@@ -5,7 +5,8 @@ const VOYAGE_MODEL = process.env.VOYAGE_MODEL || "voyage-3.5";
 const BATCH = 64;
 
 export function usingLocalEmbeddings() {
-  return !process.env.VOYAGE_API_KEY;
+  // chaves da Voyage começam com "pa-"; qualquer outro valor é tratado como ausente
+  return !process.env.VOYAGE_API_KEY?.trim().startsWith("pa-");
 }
 
 /**

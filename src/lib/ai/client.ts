@@ -32,7 +32,8 @@ export function modelFor(task: AiTask): string {
 
 /** Modo simulado: sem chave da Anthropic (ou AI_MODE=mock) o app funciona com gerador local, para desenvolvimento e testes. */
 export function isMockAi(): boolean {
-  return process.env.AI_MODE === "mock" || !process.env.ANTHROPIC_API_KEY;
+  // campo em branco ou preenchido com qualquer coisa que não seja uma chave real = modo de demonstração
+  return process.env.AI_MODE === "mock" || !process.env.ANTHROPIC_API_KEY?.trim().startsWith("sk-ant-");
 }
 
 let client: Anthropic | null = null;
