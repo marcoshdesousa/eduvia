@@ -95,13 +95,13 @@ npx prisma migrate deploy       # cria as tabelas (e a extensão vector)
 npm run db:seed                 # planos semanal e mensal
 
 npm run dev                     # app em http://localhost:3000
-npm run worker                  # em outro terminal: processa PDFs e planos
+npm run worker                  # em outro terminal: processa PDFs e planos (ou RUN_WORKER_IN_WEB=true)
 npm run admin -- @seu.usuario   # depois de criar sua conta, para acessar /admin
 ```
 
 - **Sem `ANTHROPIC_API_KEY`** o app funciona em **modo de demonstração**: o texto de estudo e as questões são montados com frases do próprio material (sem custo, bom para testar o fluxo). Com a chave, tudo é gerado pelo Claude.
 - **Sem `VOYAGE_API_KEY`** a busca nos materiais usa vetores locais simples. Se ativar a Voyage depois, reenvie os materiais.
-- `WHATSAPP_NUMBER` vem com um número de teste (`5511999999999`). Troque pelo real (DDI + DDD + número, só dígitos).
+- `WHATSAPP_NUMBER`: número que recebe os pedidos de assinatura (padrão: +55 62 99206-7369).
 - `BILLING_ENFORCED="false"` desliga o modo limitado (só para desenvolvimento).
 
 ## Testes
@@ -145,12 +145,31 @@ npm run test:e2e                # terminal 3
 
 ## Deploy no Render
 
-O `render.yaml` cria o **web**, o **worker** e o **PostgreSQL** (que suporta pgvector).
+O `render.yaml` cria **um serviço web** e o **PostgreSQL** (que suporta pgvector). O serviço web:
+- roda o app **e** o processamento em segundo plano (`RUN_WORKER_IN_WEB=true`): PDFs, planos e lembretes;
+- guarda os arquivos enviados num **disco persistente** de 5 GB (`/var/data`), sem precisar de S3/R2.
 
-1. Crie um bucket no **Cloudflare R2** (ou S3) e uma chave de acesso. Configure o CORS do bucket para aceitar `PUT` e `GET` vindos do domínio do app (o navegador envia os arquivos direto para o bucket).
-2. No Render: **New → Blueprint** → selecione o repositório.
-3. Preencha as variáveis do grupo `eduvia-shared`: URL do app, chaves de IA, R2 e `WHATSAPP_NUMBER`.
-4. As migrações e o seed rodam sozinhos em cada deploy (`preDeployCommand`). Depois de criar sua conta, rode `npm run admin -- @seu.usuario` no Shell do serviço web.
+Passo a passo:
+1. Suba o código para o GitHub (já está) e crie uma conta em https://render.com.
+2. No Render: **New → Blueprint** → conecte o GitHub e escolha o repositório `eduvia`. Ele lê o `render.yaml` e mostra o que vai criar (serviço `eduvia-web`, disco e banco `eduvia-db`). Confirme.
+3. Preencha as variáveis que ficaram em branco (eduvia-web → Environment):
+   - `APP_URL` e `BETTER_AUTH_URL`: o endereço do app, ex.: `https://eduvia-web.onrender.com` (aparece no topo da página do serviço).
+   - `ANTHROPIC_API_KEY`: opcional no início. Sem ela o app roda em **modo de demonstração**.
+   - `VOYAGE_API_KEY`: opcional (melhora a busca nos materiais).
+   - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`: para as notificações no celular. Gere no seu computador com `npx web-push generate-vapid-keys`.
+4. Clique em **Manual Deploy → Deploy latest commit**. As migrações e o seed rodam sozinhos.
+5. Abra o app, crie sua conta e, em eduvia-web → **Shell**, rode `npm run admin -- @seu.usuario` para acessar `/admin`.
+
+Custo aproximado: serviço *Starter* + disco de 5 GB + Postgres *Basic*. Confira os valores atuais em https://render.com/pricing.
+
+**Quando crescer:** crie um *Background Worker* com `npm run worker` e ponha `RUN_WORKER_IN_WEB=false` no web. Isso permite mais de uma instância do app, mas o disco persistente não é compartilhado entre serviços, então os arquivos precisam ir para um armazenamento S3 (Cloudflare R2, AWS S3): `STORAGE_DRIVER=s3` e `S3_*` (ver `.env.example`).
+
+## Chave da Anthropic (IA de verdade)
+
+1. Crie uma conta em https://console.anthropic.com e adicione créditos (Settings → Billing).
+2. Em **API Keys → Create Key**, copie a chave (começa com `sk-ant-`).
+3. Cole em `ANTHROPIC_API_KEY` no Render (ou no `.env` local) e faça um novo deploy. O aviso "Modo de demonstração" some.
+4. Custo: cada chamada fica registrada na tabela `AiUsage`, com o valor estimado. O padrão é o modelo `claude-opus-5-5`; para economizar, dá para usar um modelo mais barato em tarefas de volume (ex.: `AI_MODEL_GRADE`, `AI_MODEL_QUESTIONS`). Veja `src/lib/ai/client.ts`.
 
 ## Notas de desenvolvimento
 

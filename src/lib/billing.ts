@@ -24,7 +24,7 @@ export const LIMITED_SUMMARY = "1 preparação, 1 sessão e 1 jogo por dia, sem 
 
 /** Número de WhatsApp que recebe os pedidos de assinatura (DDI + DDD + número, só dígitos). */
 export function whatsappNumber() {
-  return (process.env.WHATSAPP_NUMBER || "5511999999999").replace(/\D/g, "");
+  return (process.env.WHATSAPP_NUMBER || "5562992067369").replace(/\D/g, "");
 }
 
 export function whatsappLink(message: string) {

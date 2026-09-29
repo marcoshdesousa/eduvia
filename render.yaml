@@ -1,74 +1,61 @@
-# Blueprint do Render: web (Next.js) + worker (fila) + PostgreSQL.
+# Blueprint do Render: um serviço web (app + processamento em segundo plano) com disco
+# para os arquivos enviados, e o PostgreSQL.
 # No painel do Render: New → Blueprint → escolha este repositório.
-# Depois preencha as variáveis marcadas com sync: false no grupo "eduvia-shared".
-envVarGroups:
-  - name: eduvia-shared
-    envVars:
-      - key: NODE_VERSION
-        value: "22"
-      - key: APP_URL
-        sync: false # ex.: https://eduvia.onrender.com (ou seu domínio)
-      - key: BETTER_AUTH_URL
-        sync: false # igual ao APP_URL
-      - key: BETTER_AUTH_SECRET
-        generateValue: true
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: VOYAGE_API_KEY
-        sync: false
-      - key: STORAGE_DRIVER
-        value: s3
-      - key: S3_ENDPOINT
-        sync: false # Cloudflare R2: https://<conta>.r2.cloudflarestorage.com
-      - key: S3_REGION
-        value: auto
-      - key: S3_BUCKET
-        sync: false
-      - key: S3_ACCESS_KEY_ID
-        sync: false
-      - key: S3_SECRET_ACCESS_KEY
-        sync: false
-      - key: WHATSAPP_NUMBER
-        value: "5511999999999" # troque pelo número real (DDI + DDD + número)
-      - key: VAPID_PUBLIC_KEY
-        sync: false # gere com: npx web-push generate-vapid-keys
-      - key: VAPID_PRIVATE_KEY
-        sync: false
-      - key: VAPID_SUBJECT
-        value: mailto:suporte@eduvia.app
-      - key: BILLING_ENFORCED
-        value: "true" # após os 3 dias de teste, a conta entra no modo limitado
+# Depois preencha as variáveis marcadas com sync: false (painel → eduvia-web → Environment).
+#
+# Quando o app crescer, dá para separar o worker (npm run worker) e mover os arquivos
+# para um armazenamento S3/Cloudflare R2 (STORAGE_DRIVER=s3) — ver README.
 
 services:
   - type: web
     name: eduvia-web
     runtime: node
-    plan: starter
+    plan: starter # discos persistentes exigem plano pago
     region: virginia
     buildCommand: npm ci && npm run build
     preDeployCommand: npx prisma migrate deploy && npm run db:seed
     startCommand: npm start
     healthCheckPath: /termos
+    disk:
+      name: eduvia-arquivos
+      mountPath: /var/data
+      sizeGB: 5 # PDFs dos alunos; dá para aumentar depois no painel
     envVars:
       - key: DATABASE_URL
         fromDatabase:
           name: eduvia-db
           property: connectionString
-      - fromGroup: eduvia-shared
-
-  - type: worker
-    name: eduvia-worker
-    runtime: node
-    plan: starter
-    region: virginia
-    buildCommand: npm ci
-    startCommand: npm run worker
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: eduvia-db
-          property: connectionString
-      - fromGroup: eduvia-shared
+      - key: NODE_VERSION
+        value: "22"
+      - key: APP_URL
+        sync: false # ex.: https://eduvia-web.onrender.com (ou seu domínio)
+      - key: BETTER_AUTH_URL
+        sync: false # igual ao APP_URL
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      # processamento de PDFs, planos e lembretes dentro do próprio app
+      - key: RUN_WORKER_IN_WEB
+        value: "true"
+      - key: STORAGE_DRIVER
+        value: local
+      - key: STORAGE_LOCAL_DIR
+        value: /var/data/uploads
+      - key: WHATSAPP_NUMBER
+        value: "5562992067369"
+      - key: BILLING_ENFORCED
+        value: "true" # após os 3 dias de teste, a conta entra no modo limitado
+      # IA: sem a chave, o app roda em modo de demonstração
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      # notificações push: gere com `npx web-push generate-vapid-keys`
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:suporte@eduvia.app
 
 databases:
   - name: eduvia-db
