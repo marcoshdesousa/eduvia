@@ -130,7 +130,7 @@ npm run admin -- @seu.usuario   # depois de criar sua conta, para acessar /admin
 
 - Com `AI_MODE=mock` o app funciona em **modo de demonstração**: aceita qualquer chave no cadastro e monta o texto e as questões com frases do próprio material. Sem isso, cada aluno usa a IA de verdade com a chave do Gemini dele.
 - **Sem `VOYAGE_API_KEY`** a busca nos materiais usa vetores locais simples. Se ativar a Voyage depois, reenvie os materiais.
-- `WHATSAPP_NUMBER`: número que recebe os pedidos de assinatura (padrão: +55 62 99206-7369).
+- `WHATSAPP_NUMBER`: número que recebe os pedidos de assinatura (padrão: +55 62 99209-7369).
 - `BILLING_ENFORCED="false"` libera o plano pago para todos (só para desenvolvimento).
 
 ## Testes

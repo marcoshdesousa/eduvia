@@ -27,7 +27,7 @@ export async function getPlan(slug: string): Promise<PlanRow | null> {
 
 /** Número de WhatsApp que recebe os pedidos de assinatura (DDI + DDD + número, só dígitos). */
 export function whatsappNumber() {
-  return (process.env.WHATSAPP_NUMBER || "5562992067369").replace(/\D/g, "");
+  return (process.env.WHATSAPP_NUMBER || "5562992097369").replace(/\D/g, "");
 }
 
 export function whatsappLink(message: string) {
