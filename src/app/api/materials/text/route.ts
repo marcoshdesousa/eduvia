@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiUser, jsonError } from "@/lib/api";
+import { uploadLimitError } from "@/lib/billing";
 import { db } from "@/lib/db";
 import { getOwnedPreparation } from "@/lib/authz";
 import { writeObject } from "@/lib/storage";
@@ -19,6 +20,8 @@ const Body = z.object({
 export async function POST(req: Request) {
   const { user, error } = await apiUser();
   if (error) return error;
+  const limit = await uploadLimitError(user);
+  if (limit) return jsonError(limit, 402);
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return jsonError(parsed.error.issues[0].message);
   const b = parsed.data;

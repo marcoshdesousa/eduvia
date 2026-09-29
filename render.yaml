@@ -16,10 +16,6 @@ envVarGroups:
         sync: false
       - key: VOYAGE_API_KEY
         sync: false
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
       - key: STORAGE_DRIVER
         value: s3
       - key: S3_ENDPOINT
@@ -32,18 +28,10 @@ envVarGroups:
         sync: false
       - key: S3_SECRET_ACCESS_KEY
         sync: false
-      - key: SMTP_URL
-        sync: false
-      - key: MAIL_FROM
-        sync: false
-      - key: ASAAS_API_KEY
-        sync: false
-      - key: ASAAS_ENV
-        value: sandbox # mude para production quando for cobrar de verdade
-      - key: ASAAS_WEBHOOK_TOKEN
-        generateValue: true # copie este valor para o webhook no painel do Asaas
+      - key: WHATSAPP_NUMBER
+        value: "5511999999999" # troque pelo número real (DDI + DDD + número)
       - key: BILLING_ENFORCED
-        value: "true" # após os 3 dias de teste, exige assinatura
+        value: "true" # após os 3 dias de teste, a conta entra no modo limitado
 
 services:
   - type: web

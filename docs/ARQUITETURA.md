@@ -2,7 +2,13 @@
 
 > Documento vivo. Nome: **Eduvia**.
 >
-> **Decisões confirmadas:** teste grátis de 3 dias com tudo liberado; depois, plano único com tudo liberado por **R$ 7/semana** ou **R$ 15/mês**; hospedagem no **Render**; pagamento via **Asaas** (Pix + cartão) — **antecipado e já implementado** junto com a Fase 1.
+> **Decisões confirmadas:**
+> - Teste grátis de 3 dias com aviso fixo no topo. Depois, **modo limitado** (1 preparação, 1 sessão/dia, sem novos materiais) até assinar.
+> - Plano com tudo liberado por **R$ 7/semana** ou **R$ 15/mês**, contratado e pago **pelo WhatsApp** e liberado manualmente por um admin (`/admin`). Sem gateway de pagamento por enquanto.
+> - Cadastro com **nome, CPF, telefone (WhatsApp), @ e senha** — sem e-mail e sem login com Google. Login por CPF ou @; nova senha por CPF + telefone.
+> - Hospedagem no **Render**.
+>
+> Com isso, ficaram fora de uso itens da proposta abaixo: e-mail (lembretes, redefinição, consentimento do responsável por e-mail), login com Google e integração com Asaas.
 >
 > **Ajustes na implementação da Fase 1** (em relação à proposta abaixo): projeto em um único pacote (`src/` + `src/worker`) em vez de monorepo; **Better Auth** no lugar do Auth.js; Next.js 16 e Prisma 7; armazenamento em Cloudflare R2 (o Render não tem armazenamento de objetos); modo de IA simulada para desenvolvimento sem chaves.
 

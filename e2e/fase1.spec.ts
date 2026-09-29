@@ -1,24 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import pg from "pg";
 import { EDITAL, makeStudyPdf } from "./fixtures";
+import { signUp } from "./helpers";
 
 const uid = Date.now().toString(36);
-
-async function signUp(page: Page, opts: { name: string; handle: string; birth: string; guardian?: { name: string; email: string } }) {
-  await page.goto("/cadastro");
-  await page.getByLabel("Nome", { exact: true }).fill(opts.name);
-  await page.getByLabel("E-mail", { exact: true }).fill(`${opts.handle}@teste.dev`);
-  await page.getByLabel("Senha").fill("senha-segura-123");
-  await page.locator("#handle").fill(opts.handle);
-  await expect(page.getByText("Disponível!")).toBeVisible();
-  await page.getByLabel("Data de nascimento").fill(opts.birth);
-  if (opts.guardian) {
-    await page.getByLabel("Nome do responsável").fill(opts.guardian.name);
-    await page.getByLabel("E-mail do responsável").fill(opts.guardian.email);
-  }
-  await page.locator('input[name="terms"]').check();
-  await page.getByRole("button", { name: /Criar conta/ }).click();
-}
 
 async function waitMaterialsReady(page: Page, count: number) {
   await expect(page.getByText("Pronto", { exact: true })).toHaveCount(count, { timeout: 90_000 });
@@ -26,8 +10,7 @@ async function waitMaterialsReady(page: Page, count: number) {
 
 test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de erros", async ({ page }) => {
   const handle = `aluno.${uid}`;
-  await signUp(page, { name: "Aluno Teste", handle, birth: "1995-05-10" });
-  await expect(page).toHaveURL(/\/inicio/);
+  await signUp(page, { name: "Aluno Teste", handle });
   await expect(page.getByText("Vamos começar?")).toBeVisible();
 
   // @ repetido é recusado em tempo real
@@ -45,7 +28,7 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
   await page.getByRole("button", { name: "15 min", exact: true }).click();
   for (const d of ["Dom", "Sáb"]) await page.locator("label", { hasText: d }).click();
   await page.getByRole("button", { name: "Criar e enviar materiais" }).click();
-  await expect(page).toHaveURL(/\/preparacoes\/.+/);
+  await expect(page).toHaveURL(/\/preparacoes\/(?!nova)[^/?]+/);
 
   // envio de PDF → processamento → pronto
   await page.locator('input[type="file"][multiple]').setInputFiles({ name: "biologia.pdf", mimeType: "application/pdf", buffer: await makeStudyPdf(8) });
@@ -98,8 +81,7 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
 });
 
 test("concurso: edital obrigatório define disciplinas e banca", async ({ page }) => {
-  await signUp(page, { name: "Concurseira", handle: `concurso.${uid}`, birth: "1990-01-01" });
-  await expect(page).toHaveURL(/\/inicio/);
+  await signUp(page, { name: "Concurseira", handle: `concurso.${uid}` });
   await page.goto("/preparacoes/nova");
   await page.getByRole("button", { name: /Concurso público/ }).click();
   await page.getByLabel("Nome da preparação").fill("Concurso Teste");
@@ -117,25 +99,4 @@ test("concurso: edital obrigatório define disciplinas e banca", async ({ page }
   await page.getByRole("link", { name: "Assuntos" }).click();
   await expect(page.getByRole("heading", { name: "Biologia" })).toBeVisible();
   await expect(page.getByText(/Fotossíntese/).first()).toBeVisible();
-});
-
-test("menor de idade precisa da autorização do responsável", async ({ page }) => {
-  await signUp(page, { name: "Aluna Menor", handle: `menor.${uid}`, birth: "2012-03-15", guardian: { name: "Mãe da Aluna", email: `mae.${uid}@teste.dev` } });
-  await expect(page).toHaveURL(/aguardando-responsavel/);
-  await page.goto("/inicio");
-  await expect(page).toHaveURL(/aguardando-responsavel/);
-
-  // o responsável abre o link do e-mail (lido do banco neste teste) e autoriza
-  const client = new pg.Client({ connectionString: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/eduvia" });
-  await client.connect();
-  const { rows } = await client.query(`SELECT token FROM "GuardianConsent" WHERE "guardianEmail" = $1`, [`mae.${uid}@teste.dev`]);
-  await client.end();
-  const guardian = await page.context().browser()!.newPage();
-  await guardian.goto(`/consentimento/${rows[0].token}`);
-  await guardian.getByRole("button", { name: /autorizo/ }).click();
-  await expect(guardian.getByText("Autorização registrada")).toBeVisible();
-  await guardian.close();
-
-  await page.goto("/inicio");
-  await expect(page).toHaveURL(/\/inicio/);
 });

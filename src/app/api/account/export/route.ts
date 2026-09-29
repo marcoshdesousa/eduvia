@@ -4,9 +4,9 @@ import { db } from "@/lib/db";
 
 /** LGPD: exportação dos dados do usuário em JSON. */
 export async function GET() {
-  const { user, error } = await apiUser({ requireAccess: false });
+  const { user, error } = await apiUser();
   if (error) return error;
-  const [preparations, attempts, reviewItems, studySessions, xpEvents, studyDays, consents, subscriptions] = await Promise.all([
+  const [preparations, attempts, reviewItems, studySessions, xpEvents, studyDays, subscriptions] = await Promise.all([
     db.preparation.findMany({
       where: { userId: user.id },
       include: { subjects: { include: { topics: true } }, materials: { select: { id: true, title: true, kind: true, role: true, status: true, createdAt: true } }, plans: { include: { sessions: true } } },
@@ -16,20 +16,18 @@ export async function GET() {
     db.studySession.findMany({ where: { userId: user.id } }),
     db.xpEvent.findMany({ where: { userId: user.id } }),
     db.studyDay.findMany({ where: { userId: user.id } }),
-    db.guardianConsent.findMany({ where: { userId: user.id }, select: { guardianName: true, guardianEmail: true, grantedAt: true, createdAt: true } }),
-    db.subscription.findMany({ where: { userId: user.id } }),
+    db.subscription.findMany({ where: { userId: user.id }, include: { payments: true } }),
   ]);
-  const { id, name, email, handle, birthDate, createdAt, timezone, xp, currentStreak, longestStreak, termsAcceptedAt, termsVersion } = user;
+  const { id, name, cpf, phone, handle, createdAt, timezone, xp, currentStreak, longestStreak, termsAcceptedAt, termsVersion, trialEndsAt } = user;
   const body = {
     exportedAt: new Date().toISOString(),
-    user: { id, name, email, handle, birthDate, createdAt, timezone, xp, currentStreak, longestStreak, termsAcceptedAt, termsVersion },
+    user: { id, name, cpf, phone, handle, createdAt, timezone, xp, currentStreak, longestStreak, termsAcceptedAt, termsVersion, trialEndsAt },
     preparations,
     attempts,
     reviewItems,
     studySessions,
     xpEvents,
     studyDays,
-    guardianConsents: consents,
     subscriptions,
   };
   return new NextResponse(JSON.stringify(body, null, 2), {

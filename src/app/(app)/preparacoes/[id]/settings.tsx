@@ -1,4 +1,5 @@
 "use client";
+import { ActionForm } from "@/components/action-form";
 import { useActionState, useTransition } from "react";
 import { deletePreparationAction, setPreparationStatusAction, updateAgendaAction } from "@/app/actions/preparations";
 import { AgendaFields } from "@/components/agenda-fields";
@@ -16,7 +17,7 @@ export function PrepSettings({ prep }: Props) {
   return (
     <div className="space-y-4">
       <Card>
-        <form action={action} className="space-y-5">
+        <ActionForm action={action} className="space-y-5">
           <input type="hidden" name="preparationId" value={prep.id} />
           <FormError message={state?.error} />
           {state?.message && <p className="text-sm text-success">{state.message}</p>}
@@ -26,7 +27,7 @@ export function PrepSettings({ prep }: Props) {
             <Input id="reviewIntervals" name="reviewIntervals" defaultValue={prep.reviewIntervals} />
           </Field>
           <Button disabled={pending}>{pending ? "Salvando..." : "Salvar e refazer plano"}</Button>
-        </form>
+        </ActionForm>
       </Card>
       <Card className="space-y-3">
         <CardTitle>Outras ações</CardTitle>

@@ -1,47 +1,55 @@
 "use server";
-import { redirect } from "next/navigation";
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
-import { requireReadyUser } from "@/lib/session";
 import { db } from "@/lib/db";
-import { cancelSubscription, CheckoutError, startCheckout, applyPayment } from "@/lib/payments/subscriptions";
-import { AsaasError } from "@/lib/payments/asaas";
-import { isSimulatedPayments, paymentProvider } from "@/lib/payments";
-import type { FormState } from "./account";
+import { requireAdmin } from "@/lib/session";
+import { addPeriod, PLANS } from "@/lib/billing";
+import { today } from "@/lib/core/dates";
 
-export async function checkoutAction(_: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireReadyUser({ allowWithoutAccess: true });
-  const input = z
-    .object({ planSlug: z.string(), billingType: z.enum(["PIX", "CREDIT_CARD"]), payerName: z.string(), cpfCnpj: z.string() })
-    .safeParse(Object.fromEntries(formData));
-  if (!input.success) return { error: "Escolha o plano e a forma de pagamento." };
-  let paymentId: string;
-  try {
-    ({ paymentId } = await startCheckout({ userId: user.id, ...input.data }));
-  } catch (e) {
-    if (e instanceof CheckoutError) return { error: e.message };
-    if (e instanceof AsaasError) {
-      console.error("[checkout asaas]", e.status, e.details);
-      return { error: `Não foi possível criar a cobrança: ${e.message}` };
-    }
-    throw e;
-  }
-  redirect(`/assinatura/pagamento/${paymentId}`);
+/**
+ * Admin confirma que recebeu o pagamento (pelo WhatsApp) e libera o plano.
+ * Se o aluno já tem um período ativo, o novo período é somado ao final dele.
+ */
+export async function grantPlanAction(userId: string, planSlug: string) {
+  await requireAdmin();
+  const plan = PLANS.find((p) => p.slug === planSlug);
+  if (!plan) return { error: "Plano inválido." };
+  const current = await db.subscription.findFirst({
+    where: { userId, status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: new Date() } },
+    orderBy: { currentPeriodEnd: "desc" },
+  });
+  const base = current?.currentPeriodEnd ?? new Date();
+  const until = addPeriod(base, plan.interval);
+
+  await db.$transaction(async (tx) => {
+    const sub = current
+      ? await tx.subscription.update({ where: { id: current.id }, data: { currentPeriodEnd: until, planSlug: plan.slug, status: "ACTIVE" } })
+      : await tx.subscription.create({
+          data: { userId, planSlug: plan.slug, provider: "manual", status: "ACTIVE", billingType: "MANUAL", currentPeriodEnd: until },
+        });
+    await tx.payment.create({
+      data: {
+        subscriptionId: sub.id,
+        providerPaymentId: `manual_${randomUUID()}`,
+        status: "PAID",
+        billingType: "MANUAL",
+        valueCents: plan.priceCents,
+        dueDate: today(),
+        paidAt: new Date(),
+      },
+    });
+  });
+  revalidatePath("/admin");
+  return { ok: true, until: until.toISOString() };
 }
 
-export async function cancelSubscriptionAction() {
-  const user = await requireReadyUser({ allowWithoutAccess: true });
-  await cancelSubscription(user.id);
-  revalidatePath("/assinatura");
-}
-
-/** Só no modo simulado (sem ASAAS_API_KEY): confirma a cobrança como se tivesse sido paga. */
-export async function simulatePaymentAction(paymentId: string) {
-  if (!isSimulatedPayments()) return;
-  const user = await requireReadyUser({ allowWithoutAccess: true });
-  const p = await db.payment.findFirst({ where: { id: paymentId, subscription: { userId: user.id } } });
-  if (!p) return;
-  const remote = await paymentProvider().getPayment(p.providerPaymentId);
-  if (remote) await applyPayment({ ...remote, status: "PAID", paidAt: new Date() });
-  revalidatePath("/assinatura");
+/** Encerra o acesso pago imediatamente (ex.: pagamento estornado). */
+export async function endPlanAction(userId: string) {
+  await requireAdmin();
+  await db.subscription.updateMany({
+    where: { userId, status: { in: ["ACTIVE", "PAST_DUE"] } },
+    data: { status: "CANCELED", canceledAt: new Date(), currentPeriodEnd: new Date() },
+  });
+  revalidatePath("/admin");
+  return { ok: true };
 }

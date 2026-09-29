@@ -6,7 +6,7 @@ import { deleteObject } from "@/lib/storage";
 import { enqueue } from "@/lib/queue";
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { user, error } = await apiUser({ requireAccess: false });
+  const { user, error } = await apiUser();
   if (error) return error;
   const { id } = await params;
   const material = await getOwnedMaterial(id, user.id);

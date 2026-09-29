@@ -5,7 +5,7 @@ import { downloadUrl } from "@/lib/storage";
 
 /** Abre o arquivo original (opcionalmente numa página) com um link temporário, após checar permissão. */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { user, error } = await apiUser({ requireAccess: false });
+  const { user, error } = await apiUser();
   if (error) return error;
   const { id } = await params;
   const material = await getOwnedMaterial(id, user.id);

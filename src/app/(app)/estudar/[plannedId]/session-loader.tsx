@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { startSessionAction } from "@/app/actions/study";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 const STEPS = ["Lendo os trechos do seu material", "Escrevendo o texto de estudo", "Separando os pontos-chave", "Criando as perguntas"];
@@ -11,13 +12,17 @@ const STEPS = ["Lendo os trechos do seu material", "Escrevendo o texto de estudo
 export function SessionLoader({ plannedId, header }: { plannedId: string; header: { topic: string; subject: string; label: string } }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [upgrade, setUpgrade] = useState(false);
   const [step, setStep] = useState(0);
   const started = useRef(false);
 
   const start = async () => {
     setError(null);
     const res = await startSessionAction(plannedId);
-    if ("error" in res) setError(res.error);
+    if ("error" in res) {
+      setError(res.error);
+      setUpgrade(!!res.upgrade);
+    }
     else router.refresh();
   };
 
@@ -37,8 +42,12 @@ export function SessionLoader({ plannedId, header }: { plannedId: string; header
       <Card className="mt-6 text-center">
         {error ? (
           <>
-            <p className="text-danger">{error}</p>
-            <Button className="mt-4" onClick={start}>Tentar de novo</Button>
+            <p className={upgrade ? "" : "text-danger"}>{error}</p>
+            {upgrade ? (
+              <Link href="/assinatura" className={buttonClass("primary", "md", "mt-4")}>Assinar plano</Link>
+            ) : (
+              <Button className="mt-4" onClick={start}>Tentar de novo</Button>
+            )}
           </>
         ) : (
           <>

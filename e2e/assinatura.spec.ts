@@ -1,78 +1,64 @@
 import { expect, test } from "@playwright/test";
-import pg from "pg";
+import { makeStudyPdf } from "./fixtures";
+import { signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
-const DB = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/eduvia";
-const WEBHOOK_TOKEN = process.env.ASAAS_WEBHOOK_TOKEN || "dev-webhook-token";
 
-async function query<T>(sql: string, params: unknown[]) {
-  const c = new pg.Client({ connectionString: DB });
-  await c.connect();
-  const r = await c.query(sql, params);
-  await c.end();
-  return r.rows as T[];
-}
+// Requer BILLING_ENFORCED diferente de "false" no servidor.
+test("teste grátis → modo limitado → admin libera o plano", async ({ page, browser }) => {
+  const handle = `aluno.pago.${uid}`;
+  await signUp(page, { name: "Aluno Pagante", handle });
 
-// Requer o app sem ASAAS_API_KEY (provedor simulado) e com ASAAS_WEBHOOK_TOKEN definido.
-test("assinatura: Pix, confirmação, webhook idempotente e cancelamento", async ({ page }) => {
-  const handle = `assinante.${uid}`;
-  await page.goto("/cadastro");
-  await page.getByLabel("Nome", { exact: true }).fill("Assinante Teste");
-  await page.getByLabel("E-mail", { exact: true }).fill(`${handle}@teste.dev`);
-  await page.getByLabel("Senha").fill("senha-segura-123");
-  await page.locator("#handle").fill(handle);
-  await expect(page.getByText("Disponível!")).toBeVisible();
-  await page.getByLabel("Data de nascimento").fill("1992-07-20");
-  await page.locator('input[name="terms"]').check();
-  await page.getByRole("button", { name: /Criar conta/ }).click();
+  // modo teste: aviso no topo e link para o WhatsApp com a mensagem pronta
+  await expect(page.getByText(/Modo teste: faltam/)).toBeVisible();
+  await page.getByRole("link", { name: "Assinar plano" }).click();
+  await expect(page).toHaveURL(/\/assinatura/);
+  const wa = page.getByRole("link", { name: /Assinar pelo WhatsApp/ }).last();
+  const href = await wa.getAttribute("href");
+  expect(href).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
+  expect(decodeURIComponent(href!)).toContain(`@${handle}`);
+
+  // cria uma preparação e encerra o teste
+  await page.goto("/preparacoes/nova");
+  await page.getByRole("button", { name: /Outro \/ estudo livre/ }).click();
+  await page.getByLabel("Nome da preparação").fill("Primeira");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Criar e enviar materiais" }).click();
+  await expect(page).toHaveURL(/\/preparacoes\/(?!nova)[^/?]+/);
+  await sql(`UPDATE "user" SET "trialEndsAt" = now() - interval '1 minute' WHERE handle = $1`, [handle]);
+
+  // modo limitado: aviso, sem envio de materiais, sem segunda preparação
+  await page.reload();
+  await expect(page.getByText(/Teste encerrado — modo limitado/)).toBeVisible();
+  await expect(page.getByText(/Assine um plano para enviar novos materiais/)).toBeVisible();
+  const blocked = await page.request.post("/api/materials", { data: { preparationId: "x", filename: "a.pdf", size: 10 } });
+  expect(blocked.status()).toBe(402);
+  await page.goto("/preparacoes/nova");
+  await page.getByRole("button", { name: /Outro \/ estudo livre/ }).click();
+  await page.getByLabel("Nome da preparação").fill("Segunda");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Criar e enviar materiais" }).click();
+  await expect(page.getByText(/No modo limitado você pode ter 1 preparação/)).toBeVisible();
+
+  // admin confirma o pagamento e libera o plano mensal
+  const admin = await (await browser.newContext()).newPage();
+  await signUp(admin, { name: "Admin Teste", handle: `admin.${uid}` });
+  await sql(`UPDATE "user" SET "isAdmin" = true WHERE handle = $1`, [`admin.${uid}`]);
+  await admin.goto(`/admin?q=${handle}`);
+  admin.on("dialog", (d) => d.accept());
+  await admin.getByRole("button", { name: "+ Mensal" }).click();
+  await expect(admin.getByText(/Mensal até/)).toBeVisible();
+
+  // aluno volta a ter tudo liberado
+  await page.goto("/assinatura");
+  await expect(page.getByText("Plano Mensal", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/modo limitado/)).toHaveCount(0);
+  const prep = await sql<{ id: string }>(`SELECT p.id FROM "Preparation" p JOIN "user" u ON u.id = p."userId" WHERE u.handle = $1`, [handle]);
+  await page.goto(`/preparacoes/${prep[0].id}?aba=materiais`);
+  await page.locator('input[type="file"][multiple]').setInputFiles({ name: "aula.pdf", mimeType: "application/pdf", buffer: await makeStudyPdf(2) });
+  await expect(page.getByText("Pronto", { exact: true })).toBeVisible({ timeout: 60_000 });
+
+  // não-admin não acessa /admin
+  await page.goto("/admin");
   await expect(page).toHaveURL(/\/inicio/);
-
-  await page.goto("/assinatura");
-  await expect(page.getByText("Teste grátis", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: /Mensal/ }).click();
-  await page.getByLabel("CPF ou CNPJ").fill("12345678900");
-  await page.getByRole("button", { name: "Gerar Pix" }).click();
-  await expect(page.getByText("CPF ou CNPJ inválido.")).toBeVisible();
-  await page.getByLabel("CPF ou CNPJ").fill("52998224725");
-  await expect(page.getByLabel("CPF ou CNPJ")).toHaveValue("529.982.247-25");
-  await page.getByRole("button", { name: "Gerar Pix" }).click();
-
-  await expect(page).toHaveURL(/\/assinatura\/pagamento\//);
-  await expect(page.getByLabel("Pix copia e cola")).toHaveValue(/SIMULADO/);
-  await page.getByRole("button", { name: /Simular pagamento/ }).click();
-  await expect(page.getByText("Pagamento confirmado!")).toBeVisible();
-
-  await page.goto("/assinatura");
-  await expect(page.getByText("Assinatura ativa")).toBeVisible();
-  await expect(page.getByText("Pago", { exact: true })).toBeVisible();
-
-  // webhook: evento repetido não estende o período duas vezes
-  const [row] = await query<{ providerPaymentId: string; providerSubscriptionId: string; end: Date }>(
-    `SELECT p."providerPaymentId", s."providerSubscriptionId", s."currentPeriodEnd" AS end
-       FROM "Payment" p JOIN "Subscription" s ON s.id = p."subscriptionId" JOIN "user" u ON u.id = s."userId"
-      WHERE u.handle = $1`,
-    [handle],
-  );
-  const event = {
-    id: `evt_${uid}`,
-    event: "PAYMENT_RECEIVED",
-    payment: { id: row.providerPaymentId, subscription: row.providerSubscriptionId, status: "RECEIVED", billingType: "PIX", value: 15, dueDate: "2026-10-01", paymentDate: "2026-10-01" },
-  };
-  const unauthorized = await page.request.post("/api/webhooks/asaas", { data: event });
-  expect(unauthorized.status()).toBe(401);
-  for (let i = 0; i < 2; i++) {
-    const res = await page.request.post("/api/webhooks/asaas", { data: event, headers: { "asaas-access-token": WEBHOOK_TOKEN } });
-    expect(res.ok()).toBeTruthy();
-  }
-  const [after] = await query<{ end: Date }>(
-    `SELECT s."currentPeriodEnd" AS end FROM "Subscription" s JOIN "user" u ON u.id = s."userId" WHERE u.handle = $1`,
-    [handle],
-  );
-  expect(new Date(after.end).getTime()).toBe(new Date(row.end).getTime());
-
-  // cancelamento mantém o acesso até o fim do período
-  page.on("dialog", (d) => d.accept());
-  await page.getByRole("button", { name: "Cancelar assinatura" }).click();
-  await expect(page.getByText(/Renovação cancelada/)).toBeVisible();
-  await expect(page.getByText("Reativar ou trocar de plano")).toBeVisible();
 });

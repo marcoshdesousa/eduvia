@@ -5,19 +5,20 @@ import { signOutAction } from "@/app/actions/account";
 import { ThemeToggle } from "@/components/theme";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { maskCpf } from "@/lib/core/phone";
 import { DeleteAccountForm, PasswordForm, ProfileForm } from "./forms";
 
 export const metadata = { title: "Configurações" };
 
 export default async function Page() {
-  const user = await requireReadyUser({ allowWithoutAccess: true });
+  const user = await requireReadyUser();
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Configurações</h1>
       <Card className="space-y-4">
         <CardTitle>Conta</CardTitle>
-        <p className="text-sm text-muted">{user.email}</p>
-        <ProfileForm name={user.name} handle={user.handle!} visibility={user.profileVisibility} timezone={user.timezone} />
+        <p className="text-sm text-muted">CPF {maskCpf(user.cpf!)}</p>
+        <ProfileForm name={user.name} handle={user.handle!} phone={user.phone!} visibility={user.profileVisibility} timezone={user.timezone} />
       </Card>
       <Card className="space-y-4">
         <CardTitle>Senha</CardTitle>
@@ -30,7 +31,7 @@ export default async function Page() {
       <Card className="space-y-2">
         <CardTitle>Notificações</CardTitle>
         <p className="text-sm text-muted">
-          Você recebe um lembrete por e-mail no horário de estudo de cada preparação (altere o horário em Preparações → Ajustes). Notificações no navegador chegam numa próxima versão.
+          Suas tarefas do dia aparecem no Início. Lembretes no horário de estudo (notificações no celular/navegador) chegam numa próxima versão.
         </p>
       </Card>
       <Card className="flex flex-wrap items-center justify-between gap-3">

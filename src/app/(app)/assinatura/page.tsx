@@ -1,99 +1,90 @@
-import Link from "next/link";
-import { Check } from "lucide-react";
+import { Check, MessageCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
-import { activeSubscription, billingEnforced, formatBRL, hasAccess, PLANS } from "@/lib/billing";
-import { isSimulatedPayments } from "@/lib/payments";
+import { formatBRL, getAccess, LIMITED_SUMMARY, PLANS, subscribeMessage, whatsappLink } from "@/lib/billing";
 import { formatDay } from "@/lib/core/dates";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
-import { CheckoutForm } from "./checkout-form";
-import { CancelButton } from "./cancel-button";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Assinatura" };
 
-const INCLUDED = ["Preparações ilimitadas", "PDFs ilimitados (inclusive escaneados)", "Plano de estudo inteligente", "Sessões com texto e questões", "Revisão espaçada e banco de erros"];
-const STATUS_LABEL = { PENDING: "Pendente", PAID: "Pago", OVERDUE: "Vencido", REFUNDED: "Estornado", CANCELED: "Cancelado" } as const;
-const STATUS_TONE = { PENDING: "warning", PAID: "success", OVERDUE: "danger", REFUNDED: "neutral", CANCELED: "neutral" } as const;
+const INCLUDED = ["Preparações ilimitadas", "PDFs ilimitados (inclusive escaneados)", "Sessões de estudo sem limite por dia", "Revisão espaçada e banco de erros", "Todas as novidades das próximas fases"];
 const longDate = (d: Date) => formatDay(d, { day: "2-digit", month: "long", year: "numeric" });
 
 export default async function Page() {
-  const user = await requireReadyUser({ allowWithoutAccess: true });
-  const [sub, access, payments] = await Promise.all([
-    activeSubscription(user.id),
-    hasAccess(user),
-    db.payment.findMany({ where: { subscription: { userId: user.id } }, include: { subscription: { include: { plan: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
+  const user = await requireReadyUser();
+  const [access, payments] = await Promise.all([
+    getAccess(user),
+    db.payment.findMany({ where: { subscription: { userId: user.id }, status: "PAID" }, include: { subscription: { include: { plan: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
   ]);
-  const renewing = sub && sub.status !== "CANCELED";
-  const openPayment = payments.find((p) => (p.status === "PENDING" || p.status === "OVERDUE") && p.subscription.status !== "CANCELED");
-  const trialActive = !!user.trialEndsAt && user.trialEndsAt > new Date();
-  const isMinor = user.guardianConsentStatus === "GRANTED";
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Assinatura</h1>
 
-      <Card className="space-y-3">
+      <Card className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>Seu acesso</CardTitle>
-          {renewing ? <Badge tone="success">Assinatura ativa</Badge> : sub ? <Badge tone="warning">Cancelada</Badge> : trialActive ? <Badge tone="primary">Teste grátis</Badge> : !access ? <Badge tone="danger">Sem acesso</Badge> : <Badge>Liberado</Badge>}
+          {access.reason === "subscription" ? <Badge tone="success">Plano {access.planName}</Badge> : access.reason === "trial" ? <Badge tone="primary">Modo teste</Badge> : access.reason === "dev" ? <Badge>Liberado</Badge> : <Badge tone="danger">Modo limitado</Badge>}
         </div>
         <p className="text-sm text-muted">
-          {renewing
-            ? `Plano ${sub.plan.name} (${formatBRL(sub.plan.priceCents)}/${sub.plan.interval === "WEEK" ? "semana" : "mês"}) via ${sub.billingType === "PIX" ? "Pix" : "cartão"}. Período pago até ${longDate(sub.currentPeriodEnd)}; a próxima cobrança é gerada automaticamente.`
-            : sub
-              ? `Renovação cancelada. Você tem acesso até ${longDate(sub.currentPeriodEnd)}.`
-              : trialActive
-                ? `Seu teste grátis vai até ${longDate(user.trialEndsAt!)}. Assine para continuar depois disso — seu progresso fica salvo.`
-                : !access
-                  ? "Seu teste grátis terminou. Assine para voltar a estudar — seu progresso está salvo."
-                  : "Acesso liberado."}
+          {access.reason === "subscription"
+            ? `Seu plano vale até ${longDate(access.until)}. Para continuar depois disso, é só renovar pelo WhatsApp.`
+            : access.reason === "trial"
+              ? `Seu teste grátis vai até ${longDate(access.until)}. Depois disso a conta fica no modo limitado (${LIMITED_SUMMARY}).`
+              : access.reason === "dev"
+                ? "Cobrança desativada neste ambiente (BILLING_ENFORCED=false)."
+                : `Seu teste grátis acabou e a conta está no modo limitado: ${LIMITED_SUMMARY}. Seu progresso está salvo — assine para liberar tudo.`}
         </p>
-        {sub?.status === "PAST_DUE" && <p className="text-sm text-danger">Há uma cobrança vencida. Pague para não perder o acesso.</p>}
-        {openPayment && (
-          <Link href={`/assinatura/pagamento/${openPayment.id}`} className={buttonClass("primary")}>
-            Pagar {formatBRL(openPayment.valueCents)} ({openPayment.billingType === "PIX" ? "Pix" : "cartão"})
-          </Link>
-        )}
-        {renewing && <CancelButton until={longDate(sub.currentPeriodEnd)} />}
       </Card>
 
-      {!renewing && (
-        <Card className="space-y-4">
-          <CardTitle>{sub ? "Reativar ou trocar de plano" : "Escolha seu plano"}</CardTitle>
-          <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
-            {INCLUDED.map((i) => <li key={i} className="flex items-center gap-2"><Check size={16} className="text-success" />{i}</li>)}
-          </ul>
-          <CheckoutForm
-            plans={PLANS.map((p) => ({ slug: p.slug, name: p.name, price: formatBRL(p.priceCents), period: p.interval === "WEEK" ? "semana" : "mês", note: p.interval === "MONTH" ? "Mais econômico" : undefined }))}
-            defaultName={user.name}
-            isMinor={isMinor}
-            startsLater={sub ? longDate(sub.currentPeriodEnd) : null}
-          />
-        </Card>
-      )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {PLANS.map((p) => (
+          <Card key={p.slug} className={cn("flex flex-col", p.interval === "MONTH" && "border-primary")}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">{p.name}</h2>
+              {p.interval === "MONTH" && <Badge tone="primary">Mais econômico</Badge>}
+            </div>
+            <div className="mt-2 text-3xl font-bold">
+              {formatBRL(p.priceCents)}
+              <span className="text-base font-normal text-muted">/{p.interval === "WEEK" ? "semana" : "mês"}</span>
+            </div>
+            <ul className="mt-4 flex-1 space-y-2 text-sm">
+              {INCLUDED.map((i) => <li key={i} className="flex items-center gap-2"><Check size={16} className="text-success" />{i}</li>)}
+            </ul>
+            <a href={whatsappLink(subscribeMessage(p, user))} target="_blank" rel="noreferrer" className={buttonClass(p.interval === "MONTH" ? "primary" : "outline", "md", "mt-5 w-full")}>
+              <MessageCircle size={16} /> {access.reason === "subscription" ? "Renovar" : "Assinar"} pelo WhatsApp
+            </a>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="space-y-2 text-sm">
+        <CardTitle>Como funciona</CardTitle>
+        <ol className="list-decimal space-y-1 pl-5 text-muted">
+          <li>Toque em &quot;Assinar pelo WhatsApp&quot;: a mensagem com o plano e o seu @ já vai pronta.</li>
+          <li>Combine o pagamento por lá (Pix).</li>
+          <li>Assim que o pagamento for confirmado, liberamos o plano na sua conta. Não há cobrança automática: quando vencer, é só renovar.</li>
+        </ol>
+      </Card>
 
       {payments.length > 0 && (
         <Card>
-          <CardTitle>Histórico de pagamentos</CardTitle>
+          <CardTitle>Histórico</CardTitle>
           <ul className="mt-3 divide-y divide-border text-sm">
             {payments.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-3 py-2">
                 <span className="w-28 text-muted">{formatDay(p.dueDate, { day: "2-digit", month: "short", year: "numeric" })}</span>
-                <span className="flex-1">{p.subscription.plan.name} · {p.billingType === "PIX" ? "Pix" : "Cartão"}</span>
+                <span className="flex-1">Plano {p.subscription.plan.name}</span>
                 <span className="font-medium">{formatBRL(p.valueCents)}</span>
-                <Badge tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Badge>
+                <Badge tone="success">Pago</Badge>
               </li>
             ))}
           </ul>
         </Card>
       )}
-
-      <p className="text-xs text-muted">
-        {isSimulatedPayments() && "Pagamentos em modo simulado (sem ASAAS_API_KEY). "}
-        {!billingEnforced() && "Ambiente de desenvolvimento: a cobrança não bloqueia o acesso (BILLING_ENFORCED=false)."}
-      </p>
     </div>
   );
 }

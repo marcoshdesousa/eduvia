@@ -1,4 +1,5 @@
 "use client";
+import { ActionForm } from "@/components/action-form";
 import { useActionState, useState } from "react";
 import { createPreparationAction } from "@/app/actions/preparations";
 import { AgendaFields } from "@/components/agenda-fields";
@@ -28,7 +29,7 @@ export function NewPreparationForm() {
   const [step, setStep] = useState(1);
 
   return (
-    <form action={action} className="space-y-6">
+    <ActionForm action={action} className="space-y-6">
       <FormError message={state?.error} />
       <input type="hidden" name="studentType" value={type ?? ""} />
 
@@ -113,6 +114,6 @@ export function NewPreparationForm() {
           <Button disabled={pending || !type}>{pending ? "Criando..." : "Criar e enviar materiais"}</Button>
         </div>
       </section>
-    </form>
+    </ActionForm>
   );
 }

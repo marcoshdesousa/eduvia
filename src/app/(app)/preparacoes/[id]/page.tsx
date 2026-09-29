@@ -7,6 +7,7 @@ import { ensurePlanFresh, latestPlan } from "@/lib/plan";
 import { PROFILES } from "@/lib/core/profiles";
 import { addDays, diffDays, formatDay, keyFromDay, today, weekdayShort } from "@/lib/core/dates";
 import { listMaterials } from "@/lib/materials/list";
+import { uploadLimitError } from "@/lib/billing";
 import { MaterialsPanel } from "@/components/materials-panel";
 import { Badge, MasteryBadge, Progress } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   if (prep.status === "ACTIVE") await ensurePlanFresh(prep, user.timezone);
 
   const materials = await listMaterials(prep.id);
+  const uploadLocked = await uploadLimitError(user);
   const tab = TABS.find((t) => t.key === sp.aba)?.key ?? (sp.nova || materials.length === 0 ? "materiais" : "plano");
   const day = today(user.timezone);
   const profile = PROFILES[prep.studentType];
@@ -106,6 +108,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           subjects={subjects.map((s) => ({ id: s.id, name: s.name }))}
           syllabusRole={syllabusRole}
           syllabusRequired={prep.studentType === "CONCURSO"}
+          lockedMessage={uploadLocked}
         />
       )}
 

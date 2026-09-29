@@ -5,16 +5,19 @@ import { ThemeToggle } from "@/components/theme";
 import { requireReadyUser } from "@/lib/session";
 import { levelFromXp } from "@/lib/gamification";
 import { isMockAi } from "@/lib/ai/client";
+import { getAccess } from "@/lib/billing";
+import { AccessBanner } from "@/components/access-banner";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireReadyUser({ allowWithoutAccess: true });
+  const user = await requireReadyUser();
   const { level } = levelFromXp(user.xp);
+  const access = await getAccess(user);
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[240px_1fr]">
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-border bg-surface p-4 md:flex">
         <Logo href="/inicio" />
         <div className="mt-8 flex-1">
-          <SideNav />
+          <SideNav isAdmin={user.isAdmin} />
         </div>
         <div className="space-y-3 border-t border-border pt-4">
           <div className="flex items-center justify-between text-sm">
@@ -37,6 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <ThemeToggle />
           </div>
         </header>
+        <AccessBanner access={access} />
         {isMockAi() && (
           <div className="border-b border-warning/30 bg-warning/10 px-4 py-2 text-center text-xs text-warning">
             Modo de demonstração: IA simulada (configure ANTHROPIC_API_KEY para textos e questões reais).

@@ -42,3 +42,20 @@ LÍNGUA PORTUGUESA: 1. Compreensão e interpretação de textos. 2. Ortografia o
 CONHECIMENTOS ESPECÍFICOS:
 BIOLOGIA: 1. Fotossíntese: etapas fotoquímica e química. 2. Respiração celular e fermentação. 3. Citologia.
 `;
+
+/** CPF válido aleatório (para testes). */
+export function randomCpf(): string {
+  const n = Array.from({ length: 9 }, () => Math.floor(Math.random() * 10));
+  const dv = (digits: number[]) => {
+    const sum = digits.reduce((s, d, i) => s + d * (digits.length + 1 - i), 0);
+    const r = (sum * 10) % 11;
+    return r === 10 ? 0 : r;
+  };
+  n.push(dv(n));
+  n.push(dv(n));
+  return n.join("");
+}
+
+export function randomPhone(): string {
+  return `119${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`;
+}

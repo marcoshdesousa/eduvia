@@ -7,6 +7,7 @@ import { requireReadyUser } from "@/lib/session";
 import { getOwnedPreparation } from "@/lib/authz";
 import { generatePlan } from "@/lib/plan";
 import { today } from "@/lib/core/dates";
+import { preparationLimitError } from "@/lib/billing";
 import type { FormState } from "./account";
 
 const DETAIL_KEYS = ["grade", "schoolSubject", "exam", "course", "discipline", "orgao", "cargo", "goal"] as const;
@@ -37,6 +38,8 @@ function parseAgenda(formData: FormData, tz: string) {
 
 export async function createPreparationAction(_: FormState, formData: FormData): Promise<FormState> {
   const user = await requireReadyUser();
+  const limit = await preparationLimitError(user);
+  if (limit) return { error: limit };
   const type = z.enum(["FUNDAMENTAL", "MEDIO", "ENEM_VESTIBULAR", "FACULDADE", "CONCURSO", "CURSINHO", "LIVRE"]).safeParse(formData.get("studentType"));
   if (!type.success) return { error: "Escolha o tipo de estudo." };
   const title = String(formData.get("title") ?? "").trim();
@@ -99,9 +102,10 @@ export async function regeneratePlanAction(preparationId: string) {
 }
 
 export async function setPreparationStatusAction(preparationId: string, status: "ACTIVE" | "ARCHIVED") {
-  const user = await requireReadyUser({ allowWithoutAccess: true });
+  const user = await requireReadyUser();
   const prep = await getOwnedPreparation(preparationId, user.id);
   if (!prep) return;
+  if (status === "ACTIVE" && (await preparationLimitError(user))) return;
   await db.preparation.update({ where: { id: prep.id }, data: { status } });
   if (status === "ACTIVE") await generatePlan(prep.id);
   revalidatePath("/preparacoes");
@@ -109,7 +113,7 @@ export async function setPreparationStatusAction(preparationId: string, status: 
 }
 
 export async function deletePreparationAction(preparationId: string) {
-  const user = await requireReadyUser({ allowWithoutAccess: true });
+  const user = await requireReadyUser();
   const prep = await getOwnedPreparation(preparationId, user.id);
   if (!prep) return;
   const { deletePreparationData } = await import("@/lib/cleanup");

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, CreditCard, Home, RotateCcw, Settings } from "lucide-react";
+import { BookOpen, CreditCard, Home, RotateCcw, Settings, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
@@ -17,11 +17,12 @@ function useActive() {
   return (href: string) => path === href || path.startsWith(href + "/") || (href === "/preparacoes" && path.startsWith("/estudar"));
 }
 
-export function SideNav() {
+export function SideNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const isActive = useActive();
+  const items = isAdmin ? [...ITEMS, { href: "/admin", label: "Admin", icon: Shield }] : ITEMS;
   return (
     <nav className="space-y-1">
-      {ITEMS.map((i) => (
+      {items.map((i) => (
         <Link
           key={i.href}
           href={i.href}

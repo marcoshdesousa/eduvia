@@ -4,15 +4,14 @@ import { requireUser } from "@/lib/session";
 import { suggestHandle } from "@/lib/core/handle";
 import { OnboardingForm } from "./onboarding-form";
 
-export const metadata = { title: "Boas-vindas" };
+export const metadata = { title: "Complete seu cadastro" };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ erro?: string }> }) {
+export default async function Page() {
   const user = await requireUser();
-  if (user.handle && user.termsAcceptedAt && user.birthDate) redirect("/inicio");
-  const { erro } = await searchParams;
+  if (user.handle && user.termsAcceptedAt && user.cpf && user.phone) redirect("/inicio");
   return (
-    <AuthShell title={`Boas-vindas, ${user.name.split(" ")[0]}!`} subtitle="Só faltam alguns dados para começar.">
-      <OnboardingForm suggested={user.handle ?? suggestHandle(user.name)} initialError={erro} />
+    <AuthShell title={`Olá, ${user.name.split(" ")[0]}!`} subtitle="Complete seu cadastro para continuar.">
+      <OnboardingForm suggested={user.handle ?? suggestHandle(user.name)} phone={user.phone ?? ""} />
     </AuthShell>
   );
 }

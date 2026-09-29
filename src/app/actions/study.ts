@@ -4,9 +4,12 @@ import { requireReadyUser } from "@/lib/session";
 import { answerQuestion, completeSession, openSession } from "@/lib/study";
 import { db } from "@/lib/db";
 import { AiRefusalError } from "@/lib/ai/client";
+import { sessionLimitError } from "@/lib/billing";
 
-export async function startSessionAction(plannedId: string): Promise<{ ok: true } | { error: string }> {
+export async function startSessionAction(plannedId: string): Promise<{ ok: true } | { error: string; upgrade?: boolean }> {
   const user = await requireReadyUser();
+  const limit = await sessionLimitError(user);
+  if (limit) return { error: limit, upgrade: true };
   try {
     const s = await openSession(plannedId, user.id);
     if (!s) return { error: "Sessão não encontrada." };

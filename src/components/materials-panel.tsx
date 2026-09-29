@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, ClipboardPaste, ExternalLink, FileText, Loader2, RotateCw, Trash2, Upload } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, CheckCircle2, ClipboardPaste, ExternalLink, FileText, Loader2, Lock, RotateCw, Trash2, Upload } from "lucide-react";
 import type { MaterialRow } from "@/lib/materials/list";
 import { Button } from "@/components/ui/button";
 import { Badge, Progress } from "@/components/ui/badge";
@@ -39,12 +40,15 @@ export function MaterialsPanel({
   subjects,
   syllabusRole,
   syllabusRequired,
+  lockedMessage,
 }: {
   preparationId: string;
   initial: MaterialRow[];
   subjects: { id: string; name: string }[];
   syllabusRole: "EDITAL" | "EMENTA" | null;
   syllabusRequired: boolean;
+  /** Modo limitado: envio bloqueado com esta mensagem. */
+  lockedMessage?: string | null;
 }) {
   const router = useRouter();
   const [materials, setMaterials] = useState(initial);
@@ -131,6 +135,18 @@ export function MaterialsPanel({
     refresh();
   }
 
+  if (lockedMessage) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm">
+          <span className="inline-flex items-center gap-2"><Lock size={16} className="text-danger" />{lockedMessage}</span>
+          <Link href="/assinatura" className="font-semibold text-primary">Assinar plano</Link>
+        </div>
+        <MaterialList materials={materials} onRemove={remove} onRetry={retry} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {syllabusRole && (
@@ -191,45 +207,55 @@ export function MaterialsPanel({
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
-        {uploads.map((u) => (
-          <li key={u.key} className="p-3">
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <span className="truncate">{u.name}</span>
-              <span className={u.error ? "text-danger" : "text-muted"}>{u.error ?? `${Math.round(u.progress * 100)}%`}</span>
-            </div>
-            {!u.error && <Progress value={u.progress} className="mt-2" />}
-          </li>
-        ))}
-        {materials.map((m) => {
-          const s = STATUS[m.status];
-          return (
-            <li key={m.id} className="flex items-center gap-3 p-3">
-              <div className="shrink-0">
-                {m.status === "READY" ? <CheckCircle2 size={18} className="text-success" /> : m.status === "ERROR" ? <AlertCircle size={18} className="text-danger" /> : <Loader2 size={18} className="animate-spin text-primary" />}
+      {uploads.length > 0 && (
+        <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
+          {uploads.map((u) => (
+            <li key={u.key} className="p-3">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="truncate">{u.name}</span>
+                <span className={u.error ? "text-danger" : "text-muted"}>{u.error ?? `${Math.round(u.progress * 100)}%`}</span>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate text-sm font-medium">{m.title}</span>
-                  {m.role !== "CONTENT" && <Badge tone="primary">{ROLE_LABEL[m.role]}</Badge>}
-                  <Badge tone={s.tone}>{s.label}</Badge>
-                </div>
-                <div className="truncate text-xs text-muted">
-                  {m.status === "ERROR" ? m.errorMessage : m.status === "READY" ? [m.subjectName, m.pageCount && `${m.pageCount} pág.`].filter(Boolean).join(" · ") || m.kind : m.progressStep ?? "Aguardando"}
-                </div>
-              </div>
-              <div className="flex shrink-0 gap-1">
-                {m.status === "ERROR" && <Button size="sm" variant="ghost" onClick={() => retry(m.id)} aria-label="Tentar de novo"><RotateCw size={15} /></Button>}
-                {m.status === "READY" && (
-                  <a href={`/api/materials/${m.id}/file`} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center rounded-lg px-2 text-muted hover:bg-surface-2" aria-label="Abrir arquivo"><ExternalLink size={15} /></a>
-                )}
-                <Button size="sm" variant="ghost" onClick={() => remove(m.id, m.title)} aria-label="Remover"><Trash2 size={15} /></Button>
-              </div>
+              {!u.error && <Progress value={u.progress} className="mt-2" />}
             </li>
-          );
-        })}
-        {!materials.length && !uploads.length && <li className="p-4 text-center text-sm text-muted">Nenhum material ainda.</li>}
-      </ul>
+          ))}
+        </ul>
+      )}
+      <MaterialList materials={materials} onRemove={remove} onRetry={retry} />
     </div>
+  );
+}
+
+function MaterialList({ materials, onRemove, onRetry }: { materials: MaterialRow[]; onRemove: (id: string, title: string) => void; onRetry: (id: string) => void }) {
+  return (
+    <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
+      {materials.map((m) => {
+        const s = STATUS[m.status];
+        return (
+          <li key={m.id} className="flex items-center gap-3 p-3">
+            <div className="shrink-0">
+              {m.status === "READY" ? <CheckCircle2 size={18} className="text-success" /> : m.status === "ERROR" ? <AlertCircle size={18} className="text-danger" /> : <Loader2 size={18} className="animate-spin text-primary" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="truncate text-sm font-medium">{m.title}</span>
+                {m.role !== "CONTENT" && <Badge tone="primary">{ROLE_LABEL[m.role]}</Badge>}
+                <Badge tone={s.tone}>{s.label}</Badge>
+              </div>
+              <div className="truncate text-xs text-muted">
+                {m.status === "ERROR" ? m.errorMessage : m.status === "READY" ? [m.subjectName, m.pageCount && `${m.pageCount} pág.`].filter(Boolean).join(" · ") || m.kind : m.progressStep ?? "Aguardando"}
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-1">
+              {m.status === "ERROR" && <Button size="sm" variant="ghost" onClick={() => onRetry(m.id)} aria-label="Tentar de novo"><RotateCw size={15} /></Button>}
+              {m.status === "READY" && (
+                <a href={`/api/materials/${m.id}/file`} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center rounded-lg px-2 text-muted hover:bg-surface-2" aria-label="Abrir arquivo"><ExternalLink size={15} /></a>
+              )}
+              <Button size="sm" variant="ghost" onClick={() => onRemove(m.id, m.title)} aria-label="Remover"><Trash2 size={15} /></Button>
+            </div>
+          </li>
+        );
+      })}
+      {!materials.length && <li className="p-4 text-center text-sm text-muted">Nenhum material ainda.</li>}
+    </ul>
   );
 }

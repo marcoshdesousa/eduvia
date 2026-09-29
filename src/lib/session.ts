@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasAccess } from "@/lib/billing";
 
 export const getCurrentUser = cache(async () => {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -20,11 +19,19 @@ export async function requireUser() {
   return user;
 }
 
-/** Usuário com cadastro completo, consentimento (se menor) e acesso (teste grátis ou assinatura). */
-export async function requireReadyUser(opts: { allowWithoutAccess?: boolean } = {}) {
+/**
+ * Usuário com cadastro completo (CPF, telefone, @ e termos).
+ * Sem assinatura nem teste grátis, o app continua acessível no modo limitado (ver lib/billing.ts).
+ */
+export async function requireReadyUser() {
   const user = await requireUser();
-  if (!user.handle || !user.termsAcceptedAt || !user.birthDate) redirect("/boas-vindas");
-  if (user.guardianConsentStatus === "PENDING" || user.guardianConsentStatus === "REVOKED") redirect("/aguardando-responsavel");
-  if (!opts.allowWithoutAccess && !(await hasAccess(user))) redirect("/assinatura");
+  if (!user.handle || !user.termsAcceptedAt || !user.cpf || !user.phone) redirect("/boas-vindas");
+  return user;
+}
+
+/** Área administrativa: só contas marcadas como admin (npm run admin -- @usuario). */
+export async function requireAdmin() {
+  const user = await requireReadyUser();
+  if (!user.isAdmin) redirect("/inicio");
   return user;
 }

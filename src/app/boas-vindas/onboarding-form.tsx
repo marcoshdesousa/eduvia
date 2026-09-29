@@ -1,17 +1,18 @@
 "use client";
+import { ActionForm } from "@/components/action-form";
 import { useActionState } from "react";
-import { completeOnboardingAction } from "@/app/actions/account";
+import { completeProfileAction } from "@/app/actions/account";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/form";
 import { ProfileFields } from "@/components/profile-fields";
 
-export function OnboardingForm({ suggested, initialError }: { suggested: string; initialError?: string }) {
-  const [state, action, pending] = useActionState(completeOnboardingAction, initialError ? { error: initialError } : undefined);
+export function OnboardingForm({ suggested, phone }: { suggested: string; phone: string }) {
+  const [state, action, pending] = useActionState(completeProfileAction, undefined);
   return (
-    <form action={action} className="space-y-4">
+    <ActionForm action={action} className="space-y-4">
       <FormError message={state?.error} />
-      <ProfileFields defaultHandle={suggested} />
+      <ProfileFields defaultHandle={suggested} defaultPhone={phone} />
       <Button className="w-full" disabled={pending}>{pending ? "Salvando..." : "Continuar"}</Button>
-    </form>
+    </ActionForm>
   );
 }

@@ -5,7 +5,6 @@ import { requireReadyUser } from "@/lib/session";
 import { ensurePlanFresh } from "@/lib/plan";
 import { addDays, today, weekday } from "@/lib/core/dates";
 import { levelFromXp } from "@/lib/gamification";
-import { billingEnforced } from "@/lib/billing";
 import { MasteryBadge, Progress } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle, Stat } from "@/components/ui/card";
@@ -48,7 +47,6 @@ export default async function Page() {
   const weekMinutes = weekDays.reduce((s, d) => s + d.minutes, 0);
   const weekGoal = preps.reduce((s, p) => s + p.dailyMinutes * p.studyDays.length, 0);
   const { level, progress } = levelFromXp(user.xp);
-  const trialDaysLeft = user.trialEndsAt ? Math.ceil((user.trialEndsAt.getTime() - Date.now()) / 86400000) : 0;
 
   return (
     <div className="space-y-6">
@@ -59,12 +57,6 @@ export default async function Page() {
         </p>
       </div>
 
-      {billingEnforced() && trialDaysLeft > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/40 bg-primary/10 p-3 text-sm">
-          <span>Teste grátis: {trialDaysLeft === 1 ? "último dia" : `${trialDaysLeft} dias restantes`}.</span>
-          <Link href="/assinatura" className="font-medium text-primary">Ver planos</Link>
-        </div>
-      )}
 
       {!preps.length ? (
         <Card className="text-center">

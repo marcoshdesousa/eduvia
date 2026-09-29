@@ -34,6 +34,11 @@ model User {
   updatedAt     DateTime @updatedAt
 
   handle                String?       @unique
+  /// CPF (só dígitos): identifica a conta, login e redefinição de senha.
+  cpf                   String?       @unique
+  /// Telefone/WhatsApp (só dígitos, com DDD).
+  phone                 String?
+  isAdmin               Boolean       @default(false)
   birthDate             DateTime?     @db.Date
   guardianConsentStatus ConsentStatus @default(NOT_REQUIRED)
   profileVisibility     Visibility    @default(PUBLIC)
@@ -615,6 +620,7 @@ model Subscription {
 enum BillingType {
   PIX
   CREDIT_CARD
+  MANUAL
 }
 
 enum PaymentStatus {
