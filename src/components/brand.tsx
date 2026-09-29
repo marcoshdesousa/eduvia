@@ -1,20 +1,23 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-/** Símbolo do Eduvia: um "e" que vira caminho ("via"), com o ponto de chegada. */
+/** Símbolo do Eduvia: um livro aberto de onde sai um caminho ("via") até a estrela (o objetivo). */
 export function LogoMark({ className }: { className?: string }) {
+  // fundo em CSS (gradiente de SVG com id repetido some quando há outra logo escondida na página)
   return (
-    <svg viewBox="0 0 64 64" className={cn("size-8 shrink-0", className)} aria-hidden="true">
-      <defs>
-        <linearGradient id="eduvia-mark" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#6d5dfc" />
-          <stop offset="1" stopColor="#3b82f6" />
-        </linearGradient>
-      </defs>
-      <rect width="64" height="64" rx="18" fill="url(#eduvia-mark)" />
-      <path d="M18.5 33h26.5a13.5 13.5 0 1 0-3.9 9.6" fill="none" stroke="#fff" strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="48.6" cy="47.2" r="4" fill="#5eead4" />
+    <span className={cn("inline-block size-8 shrink-0 overflow-hidden rounded-[28%] bg-gradient-to-br from-[#6d5dfc] to-[#3b82f6]", className)} aria-hidden="true">
+    <svg viewBox="0 0 64 64" className="size-full">
+      <path d="M8 41.5 Q20 36.5 31 42 V52.5 Q20 47 8 52 Z" fill="#fff" />
+      <path d="M56 41.5 Q44 36.5 33 42 V52.5 Q44 47 56 52 Z" fill="#e0e7ff" />
+      <g fill="#5eead4">
+        <circle cx="32" cy="36.5" r="2.5" />
+        <circle cx="27.6" cy="30.8" r="2.4" />
+        <circle cx="28.8" cy="24.2" r="2.3" />
+        <circle cx="34" cy="20" r="2.2" />
+      </g>
+      <path d="M43.5 7.5 l2.4 5.4 5.4 2.4 -5.4 2.4 -2.4 5.4 -2.4 -5.4 -5.4 -2.4 5.4 -2.4z" fill="#fff" />
     </svg>
+    </span>
   );
 }
 

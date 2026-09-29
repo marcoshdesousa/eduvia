@@ -9,13 +9,13 @@ import { Field, FormError, Input, Select } from "@/components/ui/form";
 
 const TIMEZONES = ["America/Sao_Paulo", "America/Manaus", "America/Cuiaba", "America/Belem", "America/Fortaleza", "America/Recife", "America/Bahia", "America/Porto_Velho", "America/Rio_Branco", "America/Noronha"];
 
-export function ProfileForm({ name, handle, phone, visibility, timezone, avatar }: { name: string; handle: string; phone: string; visibility: string; timezone: string; avatar: string | null }) {
+export function ProfileForm({ name, handle, phone, visibility, timezone, avatar, subscriber }: { name: string; handle: string; phone: string; visibility: string; timezone: string; avatar: string | null; subscriber: boolean }) {
   const [state, action, pending] = useActionState(updateProfileAction, undefined);
   return (
     <ActionForm action={action} className="space-y-4">
       <FormError message={state?.error} />
       {state?.message && <p className="text-sm text-success">{state.message}</p>}
-      <AvatarPicker current={avatar} />
+      <AvatarPicker current={avatar} subscriber={subscriber} />
       <Field label="Nome" htmlFor="name"><Input id="name" name="name" defaultValue={name} /></Field>
       <Field label="@ de usuário" htmlFor="handle" hint="O @ é a sua identidade no Eduvia e não pode ser trocado.">
         <Input id="handle" value={`@${handle}`} readOnly disabled />

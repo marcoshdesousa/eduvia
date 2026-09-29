@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/theme";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { maskCpf } from "@/lib/core/phone";
+import { getAccess } from "@/lib/billing";
 import { vapidPublicKey } from "@/lib/notifications";
 import { PushSettings } from "@/components/push-settings";
 import { DeleteAccountForm, PasswordForm, ProfileForm } from "./forms";
@@ -20,7 +21,7 @@ export default async function Page() {
       <Card className="space-y-4">
         <CardTitle>Conta</CardTitle>
         <p className="text-sm text-muted">CPF {maskCpf(user.cpf!)}</p>
-        <ProfileForm name={user.name} handle={user.handle!} phone={user.phone!} visibility={user.profileVisibility} timezone={user.timezone} avatar={user.avatar} />
+        <ProfileForm name={user.name} handle={user.handle!} phone={user.phone!} visibility={user.profileVisibility} timezone={user.timezone} avatar={user.avatar} subscriber={(await getAccess(user)).mode === "full"} />
       </Card>
       <Card className="space-y-4">
         <CardTitle>Senha</CardTitle>

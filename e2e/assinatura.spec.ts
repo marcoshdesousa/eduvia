@@ -52,6 +52,14 @@ test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", as
   await page.getByRole("button", { name: "Criar e enviar materiais" }).click();
   await expect(page.getByText(/O plano Grátis permite 1 preparação/)).toBeVisible();
 
+  // Grátis: só 1 personagem feminino e 1 masculino por categoria
+  await page.goto("/configuracoes");
+  await expect(page.getByRole("radio", { name: "Gatinha", exact: true })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Pandinha (só para assinantes)" })).toBeVisible();
+  await page.getByRole("tab", { name: "Heróis" }).click();
+  await expect(page.getByRole("radio", { name: "Heroína Raio", exact: true })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Herói Chama (só para assinantes)" })).toBeVisible();
+
   // admin confirma o pagamento e libera o Eduvia por 30 dias
   const admin = await (await browser.newContext()).newPage();
   await signUp(admin, { name: "Admin Teste", handle: `admin.${uid}` });
@@ -90,7 +98,8 @@ test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", as
   await page.getByRole("button", { name: "Enviar" }).click();
   await expect(page.getByText(/Mensagem enviada/)).toBeVisible();
   await admin.goto("/admin?aba=suporte");
-  await admin.getByRole("link", { name: /Aluno Pagante/ }).click();
+  await admin.getByRole("link", { name: `@${handle}` }).click();
+  await expect(admin).toHaveURL(/aluno=/);
   await expect(admin.getByText("Como troco minha chave do Gemini?")).toBeVisible();
   await admin.getByLabel("Mensagem").fill("É em Mais → Minha IA.");
   await admin.getByRole("button", { name: "Enviar" }).click();

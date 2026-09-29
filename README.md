@@ -74,11 +74,11 @@ e2e/                   testes de ponta a ponta (Playwright)
 
 ## Marca, site e atendimento
 
-- **Logo:** um "e" que vira caminho ("via"), com o ponto de chegada. Símbolo em `src/components/brand.tsx` (`LogoMark`), favicon em `src/app/icon.svg`, ícones do app em `public/`.
+- **Logo:** um livro aberto de onde sai um caminho pontilhado ("via") até a estrela (o objetivo). Símbolo em `src/components/brand.tsx` (`LogoMark`), favicon em `src/app/icon.svg`, ícones do app em `public/`.
 - **Página inicial** (`src/app/page.tsx`): apresentação, como funciona, recursos, preço (lido do plano no banco), perguntas frequentes (inclui "por que pedimos o CPF") e rodapé.
 - **Redes sociais:** em **/admin → Site**, cadastre Instagram, WhatsApp, TikTok e X. Só as preenchidas aparecem no rodapé.
 - **Suporte:** o aluno escreve em **Mais → Suporte** (`/suporte`); a equipe vê as conversas em **/admin → Suporte** (com o nº de não lidas), responde por lá e o aluno recebe uma notificação.
-- **Foto de perfil:** 10 personagens (5 meninas, 5 meninos) em `public/avatars/`, escolhidos em Ajustes. O aluno muda o nome; o @ não pode ser trocado.
+- **Foto de perfil:** 40 personagens em 4 categorias (Bichinhos, Heróis, MVP e Halloween; 5 femininos e 5 masculinos cada) em `public/avatars/`, lista em `src/lib/avatars.ts`. No plano Grátis só 1 feminino e 1 masculino de cada categoria ficam liberados (`free: true`); assinantes usam todos. O aluno muda o nome; o @ não pode ser trocado.
 - **Cadastro em 2 passos:** dados da conta → chave do Gemini, com botão "Voltar" que mantém o que foi digitado.
 
 ## Fase 2 — praticar

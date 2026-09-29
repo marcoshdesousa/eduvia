@@ -1,5 +1,6 @@
 "use server";
-import { isAvatarId } from "@/lib/avatars";
+import { canUseAvatar, isAvatarId } from "@/lib/avatars";
+import { getAccess } from "@/lib/billing";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -16,6 +17,9 @@ export async function updateProfileAction(_: FormState, formData: FormData): Pro
   const name = String(formData.get("name") ?? "").trim();
   if (name.length < 2) return { error: "Informe seu nome." };
   const avatar = String(formData.get("avatar") ?? "");
+  if (isAvatarId(avatar) && avatar !== user.avatar && !canUseAvatar(avatar, (await getAccess(user)).mode === "full")) {
+    return { error: "Esse personagem é só para assinantes. Assine o Eduvia para liberar todos." };
+  }
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   if (!phone) return { error: "Telefone inválido. Use DDD + número." };
   const visibility = formData.get("profileVisibility") === "PRIVATE" ? "PRIVATE" : "PUBLIC";
