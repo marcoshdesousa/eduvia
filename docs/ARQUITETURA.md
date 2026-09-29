@@ -1,6 +1,10 @@
 # Eduvia — Arquitetura, modelo de dados, telas e plano por fases
 
-> Documento vivo. Nome provisório: **Eduvia** (nome do repositório). Troca de nome = troca de constante `APP_NAME`.
+> Documento vivo. Nome: **Eduvia**.
+>
+> **Decisões confirmadas:** teste grátis de 3 dias com tudo liberado; depois, plano único com tudo liberado por **R$ 7/semana** ou **R$ 15/mês**; hospedagem no **Render**; pagamento via **Asaas** (Pix + cartão) na Fase 3.
+>
+> **Ajustes na implementação da Fase 1** (em relação à proposta abaixo): projeto em um único pacote (`src/` + `src/worker`) em vez de monorepo; **Better Auth** no lugar do Auth.js; Next.js 16 e Prisma 7; armazenamento em Cloudflare R2 (o Render não tem armazenamento de objetos); modo de IA simulada para desenvolvimento sem chaves.
 
 ---
 

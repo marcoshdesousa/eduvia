@@ -1,0 +1,639 @@
+// Eduvia — schema da Fase 1 (MVP) + estrutura mínima de assinatura (teste grátis).
+// Tabelas das fases 2 e 3 entram em migrações próprias.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────── Contas (Better Auth + campos do Eduvia) ─────────────────────────
+
+enum ConsentStatus {
+  NOT_REQUIRED
+  PENDING
+  GRANTED
+  REVOKED
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+}
+
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  handle                String?       @unique
+  birthDate             DateTime?     @db.Date
+  guardianConsentStatus ConsentStatus @default(NOT_REQUIRED)
+  profileVisibility     Visibility    @default(PUBLIC)
+  timezone              String        @default("America/Sao_Paulo")
+  termsAcceptedAt       DateTime?
+  termsVersion          String?
+  trialEndsAt           DateTime?
+
+  xp            Int       @default(0)
+  currentStreak Int       @default(0)
+  longestStreak Int       @default(0)
+  lastStudyDate DateTime? @db.Date
+
+  sessions         Session[]
+  accounts         Account[]
+  guardianConsents GuardianConsent[]
+  preparations     Preparation[]
+  materials        Material[]
+  studySessions    StudySession[]
+  attempts         Attempt[]
+  reviewItems      ReviewItem[]
+  topicReviews     TopicReview[]
+  topicMastery     TopicMastery[]
+  xpEvents         XpEvent[]
+  studyDays        StudyDay[]
+  subscriptions    Subscription[]
+  aiUsage          AiUsage[]
+  usageCounters    UsageCounter[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model GuardianConsent {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guardianName  String
+  guardianEmail String
+  token         String    @unique
+  grantedAt     DateTime?
+  grantedIp     String?
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ───────────────────────── Preparações e materiais ─────────────────────────
+
+enum StudentType {
+  FUNDAMENTAL
+  MEDIO
+  ENEM_VESTIBULAR
+  FACULDADE
+  CONCURSO
+  CURSINHO
+  LIVRE
+}
+
+enum PreparationStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model Preparation {
+  id              String            @id @default(cuid())
+  userId          String
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  studentType     StudentType
+  details         Json              @default("{}")
+  examDate        DateTime?         @db.Date
+  dailyMinutes    Int
+  studyDays       Int[]
+  studyTime       String
+  reviewIntervals Int[]             @default([1, 7, 15, 30])
+  status          PreparationStatus @default(ACTIVE)
+  lastReplanDate  DateTime?         @db.Date
+  lastReminderAt  DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  subjects       Subject[]
+  materials      Material[]
+  plans          StudyPlan[]
+  editalAnalysis EditalAnalysis?
+
+  @@index([userId, status])
+}
+
+enum TopicSource {
+  EDITAL
+  MATERIAL
+  MANUAL
+}
+
+model Subject {
+  id            String      @id @default(cuid())
+  preparationId String
+  preparation   Preparation @relation(fields: [preparationId], references: [id], onDelete: Cascade)
+  name          String
+  weight        Float       @default(1)
+  order         Int         @default(0)
+  createdAt     DateTime    @default(now())
+
+  topics    Topic[]
+  materials Material[]
+
+  @@unique([preparationId, name])
+}
+
+model Topic {
+  id               String      @id @default(cuid())
+  subjectId        String
+  subject          Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  order            Int         @default(0)
+  weight           Float       @default(1)
+  difficulty       Int         @default(3)
+  estimatedMinutes Int         @default(30)
+  source           TopicSource @default(MATERIAL)
+  materialId       String?
+  pageStart        Int?
+  pageEnd          Int?
+  createdAt        DateTime    @default(now())
+
+  chunks          TopicChunk[]
+  studyTexts      StudyText[]
+  questions       Question[]
+  plannedSessions PlannedSession[]
+  studySessions   StudySession[]
+  topicReviews    TopicReview[]
+  mastery         TopicMastery[]
+
+  @@index([subjectId])
+}
+
+enum MaterialKind {
+  PDF
+  DOCX
+  IMAGE
+  TEXT
+}
+
+enum MaterialRole {
+  CONTENT
+  EDITAL
+  EMENTA
+}
+
+enum MaterialStatus {
+  UPLOADING
+  QUEUED
+  PROCESSING
+  READY
+  ERROR
+}
+
+/// Arquivo físico identificado pelo hash: o mesmo arquivo é processado uma única vez.
+model MaterialBlob {
+  id          String    @id @default(cuid())
+  sha256      String?   @unique
+  storageKey  String
+  mimeType    String
+  sizeBytes   Int
+  pageCount   Int?
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  materials Material[]
+  pages     MaterialPage[]
+  chunks    Chunk[]
+}
+
+model Material {
+  id            String         @id @default(cuid())
+  preparationId String
+  preparation   Preparation    @relation(fields: [preparationId], references: [id], onDelete: Cascade)
+  subjectId     String?
+  subject       Subject?       @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  uploaderId    String
+  uploader      User           @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  blobId        String?
+  blob          MaterialBlob?  @relation(fields: [blobId], references: [id])
+  title         String
+  kind          MaterialKind
+  role          MaterialRole   @default(CONTENT)
+  status        MaterialStatus @default(UPLOADING)
+  progressStep  String?
+  errorMessage  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([preparationId])
+}
+
+model MaterialPage {
+  id         String       @id @default(cuid())
+  blobId     String
+  blob       MaterialBlob @relation(fields: [blobId], references: [id], onDelete: Cascade)
+  pageNumber Int
+  text       String
+  ocr        Boolean      @default(false)
+
+  @@unique([blobId, pageNumber])
+}
+
+model Chunk {
+  id         String                       @id @default(cuid())
+  blobId     String
+  blob       MaterialBlob                 @relation(fields: [blobId], references: [id], onDelete: Cascade)
+  index      Int
+  content    String
+  pageStart  Int
+  pageEnd    Int
+  tokenCount Int
+  embedding  Unsupported("vector(1024)")?
+
+  topics TopicChunk[]
+
+  @@unique([blobId, index])
+}
+
+model TopicChunk {
+  topicId String
+  topic   Topic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  chunkId String
+  chunk   Chunk  @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  score   Float  @default(1)
+
+  @@id([topicId, chunkId])
+  @@index([chunkId])
+}
+
+model EditalAnalysis {
+  id            String      @id @default(cuid())
+  preparationId String      @unique
+  preparation   Preparation @relation(fields: [preparationId], references: [id], onDelete: Cascade)
+  banca         String?
+  cargo         String?
+  questionStyle String      @default("MULTIPLA_ESCOLHA")
+  raw           Json
+  createdAt     DateTime    @default(now())
+}
+
+// ───────────────────────── Plano e sessões ─────────────────────────
+
+enum Feasibility {
+  OK
+  APERTADO
+  INSUFICIENTE
+}
+
+enum SessionKind {
+  STUDY
+  REVIEW
+  PRACTICE
+}
+
+enum PlannedStatus {
+  PENDING
+  DONE
+  MISSED
+  SKIPPED
+}
+
+model StudyPlan {
+  id             String      @id @default(cuid())
+  preparationId  String
+  preparation    Preparation @relation(fields: [preparationId], references: [id], onDelete: Cascade)
+  version        Int
+  feasibility    Feasibility
+  totalMinutes   Int
+  capacityMinutes Int
+  missingMinutes Int         @default(0)
+  notes          String?
+  createdAt      DateTime    @default(now())
+
+  sessions PlannedSession[]
+
+  @@index([preparationId, version])
+}
+
+model PlannedSession {
+  id           String        @id @default(cuid())
+  planId       String
+  plan         StudyPlan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  date         DateTime      @db.Date
+  durationMin  Int
+  kind         SessionKind
+  topicId      String
+  topic        Topic         @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  part         Int           @default(1)
+  partCount    Int           @default(1)
+  reviewNumber Int?
+  status       PlannedStatus @default(PENDING)
+  order        Int           @default(0)
+
+  studySession StudySession?
+
+  @@index([planId, date])
+  @@index([topicId])
+}
+
+model StudySession {
+  id               String          @id @default(cuid())
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plannedSessionId String?         @unique
+  plannedSession   PlannedSession? @relation(fields: [plannedSessionId], references: [id], onDelete: SetNull)
+  topicId          String
+  topic            Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  kind             SessionKind
+  studyTextId      String?
+  studyText        StudyText?      @relation(fields: [studyTextId], references: [id], onDelete: SetNull)
+  questionIds      String[]
+  startedAt        DateTime        @default(now())
+  completedAt      DateTime?
+  minutesSpent     Int?
+
+  @@index([userId, startedAt])
+}
+
+/// Texto de estudo gerado pela IA; cache por tópico + parte + tipo de estudante.
+model StudyText {
+  id            String      @id @default(cuid())
+  topicId       String
+  topic         Topic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  part          Int
+  partCount     Int
+  studentType   StudentType
+  content       String
+  highlights    Json
+  keyPoints     Json
+  sourceRefs    Json
+  promptVersion String
+  createdAt     DateTime    @default(now())
+
+  studySessions StudySession[]
+  questions     Question[]
+
+  @@unique([topicId, part, partCount, studentType, promptVersion])
+}
+
+// ───────────────────────── Questões e aprendizagem ─────────────────────────
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  CERTO_ERRADO
+  OPEN_RECALL
+}
+
+model Question {
+  id            String       @id @default(cuid())
+  topicId       String
+  topic         Topic        @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  studyTextId   String?
+  studyText     StudyText?   @relation(fields: [studyTextId], references: [id], onDelete: SetNull)
+  type          QuestionType
+  statement     String
+  options       Json?
+  correctAnswer String
+  explanation   String
+  difficulty    Int          @default(3)
+  sourceRefs    Json         @default("[]")
+  createdAt     DateTime     @default(now())
+
+  attempts    Attempt[]
+  reviewItems ReviewItem[]
+
+  @@index([topicId])
+}
+
+enum AttemptContext {
+  SESSION
+  REVIEW
+  ERROR_BANK
+  GAME
+  EXAM
+}
+
+model Attempt {
+  id         String         @id @default(cuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  context    AttemptContext
+  contextId  String?
+  answer     String
+  isCorrect  Boolean
+  score      Float
+  feedback   String?
+  timeMs     Int?
+  createdAt  DateTime       @default(now())
+
+  @@index([userId, createdAt])
+  @@index([questionId])
+}
+
+/// Repetição por questão: erros (banco de erros) voltam logo, acertos voltam com menos frequência.
+model ReviewItem {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionId   String
+  question     Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  step         Int       @default(0)
+  dueAt        DateTime  @db.Date
+  lapses       Int       @default(0)
+  correctCount Int       @default(0)
+  lastResult   Boolean
+  inErrorBank  Boolean   @default(false)
+  resolvedAt   DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, questionId])
+  @@index([userId, dueAt])
+}
+
+/// Revisão espaçada do assunto (R1, R2, R3, R4...).
+model TopicReview {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId      String
+  topic        Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  reviewNumber Int
+  dueDate      DateTime  @db.Date
+  doneAt       DateTime?
+
+  @@unique([userId, topicId, reviewNumber])
+  @@index([userId, dueDate])
+}
+
+enum MasteryStatus {
+  SEM_DADOS
+  CRITICO
+  EM_DESENVOLVIMENTO
+  BOM
+}
+
+model TopicMastery {
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId   String
+  topic     Topic         @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  attempts  Int           @default(0)
+  correct   Float         @default(0)
+  accuracy  Float         @default(0)
+  status    MasteryStatus @default(SEM_DADOS)
+  studyDone Boolean       @default(false)
+  updatedAt DateTime      @updatedAt
+
+  @@id([userId, topicId])
+}
+
+// ───────────────────────── Gamificação básica ─────────────────────────
+
+model XpEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  reason    String
+  refId     String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model StudyDay {
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date    DateTime @db.Date
+  minutes Int      @default(0)
+
+  @@id([userId, date])
+}
+
+// ───────────────────────── Assinatura, limites e custo de IA ─────────────────────────
+
+enum BillingInterval {
+  WEEK
+  MONTH
+}
+
+model Plan {
+  slug       String          @id
+  name       String
+  priceCents Int
+  interval   BillingInterval
+  /// Limites configuráveis. Quantidade de PDFs nunca é limitada.
+  limits     Json            @default("{}")
+  active     Boolean         @default(true)
+
+  subscriptions Subscription[]
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planSlug               String
+  plan                   Plan               @relation(fields: [planSlug], references: [slug])
+  provider               String
+  providerCustomerId     String?
+  providerSubscriptionId String?            @unique
+  status                 SubscriptionStatus
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([userId, status])
+}
+
+model UsageCounter {
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metric      String
+  periodStart DateTime @db.Date
+  count       Int      @default(0)
+
+  @@id([userId, metric, periodStart])
+}
+
+model AiUsage {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  task            String
+  model           String
+  inputTokens     Int
+  outputTokens    Int
+  cacheReadTokens Int      @default(0)
+  costMicros      Int
+  createdAt       DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// Cache genérico de respostas da IA (mesma entrada = mesma resposta, sem nova chamada).
+model AiCache {
+  key       String   @id
+  task      String
+  value     Json
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,77 @@
+# Blueprint do Render: web (Next.js) + worker (fila) + PostgreSQL.
+# No painel do Render: New → Blueprint → escolha este repositório.
+# Depois preencha as variáveis marcadas com sync: false no grupo "eduvia-shared".
+envVarGroups:
+  - name: eduvia-shared
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: APP_URL
+        sync: false # ex.: https://eduvia.onrender.com (ou seu domínio)
+      - key: BETTER_AUTH_URL
+        sync: false # igual ao APP_URL
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: STORAGE_DRIVER
+        value: s3
+      - key: S3_ENDPOINT
+        sync: false # Cloudflare R2: https://<conta>.r2.cloudflarestorage.com
+      - key: S3_REGION
+        value: auto
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: SMTP_URL
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: BILLING_ENFORCED
+        value: "false" # mude para "true" quando o pagamento (Fase 3) estiver no ar
+
+services:
+  - type: web
+    name: eduvia-web
+    runtime: node
+    plan: starter
+    region: virginia
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npx prisma migrate deploy && npm run db:seed
+    startCommand: npm start
+    healthCheckPath: /termos
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eduvia-db
+          property: connectionString
+      - fromGroup: eduvia-shared
+
+  - type: worker
+    name: eduvia-worker
+    runtime: node
+    plan: starter
+    region: virginia
+    buildCommand: npm ci
+    startCommand: npm run worker
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eduvia-db
+          property: connectionString
+      - fromGroup: eduvia-shared
+
+databases:
+  - name: eduvia-db
+    plan: basic-256mb
+    region: virginia
+    postgresMajorVersion: "16"
