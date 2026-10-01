@@ -4,13 +4,16 @@ import { createHash } from "node:crypto";
 import { GEMINI_API, AiQuotaError, AiUnavailableError, isMockAi, parseQuota, userGeminiKey } from "@/lib/ai/client";
 import { readObject, writeObject } from "@/lib/storage";
 import { Mp3Encoder } from "@breezystack/lamejs";
+import { alignWords } from "@/lib/speech-align";
 
 export type TtsVoice = "f" | "m";
 /** Vozes do Gemini: Kore (feminina, firme e clara) e Charon (masculina, calma e informativa). */
 export const TTS_VOICES: Record<TtsVoice, string> = { f: "Kore", m: "Charon" };
 export const TTS_MAX_CHARS = 2600;
-// versão do áudio guardado (mudou: sem instrução lida em voz alta e sem chiado)
-const CACHE_VERSION = "v3-mp3";
+// versão do áudio guardado (v4: guarda junto o tempo de cada palavra, medido no próprio áudio)
+const CACHE_VERSION = "v4-mp3";
+// áudio da versão anterior (sem os tempos): usado só se a voz estiver sem cota agora
+const OLD_CACHE_VERSION = "v3-mp3";
 
 const found = new Map<string, { models: string[]; at: number }>();
 
@@ -115,18 +118,59 @@ function toMp3WithPause(pcm: Buffer, rate: number) {
   return pcmToMp3(Buffer.concat([pcm, Buffer.alloc(Math.round(rate * TAIL_PAUSE_S) * 2)]), rate);
 }
 
-/** Gera (ou reaproveita) o áudio MP3 de um trecho, já limpo e com a pausa do fim. */
-export async function speak(userId: string, text: string, voice: TtsVoice): Promise<Buffer> {
-  const clean = text.trim().slice(0, TTS_MAX_CHARS);
-  const cacheKey = `tts/${createHash("sha256").update(`${CACHE_VERSION}:${voice}:${clean}`).digest("hex")}.mp3`;
-  try {
-    return await readObject(cacheKey);
-  } catch {}
-  if (isMockAi()) {
-    // silêncio com duração parecida com a fala (para testar o carregamento e a marcação das frases)
-    const secs = Math.min(20, Math.max(1, clean.length / 15));
-    return toMp3WithPause(Buffer.alloc(Math.round(24000 * secs) * 2), 24000);
+/** Fala de teste (modo sem IA): um "bip" por palavra e silêncio nas vírgulas e pontos, para testar a marcação. */
+function mockSpeech(text: string, rate: number) {
+  const parts: Buffer[] = [];
+  for (const m of text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)) {
+    const len = Math.round(rate * (0.08 + m[0].length * 0.035));
+    const b = Buffer.alloc(len * 2);
+    for (let i = 0; i < len; i++) b.writeInt16LE(Math.round(4000 * Math.sin(i / 4)), i * 2);
+    const after = text.slice(m.index! + m[0].length, m.index! + m[0].length + 2);
+    const gap = /[.!?]/.test(after) ? 0.4 : /[,;:]/.test(after) ? 0.2 : 0.04;
+    parts.push(b, Buffer.alloc(Math.round(rate * gap) * 2));
   }
+  return Buffer.concat(parts);
+}
+
+export type Spoken = { mp3: Buffer; times: number[] | null };
+
+/** Gera (ou reaproveita) o áudio MP3 de um trecho, já limpo e com a pausa do fim, e o tempo de cada palavra. */
+export async function speak(userId: string, text: string, voice: TtsVoice): Promise<Spoken> {
+  const clean = text.trim().slice(0, TTS_MAX_CHARS);
+  const hash = (v: string) => createHash("sha256").update(`${v}:${voice}:${clean}`).digest("hex");
+  const cacheKey = `tts/${hash(CACHE_VERSION)}.mp3`;
+  try {
+    const mp3 = await readObject(cacheKey);
+    const times = await readObject(`tts/${hash(CACHE_VERSION)}.json`)
+      .then((b) => JSON.parse(b.toString()) as number[] | null)
+      .catch(() => null);
+    return { mp3, times };
+  } catch {}
+  const finish = async (pcm: Buffer, rate: number): Promise<Spoken> => {
+    const cleaned = cleanPcm(pcm, rate);
+    const mp3 = toMp3WithPause(cleaned, rate);
+    let times: number[] | null = null;
+    try {
+      times = alignWords(cleaned, rate, clean);
+    } catch (e) {
+      console.error("[voz] tempos das palavras", e);
+    }
+    await writeObject(cacheKey, mp3, "audio/mpeg").catch(() => {});
+    await writeObject(`tts/${hash(CACHE_VERSION)}.json`, Buffer.from(JSON.stringify(times)), "application/json").catch(() => {});
+    return { mp3, times };
+  };
+  if (isMockAi()) return finish(mockSpeech(clean, 24000), 24000);
+  try {
+    return await generate(userId, clean, voice, finish);
+  } catch (e) {
+    // sem cota agora: usa o áudio antigo desta aula (se já foi ouvido antes), sem os tempos das palavras
+    const old = await readObject(`tts/${hash(OLD_CACHE_VERSION)}.mp3`).catch(() => null);
+    if (old) return { mp3: old, times: null };
+    throw e;
+  }
+}
+
+async function generate(userId: string, clean: string, voice: TtsVoice, finish: (pcm: Buffer, rate: number) => Promise<Spoken>): Promise<Spoken> {
   const key = await userGeminiKey(userId);
   const errors: string[] = [];
   for (const model of (await ttsModels(key)).slice(0, 3)) {
@@ -144,9 +188,7 @@ export async function speak(userId: string, text: string, voice: TtsVoice): Prom
       const part = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;
       if (part?.data) {
         const rate = Number(part.mimeType?.match(/rate=(\d+)/)?.[1]) || 24000;
-        const mp3 = toMp3WithPause(cleanPcm(Buffer.from(part.data, "base64"), rate), rate);
-        await writeObject(cacheKey, mp3, "audio/mpeg").catch(() => {});
-        return mp3;
+        return finish(Buffer.from(part.data, "base64"), rate);
       }
       errors.push(`${model}: sem áudio`);
       continue;

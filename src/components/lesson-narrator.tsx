@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Pause, Play, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { stripSources } from "@/lib/sources";
+import { decodeTimes, splitWords } from "@/lib/speech-align";
 import { cn } from "@/lib/utils";
 
 /** Tira a marcação do texto (Markdown e marcações de fonte como [T1]) e separa em frases para ler em voz alta. */
@@ -69,6 +70,26 @@ export function sentenceTimeline(parts: string[], blocks: { from: number; to: nu
   return starts;
 }
 
+export { splitWords };
+
+/**
+ * Tempo de cada palavra na aula inteira: usa os tempos medidos no áudio de cada trecho (quando vieram)
+ * e, se faltarem, a estimativa pelo tamanho das palavras.
+ */
+export function mergeWordTimes(parts: string[], blocks: { from: number; to: number }[], seconds: number[], measured: (number[] | null)[], estimate: { s: number; t: number }[]) {
+  const words = estimate.map((w) => ({ ...w }));
+  let offset = 0;
+  let k = 0;
+  blocks.forEach((b, i) => {
+    const count = parts.slice(b.from, b.to + 1).reduce((x, p) => x + splitWords(p).length, 0);
+    const m = measured[i];
+    if (m && m.length === count) for (let j = 0; j < count; j++) words[k + j].t = offset + m[j];
+    k += count;
+    offset += seconds[i];
+  });
+  return words;
+}
+
 const plainChar = (c: string) =>
   c
     .normalize("NFD")
@@ -109,17 +130,6 @@ export function mapSentences(flat: string, parts: string[]): ({ start: number; e
     while (end < flat.length && /[.,;:!?)"”'»]/.test(flat[end])) end++; // inclui a pontuação do fim
     return { start: back[at], end };
   });
-}
-
-/** Palavras de uma frase, com a posição na frase e o "peso" de fala (letras + pausa da pontuação logo depois). */
-export function splitWords(part: string): { word: string; at: number; weight: number }[] {
-  const out: { word: string; at: number; weight: number }[] = [];
-  for (const m of part.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)) {
-    const after = part.slice(m.index! + m[0].length, m.index! + m[0].length + 2);
-    const pause = /[.!?]/.test(after) ? 7 : /[,;:]/.test(after) ? 4 : 0;
-    out.push({ word: m[0], at: m.index!, weight: m[0].length + 1 + pause });
-  }
-  return out;
 }
 
 /**
@@ -250,7 +260,7 @@ function rankVoice(v: SpeechSynthesisVoice, gender: "f" | "m") {
   return score;
 }
 
-type Prepared = { url: string; starts: number[]; words: { s: number; t: number }[] };
+type Prepared = { url: string; words: { s: number; t: number }[] };
 type State = "idle" | "loading" | "playing" | "paused";
 
 /**
@@ -331,6 +341,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     if (hit) return hit;
     const chunks: ArrayBuffer[] = new Array(blocks.length);
     const seconds: number[] = new Array(blocks.length).fill(0);
+    const measured: (number[] | null)[] = new Array(blocks.length).fill(null);
     let done = 0;
     let next = 0;
     setProgress(0);
@@ -346,6 +357,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
           if (r instanceof Response && r.ok) {
             chunks[i] = await r.arrayBuffer();
             seconds[i] = Number(r.headers.get("x-audio-seconds")) || chunks[i].byteLength / 6000;
+            measured[i] = decodeTimes(r.headers.get("x-word-times"));
             lastError = null;
             break;
           }
@@ -361,7 +373,8 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     await Promise.all([worker(), worker()]);
     const url = URL.createObjectURL(new Blob(chunks, { type: "audio/mpeg" }));
     const starts = sentenceTimeline(parts, blocks, seconds);
-    const p = { url, starts, words: wordTimeline(parts, starts, seconds.reduce((x, y) => x + y, 0)) };
+    const estimate = wordTimeline(parts, starts, seconds.reduce((x, y) => x + y, 0));
+    const p = { url, words: mergeWordTimes(parts, blocks, seconds, measured, estimate) };
     prepared.current.set(key, p);
     return p;
   };
