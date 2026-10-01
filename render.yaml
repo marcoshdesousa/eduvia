@@ -11,7 +11,7 @@ services:
     # o nome vira o endereço gratuito: https://eduvia.onrender.com (se o nome estiver livre no Render)
     name: eduvia
     runtime: node
-    plan: starter # discos persistentes exigem plano pago
+    plan: standard # 2 GB: site + leitura de PDFs (discos persistentes exigem plano pago)
     region: virginia
     buildCommand: npm ci && npm run build
     preDeployCommand: npx prisma migrate deploy && npm run db:seed
@@ -32,9 +32,12 @@ services:
       # quando tiver domínio próprio (ex.: https://eduvia.com.br).
       - key: BETTER_AUTH_SECRET
         generateValue: true
-      # processamento de PDFs, planos e lembretes dentro do próprio app
+      # processamento de PDFs, planos e lembretes no mesmo servidor, num processo separado do site
+      # (se um PDF pesado derrubar esse processo, ele reinicia sozinho e o site continua no ar)
       - key: RUN_WORKER_IN_WEB
         value: "true"
+      - key: WORKER_MAX_MB
+        value: "1024" # memória máxima do processo dos PDFs (o resto fica para o site)
       - key: STORAGE_DRIVER
         value: local
       - key: STORAGE_LOCAL_DIR

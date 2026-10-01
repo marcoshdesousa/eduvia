@@ -128,6 +128,8 @@ e2e/                   testes de ponta a ponta (Playwright)
 
 ## Estabilidade e novidades
 
+- **Worker em processo separado (sem custo extra):** com `RUN_WORKER_IN_WEB=true`, o site inicia o worker (PDFs, planos, lembretes) num processo próprio (`src/worker/supervisor.ts`), no mesmo servidor e com o mesmo disco. Se ele cair (ex.: PDF enorme), religa sozinho e o site continua no ar. `WORKER_MAX_MB` limita a memória dele (padrão 1024). `WORKER_MODE=inline` volta ao modo antigo.
+
 - **Fila que não dá erro à toa:** se a cota do Gemini acabar ou o Google oscilar, o material volta sozinho para a fila ("Na fila: … continuamos sozinhos") em vez de virar erro. Materiais parados (ex.: o servidor reiniciou) são retomados a cada 5 minutos. O processo registra erros soltos em vez de cair, e as telas têm páginas de erro amigáveis com "Tentar de novo".
 - **Início estilo Duolingo:** foguinho da sequência (aceso quando já estudou hoje), últimos 7 dias e botão para estudar.
 - **Sessão de estudo:** cronômetro do tempo escolhido (some quando acaba, sem tirar o aluno da tela), aviso de conteúdo pronto e mensagem de conforto ao concluir.
