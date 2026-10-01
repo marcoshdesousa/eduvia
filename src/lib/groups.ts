@@ -4,8 +4,9 @@ import type { GroupRole, ShareType } from "@/generated/prisma/enums";
 import { notify } from "@/lib/notifications";
 import { checkAchievementsSafe } from "@/lib/achievements";
 import { groupAccessError, groupCreateError } from "@/lib/billing";
+import { MAX_GROUP_MEMBERS } from "@/lib/plans";
 
-export const MAX_MEMBERS = 50;
+export const MAX_MEMBERS = MAX_GROUP_MEMBERS;
 
 export class GroupError extends Error {}
 

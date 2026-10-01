@@ -23,8 +23,8 @@ import { Logo } from "@/components/brand";
 import { SiteFooter } from "@/components/site-footer";
 import { buttonClass } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
-import { formatBRL, getPlan } from "@/lib/billing";
-import { PAID_PLAN } from "@/lib/plans";
+import { formatBRL, listPlans } from "@/lib/billing";
+import { PAID_PLAN, planFeatures } from "@/lib/plans";
 
 const STEPS = [
   { icon: FileUp, title: "Envie seu material", text: "PDFs, apostilas, fotos do caderno, DOCX ou texto colado. Para concurso, mande também o edital." },
@@ -55,11 +55,11 @@ const FAQ = [
   },
   {
     q: "Preciso pagar alguma coisa para começar?",
-    a: "Não. A conta é grátis e não pede cartão. No cadastro você ativa o Eduvia com uma chave gratuita do Google (o passo a passo aparece lá). Quando quiser tudo liberado, é só assinar o plano Eduvia.",
+    a: "Não. A conta é grátis e não pede cartão. No cadastro você ativa o Eduvia com uma chave gratuita do Google (o passo a passo aparece lá). Quando quiser mais, é só assinar um plano.",
   },
   {
     q: "Quanto custa?",
-    a: "Você começa grátis, com limites pequenos para testar. O plano Eduvia libera tudo por R$ 7 a cada 7 dias ou R$ 15 a cada 30 dias. O pagamento é combinado pelo WhatsApp (Pix) e não há renovação automática.",
+    a: "Você começa grátis, com limites pequenos para testar. Os planos começam em R$ 7 a cada 7 dias ou R$ 15 a cada 30 dias (Básico) e vão até o Ilimitado, por R$ 80. Todos têm PDFs e páginas sem limite; o que muda é quantos guias de estudo você cria por mês. O pagamento é combinado pelo WhatsApp (Pix) e não há renovação automática.",
   },
   {
     q: "Meus materiais e dados ficam seguros?",
@@ -77,9 +77,9 @@ const FAQ = [
 
 export default async function Home() {
   if (await getCurrentUser()) redirect("/inicio");
-  const plan = await getPlan(PAID_PLAN);
-  const week = formatBRL(plan?.priceWeekCents ?? 700);
-  const month = formatBRL(plan?.priceMonthCents ?? 1500);
+  const plans = (await listPlans()).filter((p) => p.slug !== "gratis" && p.active && p.priceMonthCents > 0);
+  const basic = plans.find((p) => p.slug === PAID_PLAN) ?? plans[0];
+  const month = formatBRL(basic?.priceMonthCents ?? 1500);
 
   return (
     <div className="relative overflow-x-clip">
@@ -120,7 +120,7 @@ export default async function Home() {
               <a href="#como-funciona" className={buttonClass("outline", "lg")}>Ver como funciona</a>
             </div>
             <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
-              {["Sem cartão", "Pronto em 2 minutos", `Tudo liberado por ${month}/mês`].map((t) => (
+              {["Sem cartão", "Pronto em 2 minutos", `Planos a partir de ${month}/mês`].map((t) => (
                 <li key={t} className="inline-flex items-center gap-1.5"><Check size={16} className="text-success" />{t}</li>
               ))}
             </ul>
@@ -165,13 +165,22 @@ export default async function Home() {
 
         {/* ── Preço */}
         <section id="preco" className="scroll-mt-20 py-14">
-          <SectionTitle kicker="Preço" title="Um plano só, com tudo liberado" subtitle="Comece grátis. Quando quiser mais, assine pelo WhatsApp." />
-          <div className="mx-auto mt-10 grid max-w-3xl gap-4 md:grid-cols-2">
-            <PriceCard label="Semanal" price={week} period="7 dias" />
-            <PriceCard label="Mensal" price={month} period="30 dias" highlight />
+          <SectionTitle kicker="Preço" title="Planos que cabem no bolso" subtitle="Comece grátis. Todos os planos têm PDFs e páginas sem limite; o que muda é quantos guias de estudo você cria por mês." />
+          <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {plans.map((p) => (
+              <PriceCard
+                key={p.slug}
+                label={p.name}
+                price={formatBRL(p.priceMonthCents)}
+                period="30 dias"
+                extra={p.priceWeekCents > 0 ? `ou ${formatBRL(p.priceWeekCents)} por 7 dias` : undefined}
+                features={planFeatures(p.limits).filter((f) => !f.startsWith("Sem "))}
+                highlight={p.slug === "ilimitado"}
+              />
+            ))}
           </div>
           <ul className="mx-auto mt-6 grid max-w-3xl gap-2 text-sm text-muted sm:grid-cols-2">
-            {["Preparações e PDFs à vontade", "Sessões, testes rápidos, simulados e redação", "Professor IA com o seu material", "Grupos de estudo e ranking", "Revisões e banco de erros ilimitados", "Sem renovação automática"].map((t) => (
+            {["Testes rápidos à vontade em todos os planos", "Revisões e banco de erros ilimitados", "Grupos de estudo com torneios", "Sem renovação automática"].map((t) => (
               <li key={t} className="inline-flex items-center gap-2"><Check size={16} className="shrink-0 text-success" />{t}</li>
             ))}
           </ul>
@@ -221,15 +230,20 @@ function SectionTitle({ kicker, title, subtitle }: { kicker: string; title: stri
   );
 }
 
-function PriceCard({ label, price, period, highlight }: { label: string; price: string; period: string; highlight?: boolean }) {
+function PriceCard({ label, price, period, extra, features, highlight }: { label: string; price: string; period: string; extra?: string; features: string[]; highlight?: boolean }) {
   return (
-    <div className={`rounded-2xl border p-6 ${highlight ? "border-primary bg-primary/5 shadow-[0_0_0_1px_var(--primary)]" : "border-border bg-surface"}`}>
+    <div className={`flex flex-col rounded-2xl border p-6 ${highlight ? "border-primary bg-primary/5 shadow-[0_0_0_1px_var(--primary)]" : "border-border bg-surface"}`}>
       <div className="flex items-center justify-between">
         <span className="font-semibold">{label}</span>
-        {highlight && <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">Mais econômico</span>}
+        {highlight && <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">Tudo ilimitado</span>}
       </div>
       <div className="font-display mt-3 text-4xl font-extrabold">{price}</div>
-      <p className="text-sm text-muted">por {period}</p>
+      <p className="text-sm text-muted">por {period}{extra ? ` · ${extra}` : ""}</p>
+      <ul className="mt-4 flex-1 space-y-1.5 text-sm">
+        {features.map((f) => (
+          <li key={f} className="flex items-start gap-2"><Check size={15} className="mt-0.5 shrink-0 text-success" />{f}</li>
+        ))}
+      </ul>
       <Link href="/cadastro" className={buttonClass(highlight ? "primary" : "outline", "md", "mt-6 w-full")}>Começar grátis</Link>
     </div>
   );

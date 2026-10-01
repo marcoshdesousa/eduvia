@@ -227,7 +227,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
     orderBy: { createdAt: "desc" },
     take: 30,
   });
-  const paidPlans = plans.filter((p) => p.slug !== "gratis").map((p) => ({ slug: p.slug, name: p.name, week: formatBRL(p.priceWeekCents), month: formatBRL(p.priceMonthCents) }));
+  const paidPlans = plans.filter((p) => p.slug !== "gratis").map((p) => ({ slug: p.slug, name: p.name, week: p.priceWeekCents > 0 ? formatBRL(p.priceWeekCents) : null, month: formatBRL(p.priceMonthCents) }));
 
   return (
     <div className="space-y-6">

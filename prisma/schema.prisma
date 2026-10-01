@@ -871,8 +871,9 @@ model Group {
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
 
-  members  GroupMember[]
-  invites  GroupInvite[]
+  members     GroupMember[]
+  invites     GroupInvite[]
+  tournaments Tournament[]
   shares   GroupShare[]
   messages GroupMessage[]
 }
@@ -1038,4 +1039,27 @@ model SupportMessage {
   @@index([userId, createdAt])
   @@index([ticketId, createdAt])
   @@index([fromStaff, readAt])
+}
+
+/// Registro de cada preparação (guia de estudo) criada: o limite do plano é por mês e não volta ao apagar.
+model PreparationCreation {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// Torneio do grupo: ranking de XP dos membros entre o início e o fim.
+model Tournament {
+  id          String   @id @default(cuid())
+  groupId     String
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name        String
+  startsAt    DateTime @default(now())
+  endsAt      DateTime
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([groupId, endsAt])
 }

@@ -31,7 +31,7 @@ describe("assinatura", () => {
     const eduvia = DEFAULT_PLANS.find((p) => p.slug === "eduvia")!;
     const link = whatsappLink(subscribeMessage(eduvia, "MONTH", { name: "Ana", handle: "ana.silva" }));
     expect(link).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
-    expect(decodeURIComponent(link.split("text=")[1])).toContain("plano Eduvia mensal (30 dias)");
+    expect(decodeURIComponent(link.split("text=")[1])).toContain("plano Básico mensal (30 dias)");
     expect(decodeURIComponent(link.split("text=")[1])).toContain("15,00");
     expect(decodeURIComponent(link.split("text=")[1])).toContain("@ana.silva");
   });
@@ -57,6 +57,17 @@ describe("planos", () => {
     const f = planFeatures(DEFAULT_PLANS[0].limits);
     expect(f).toContain("Sem grupos");
     expect(f).toContain("3 testes rápidos por dia");
+    expect(f).toContain("PDFs e páginas sem limite");
+    expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("6 guias de estudo por mês");
     expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Professor IA: 40 mensagens por dia");
+    expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Testes rápidos à vontade");
+  });
+  it("faixas de guias e simulados por plano", () => {
+    const by = Object.fromEntries(DEFAULT_PLANS.map((p) => [p.slug, p]));
+    expect([by.eduvia, by.plus, by.pro, by.avancado, by.ilimitado].map((p) => p.limits.preparationsPerMonth)).toEqual([6, 8, 12, 15, 35]);
+    expect([by.eduvia, by.plus, by.pro, by.avancado, by.ilimitado].map((p) => p.limits.examsPerMonth)).toEqual([15, 20, 30, 40, -1]);
+    expect([by.eduvia, by.plus, by.pro, by.avancado, by.ilimitado].map((p) => p.priceMonthCents)).toEqual([1500, 2000, 2500, 3000, 8000]);
+    expect(by.ilimitado.limits.essaysPerDay).toBe(-1);
+    expect(DEFAULT_PLANS.every((p) => p.limits.pagesPerDay === -1 && p.limits.materials === -1)).toBe(true);
   });
 });

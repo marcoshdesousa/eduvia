@@ -4,11 +4,12 @@ import { endPlanAction, grantPlanAction } from "@/app/actions/billing";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/form";
 
-export function AdminUserActions({ userId, name, hasPlan, plans }: { userId: string; name: string; hasPlan: boolean; plans: { slug: string; name: string; week: string; month: string }[] }) {
+export function AdminUserActions({ userId, name, hasPlan, plans }: { userId: string; name: string; hasPlan: boolean; plans: { slug: string; name: string; week: string | null; month: string }[] }) {
   const [pending, start] = useTransition();
   const [plan, setPlan] = useState(plans[0]?.slug ?? "");
   const [interval, setInterval] = useState<"WEEK" | "MONTH">("MONTH");
   const chosen = plans.find((p) => p.slug === plan);
+  const period = chosen?.week ? interval : "MONTH";
   return (
     <div className="flex flex-wrap items-center gap-2">
       {plans.length > 1 && (
@@ -16,16 +17,16 @@ export function AdminUserActions({ userId, name, hasPlan, plans }: { userId: str
           {plans.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}
         </Select>
       )}
-      <Select value={interval} onChange={(e) => setInterval(e.target.value as "WEEK" | "MONTH")} className="h-8 w-auto text-xs" aria-label="Período">
-        <option value="WEEK">7 dias ({chosen?.week})</option>
+      <Select value={period} onChange={(e) => setInterval(e.target.value as "WEEK" | "MONTH")} className="h-8 w-auto text-xs" aria-label="Período">
+        {chosen?.week && <option value="WEEK">7 dias ({chosen.week})</option>}
         <option value="MONTH">30 dias ({chosen?.month})</option>
       </Select>
       <Button
         size="sm"
         disabled={pending || !plan}
         onClick={() =>
-          confirm(`Confirmar pagamento e liberar o plano ${chosen?.name} por ${interval === "WEEK" ? "7" : "30"} dias para ${name}?`) &&
-          start(async () => void (await grantPlanAction(userId, plan, interval)))
+          confirm(`Confirmar pagamento e liberar o plano ${chosen?.name} por ${period === "WEEK" ? "7" : "30"} dias para ${name}?`) &&
+          start(async () => void (await grantPlanAction(userId, plan, period)))
         }
       >
         Liberar

@@ -110,11 +110,13 @@ export function QuickTestPlayer({
   const options = q.options.length ? q.options : ["Certo", "Errado"];
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between text-sm">
-        <span className="font-semibold">{name}</span>
-        <span className="text-muted">Pergunta {number} de {total}</span>
+      <div className="flex items-end justify-between gap-3">
+        <PixelStage state={stage} level={level} animKey={animKey} />
+        <div className="text-right text-sm">
+          <div className="font-semibold">{name}</div>
+          <div className="text-muted">Pergunta {number} de {total}</div>
+        </div>
       </div>
-      <PixelStage state={stage} level={level} animKey={animKey} />
       <div className="h-2 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-label="Tempo restante" aria-valuemin={0} aria-valuemax={seconds} aria-valuenow={Math.ceil(left / 1000)}>
         <div className={cn("h-full rounded-full transition-[width] duration-100", pct < 0.25 ? "bg-danger" : "bg-primary")} style={{ width: `${pct * 100}%` }} />
       </div>

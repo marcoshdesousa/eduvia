@@ -15,6 +15,16 @@ export const auth = betterAuth({
   database: prismaAdapter(db, { provider: "postgresql" }),
   emailAndPassword: { enabled: true, minPasswordLength: 8 },
   plugins: [nextCookies()],
+  // Login único: entrar em um aparelho desconecta os outros.
+  databaseHooks: {
+    session: {
+      create: {
+        after: async (session) => {
+          await db.session.deleteMany({ where: { userId: session.userId, id: { not: session.id } } });
+        },
+      },
+    },
+  },
 });
 
 export const internalEmail = (cpf: string) => `${cpf}@cpf.eduvia.invalid`;

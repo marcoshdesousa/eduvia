@@ -7,7 +7,7 @@ import { requireReadyUser } from "@/lib/session";
 import { getOwnedPreparation } from "@/lib/authz";
 import { generatePlan } from "@/lib/plan";
 import { today } from "@/lib/core/dates";
-import { preparationLimitError } from "@/lib/billing";
+import { activePreparationLimitError, preparationLimitError } from "@/lib/billing";
 import type { FormState } from "./account";
 
 const DETAIL_KEYS = ["grade", "schoolSubject", "exam", "course", "discipline", "orgao", "cargo", "goal"] as const;
@@ -67,6 +67,7 @@ export async function createPreparationAction(_: FormState, formData: FormData):
       subjects: initialSubject ? { create: { name: initialSubject, weight: 1 } } : undefined,
     },
   });
+  await db.preparationCreation.create({ data: { userId: user.id } });
   redirect(`/preparacoes/${prep.id}?nova=1`);
 }
 
@@ -105,7 +106,7 @@ export async function setPreparationStatusAction(preparationId: string, status: 
   const user = await requireReadyUser();
   const prep = await getOwnedPreparation(preparationId, user.id);
   if (!prep) return;
-  if (status === "ACTIVE" && (await preparationLimitError(user))) return;
+  if (status === "ACTIVE" && (await activePreparationLimitError(user))) return;
   await db.preparation.update({ where: { id: prep.id }, data: { status } });
   if (status === "ACTIVE") await generatePlan(prep.id);
   revalidatePath("/preparacoes");

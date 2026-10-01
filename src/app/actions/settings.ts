@@ -18,7 +18,7 @@ export async function updateProfileAction(_: FormState, formData: FormData): Pro
   if (name.length < 2) return { error: "Informe seu nome." };
   const avatar = String(formData.get("avatar") ?? "");
   if (isAvatarId(avatar) && avatar !== user.avatar && !canUseAvatar(avatar, (await getAccess(user)).mode === "full")) {
-    return { error: "Esse personagem é só para assinantes. Assine o Eduvia para liberar todos." };
+    return { error: "Esse personagem é só para assinantes. Assine um plano para liberar todos." };
   }
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   if (!phone) return { error: "Telefone inválido. Use DDD + número." };

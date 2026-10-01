@@ -1,5 +1,6 @@
 // Assinatura manual: o aluno paga pelo WhatsApp e um admin libera o plano em /admin.
-// Um plano pago (Eduvia: 7 ou 30 dias) e o plano Grátis, bem limitado, para testar. Limites são por dia.
+// Planos pagos por guias de estudo no mês (Básico 7 ou 30 dias; os outros mensais) e o plano Grátis para testar.
+// PDFs e páginas não têm limite em nenhum plano.
 import { db } from "@/lib/db";
 import { addDays, today } from "@/lib/core/dates";
 import { DEFAULT_PLANS, isUnlimited, normalizeLimits, PAID_PLAN, PERIOD_DAYS, type PlanLimits, type PlanSlug } from "@/lib/plans";
@@ -77,10 +78,10 @@ export async function getAccess(user: UserLike): Promise<Access> {
 
 // ───────────── Uso de hoje (para aplicar limites e mostrar ao aluno) ─────────────
 
-/** Páginas enviadas hoje (todas) e páginas escaneadas lidas pela IA hoje. */
+/** Páginas enviadas hoje (só arquivos que deram certo) e páginas escaneadas lidas pela IA hoje. */
 async function pagesToday(userId: string, dayStart: Date, exceptMaterialId?: string) {
   const mats = await db.material.findMany({
-    where: { uploaderId: userId, createdAt: { gte: dayStart }, status: { not: "ERROR" }, ...(exceptMaterialId ? { id: { not: exceptMaterialId } } : {}) },
+    where: { uploaderId: userId, createdAt: { gte: dayStart }, status: "READY", ...(exceptMaterialId ? { id: { not: exceptMaterialId } } : {}) },
     select: { blobId: true, blob: { select: { pageCount: true } } },
   });
   const blobIds = mats.flatMap((m) => (m.blobId ? [m.blobId] : []));
@@ -92,9 +93,10 @@ export async function usage(user: UserLike) {
   const tz = user.timezone ?? "America/Sao_Paulo";
   const dayStart = localDayStart(tz);
   const monthStart = localMonthStart(tz);
-  const [activePreparations, materials, pages, newSessionsToday, gamesToday, examsThisMonth, essaysToday, tutorToday, groupsOwned, studyDay] = await Promise.all([
+  const [preparationsThisMonth, activePreparations, materials, pages, newSessionsToday, gamesToday, examsThisMonth, essaysToday, tutorToday, groupsOwned, studyDay] = await Promise.all([
+    db.preparationCreation.count({ where: { userId: user.id, createdAt: { gte: monthStart } } }),
     db.preparation.count({ where: { userId: user.id, status: "ACTIVE" } }),
-    db.material.count({ where: { preparation: { userId: user.id }, role: "CONTENT", status: { not: "ERROR" } } }),
+    db.material.count({ where: { preparation: { userId: user.id }, role: "CONTENT", status: "READY" } }),
     pagesToday(user.id, dayStart),
     db.studySession.count({ where: { userId: user.id, kind: "STUDY", startedAt: { gte: dayStart } } }),
     db.gameRun.count({ where: { userId: user.id, startedAt: { gte: dayStart } } }),
@@ -105,6 +107,7 @@ export async function usage(user: UserLike) {
     db.studyDay.findUnique({ where: { userId_date: { userId: user.id, date: today(tz) } } }),
   ]);
   return {
+    preparationsThisMonth,
     activePreparations,
     materials,
     pagesToday: pages.pages,
@@ -122,7 +125,8 @@ export async function usage(user: UserLike) {
 const over = (used: number, max: number) => !isUnlimited(max) && used >= max;
 
 function upgradeHint(a: Access) {
-  return a.reason === "free" ? " Assine o Eduvia para liberar mais." : "";
+  if (a.reason === "free") return " Assine um plano para liberar mais.";
+  return a.planSlug !== "ilimitado" && a.reason === "subscription" ? " Um plano maior libera mais." : "";
 }
 
 /** Mensagem de limite do dia atingido (a tela mostra o convite para descansar). */
@@ -132,12 +136,25 @@ function dailyLimit(a: Access, what: string) {
 
 // ───────────── Regras (devolvem a mensagem de bloqueio ou null) ─────────────
 
-export async function preparationLimitError(user: UserLike) {
+/** Ativar uma preparação arquivada: só olha as ativas ao mesmo tempo. */
+export async function activePreparationLimitError(user: UserLike) {
   const a = await getAccess(user);
   const used = await db.preparation.count({ where: { userId: user.id, status: "ACTIVE" } });
   return over(used, a.limits.activePreparations)
-    ? `O plano ${a.planName} permite ${a.limits.activePreparations} preparação(ões) ativa(s). Arquive ou exclua uma para criar outra.${upgradeHint(a)}`
+    ? `O plano ${a.planName} permite ${a.limits.activePreparations} preparação(ões) ativa(s). Arquive ou exclua uma para ativar outra.${upgradeHint(a)}`
     : null;
+}
+
+/** Criar um guia de estudo: limite por mês (apagar ou editar não devolve a vaga) e ativas ao mesmo tempo. */
+export async function preparationLimitError(user: UserLike & { timezone?: string }) {
+  const a = await getAccess(user);
+  const max = a.limits.preparationsPerMonth;
+  if (max === 0) return `O plano ${a.planName} não inclui criar guias de estudo.${upgradeHint(a)}`;
+  const used = await db.preparationCreation.count({ where: { userId: user.id, createdAt: { gte: localMonthStart(user.timezone ?? "America/Sao_Paulo") } } });
+  if (over(used, max)) {
+    return `Você já criou ${used} de ${max} guia${max === 1 ? "" : "s"} de estudo este mês no plano ${a.planName}. Apagar um guia não devolve a vaga; no mês que vem libera de novo.${upgradeHint(a)}`;
+  }
+  return activePreparationLimitError(user);
 }
 
 /** Envio de arquivo de conteúdo (conta PDFs guardados e páginas do dia). Edital/ementa só contam páginas. */
