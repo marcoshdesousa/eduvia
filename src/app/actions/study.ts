@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireReadyUser } from "@/lib/session";
-import { answerQuestion, completeSession, lessonBlocker, nextLesson, openSession, retakeSession, SESSION_MINUTES } from "@/lib/study";
+import { answerQuestion, completeSession, lessonBlocker, nextLesson, openSession, retakeSession, SESSION_MINUTES, studyPulse } from "@/lib/study";
 import { db } from "@/lib/db";
 import { aiErrorMessage } from "@/lib/ai/client";
 import { sessionLimitError } from "@/lib/billing";
@@ -68,4 +68,10 @@ export async function retakeSessionAction(sessionId: string) {
   await retakeSession(sessionId, user.id);
   revalidatePath("/inicio");
   return { ok: true };
+}
+
+/** A cada minuto com a aula aberta: soma o tempo de estudo do dia (a sequência vale com 5 min). */
+export async function studyPulseAction(sessionId: string) {
+  const user = await requireReadyUser();
+  await studyPulse(sessionId, user.id);
 }

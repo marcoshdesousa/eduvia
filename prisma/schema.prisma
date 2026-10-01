@@ -450,6 +450,9 @@ model StudySession {
   passedAt         DateTime?
   /// Início da tentativa atual (refazer a aula começa uma nova rodada de respostas).
   roundStartedAt   DateTime        @default(now())
+  /// Minutos já contados nesta tentativa (1 por minuto com a aula aberta); a sequência vale com 5 min no dia.
+  roundPulses      Int             @default(0)
+  lastPulseAt      DateTime?
 
   @@index([userId, startedAt])
 }

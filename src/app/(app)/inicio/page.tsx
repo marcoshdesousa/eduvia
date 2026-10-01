@@ -5,7 +5,7 @@ import { InstallAppBanner } from "@/components/install-app";
 import { requireReadyUser } from "@/lib/session";
 import { ensurePlanFresh } from "@/lib/plan";
 import { addDays, formatDay, keyFromDay, today, weekday } from "@/lib/core/dates";
-import { levelFromXp, liveStreak } from "@/lib/gamification";
+import { levelFromXp, liveStreak, STREAK_MIN_MINUTES } from "@/lib/gamification";
 import { StreakCard } from "@/components/streak-card";
 import { weeklyEssays } from "@/lib/essay-plan";
 import { MasteryBadge, Progress } from "@/components/ui/badge";
@@ -48,11 +48,13 @@ export default async function Page() {
       where: { subject: { preparation: { userId: user.id, status: "ACTIVE" } } },
       select: { id: true, subject: { select: { preparationId: true } }, mastery: { where: { userId: user.id }, select: { studyDone: true } } },
     }),
-    db.studyDay.findMany({ where: { userId: user.id, date: { gte: addDays(day, -6) }, minutes: { gt: 0 } }, select: { date: true } }),
+    db.studyDay.findMany({ where: { userId: user.id, date: { gte: addDays(day, -6) } }, select: { date: true, minutes: true } }),
   ]);
   const essays = await weeklyEssays(user);
   const streak = liveStreak(user, preps.flatMap((p) => p.studyDays), day);
-  const studied = new Set(lastDays.map((d) => keyFromDay(d.date)));
+  // o dia conta para a sequência com pelo menos 5 minutos de estudo
+  const studied = new Set(lastDays.filter((d) => d.minutes >= STREAK_MIN_MINUTES).map((d) => keyFromDay(d.date)));
+  const minutesToday = lastDays.find((d) => keyFromDay(d.date) === keyFromDay(day))?.minutes ?? 0;
 
   const todaySessions = [...overdue, ...todayOnly];
   const pending = todaySessions.filter((s) => s.status === "PENDING");
@@ -84,7 +86,7 @@ export default async function Page() {
         </p>
       </div>
 
-      <StreakCard streak={streak} best={user.longestStreak} day={day} studied={studied} href={pending.find((p) => unlocked.has(p.id)) ? `/estudar/${pending.find((p) => unlocked.has(p.id))!.id}` : preps.length ? "/revisoes" : "/preparacoes/nova"} />
+      <StreakCard streak={streak} best={user.longestStreak} day={day} studied={studied} minutesToday={minutesToday} goal={STREAK_MIN_MINUTES} href={pending.find((p) => unlocked.has(p.id)) ? `/estudar/${pending.find((p) => unlocked.has(p.id))!.id}` : preps.length ? "/revisoes" : "/preparacoes/nova"} />
 
       {!preps.length ? (
         <Card className="text-center">

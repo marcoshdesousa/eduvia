@@ -1,11 +1,11 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { LessonNarrator } from "@/components/lesson-narrator";
 import { ContentReadyToast, finishMessage, StudyTimer } from "./study-timer";
 import { BookOpen, Brain, CheckCircle2, Lightbulb, PartyPopper, RotateCcw, XCircle } from "lucide-react";
-import { completeSessionAction, retakeSessionAction } from "@/app/actions/study";
+import { completeSessionAction, retakeSessionAction, studyPulseAction } from "@/app/actions/study";
 import { useRouter } from "next/navigation";
 import { QuestionCard, SourceLinks, type QuestionData, type SourceRef } from "@/components/question-card";
 import { linkSources } from "@/lib/sources";
@@ -57,6 +57,16 @@ export function SessionView({
   const [comfort, setComfort] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const current = steps[step].key;
+
+  // conta o tempo de estudo (1 min por minuto com a aula aberta na tela): a sequência vale com 5 min no dia
+  const active = !completed && !summary;
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") studyPulseAction(sessionId).catch(() => {});
+    }, 60_000);
+    return () => clearInterval(t);
+  }, [active, sessionId]);
   const markAnswered = (id: string) => setAnsweredIds((s) => new Set(s).add(id));
 
   return (

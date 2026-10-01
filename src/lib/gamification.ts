@@ -34,18 +34,23 @@ export async function addXp(userId: string, amount: number, reason: string, refI
  * Registra um dia de estudo e atualiza a sequência.
  * A sequência só quebra se o aluno pulou um dia em que tinha estudo agendado (dias de folga não contam).
  */
+/** Minutos de estudo no dia para a sequência (foguinho) valer. */
+export const STREAK_MIN_MINUTES = 5;
+
+/** Soma minutos de estudo no dia; quando o dia chega a 5 minutos, a sequência conta. */
 export async function registerStudy(userId: string, minutes: number) {
   const user = await db.user.findUniqueOrThrow({
     where: { id: userId },
     include: { preparations: { where: { status: "ACTIVE" }, select: { studyDays: true } } },
   });
   const day = today(user.timezone);
-  await db.studyDay.upsert({
+  const studyDay = await db.studyDay.upsert({
     where: { userId_date: { userId, date: day } },
     create: { userId, date: day, minutes },
     update: { minutes: { increment: minutes } },
   });
   if (user.lastStudyDate && diffDays(day, user.lastStudyDate) === 0) return;
+  if (studyDay.minutes < STREAK_MIN_MINUTES) return;
 
   const scheduled = new Set(user.preparations.flatMap((p) => p.studyDays));
   let streak = 1;

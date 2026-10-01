@@ -373,7 +373,21 @@ export async function nextLesson(preparationId: string) {
 export async function retakeSession(sessionId: string, userId: string) {
   const session = await db.studySession.findFirst({ where: { id: sessionId, userId } });
   if (!session) return null;
-  return db.studySession.update({ where: { id: sessionId }, data: { roundStartedAt: new Date(), completedAt: null } });
+  return db.studySession.update({ where: { id: sessionId }, data: { roundStartedAt: new Date(), completedAt: null, roundPulses: 0 } });
+}
+
+/**
+ * Conta 1 minuto de estudo enquanto a aula está aberta (chamado a cada minuto pela tela da aula).
+ * Ignora chamadas repetidas em menos de 50 s e aulas já concluídas.
+ */
+export async function studyPulse(sessionId: string, userId: string) {
+  const since = new Date(Date.now() - 50_000);
+  const updated = await db.studySession.updateMany({
+    where: { id: sessionId, userId, completedAt: null, OR: [{ lastPulseAt: null }, { lastPulseAt: { lt: since } }] },
+    data: { lastPulseAt: new Date(), roundPulses: { increment: 1 } },
+  });
+  if (updated.count) await registerStudy(userId, 1);
+  return updated.count > 0;
 }
 
 export type CompleteResult = { correct: number; total: number; score: number; passed: boolean; firstPass: boolean; best: number };
@@ -395,6 +409,8 @@ export async function completeSession(sessionId: string, userId: string): Promis
   if (session.completedAt) return { ...r, passed, firstPass: false, best };
   const planned = session.plannedSession;
   const minutes = Math.max(1, Math.min(planned?.durationMin ?? 60, Math.round((Date.now() - session.roundStartedAt.getTime()) / 60000)));
+  // minutos que ainda não foram contados enquanto a aula estava aberta
+  const untracked = Math.max(0, minutes - session.roundPulses);
   const firstPass = passed && !session.passedAt;
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
   const day = today(user.timezone);
@@ -436,7 +452,7 @@ export async function completeSession(sessionId: string, userId: string): Promis
     }
   }
   if (firstPass) await addXp(userId, planned?.kind === "REVIEW" ? XP.reviewDone : XP.sessionDone, "sessao", sessionId);
-  await registerStudy(userId, minutes);
+  if (untracked) await registerStudy(userId, untracked);
   await checkAchievementsSafe(userId);
   return { ...r, passed, firstPass, best };
 }

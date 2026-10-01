@@ -63,10 +63,16 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
   await page.getByRole("button", { name: /Reestudar e refazer a aula/ }).click();
   await expect(page.getByRole("button", { name: /Já li|Continuar/ })).toBeVisible();
   await expect(page.getByText(/Sei que pode parecer muito ou pouco tempo/)).toBeVisible();
+  // a sequência só vale com 5 minutos de estudo no dia: simula 4 min já estudados hoje (a aula completa os 5)
+  await sql(
+    `INSERT INTO "StudyDay" ("userId", date, minutes) SELECT id, (now() AT TIME ZONE 'America/Sao_Paulo')::date, 4 FROM "user" WHERE handle = $1
+     ON CONFLICT ("userId", date) DO UPDATE SET minutes = 4`,
+    [handle],
+  );
   await answerRound(page, true);
   await expect(page.getByText("Aula aprovada! Próxima aula liberada.")).toBeVisible();
   await expect(page.getByText("100%", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Você escolheu 10 min e terminou em|Você focou por/)).toBeVisible();
+  await expect(page.getByText(/Você escolheu 10 min e terminou em|Você focou por/).first()).toBeVisible();
   await expect(page.getByText(/Sei que pode parecer muito ou pouco tempo/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Refazer para melhorar a nota/ })).toBeVisible();
 

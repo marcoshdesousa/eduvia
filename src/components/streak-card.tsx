@@ -7,7 +7,23 @@ import { buttonClass } from "@/components/ui/button";
  * Sequência no estilo Duolingo: foguinho aceso quando o aluno já estudou hoje,
  * apagado (cinza) quando ainda falta estudar para manter a sequência.
  */
-export function StreakCard({ streak, best, day, studied, href }: { streak: number; best: number; day: Date; studied: Set<string>; href: string }) {
+export function StreakCard({
+  streak,
+  best,
+  day,
+  studied,
+  href,
+  minutesToday = 0,
+  goal = 5,
+}: {
+  streak: number;
+  best: number;
+  day: Date;
+  studied: Set<string>;
+  href: string;
+  minutesToday?: number;
+  goal?: number;
+}) {
   const lit = studied.has(keyFromDay(day));
   const days = Array.from({ length: 7 }, (_, i) => addDays(day, i - 6));
   return (
@@ -29,8 +45,8 @@ export function StreakCard({ streak, best, day, studied, href }: { streak: numbe
             {lit
               ? "Foguinho aceso! Você já estudou hoje. Volte amanhã para manter a sequência."
               : streak > 0
-                ? "Estude hoje para não perder a sua sequência!"
-                : "Comece uma sequência hoje: basta uma sessão de estudo."}
+                ? `Estude ${goal} minutos hoje para não perder a sua sequência!`
+                : `Comece uma sequência hoje: basta estudar ${goal} minutos.`}
           </p>
         </div>
       </div>
@@ -55,6 +71,17 @@ export function StreakCard({ streak, best, day, studied, href }: { streak: numbe
           );
         })}
       </ol>
+      {!lit && (
+        <div className="mt-3">
+          <div className="mb-1 flex justify-between text-xs text-muted">
+            <span>Estudo de hoje</span>
+            <span>{Math.min(minutesToday, goal)} de {goal} min</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuemin={0} aria-valuemax={goal} aria-valuenow={Math.min(minutesToday, goal)}>
+            <div className="h-full rounded-full bg-[#f97316]" style={{ width: `${Math.min(100, (minutesToday / goal) * 100)}%` }} />
+          </div>
+        </div>
+      )}
       <div className="mt-4 flex items-center justify-between gap-3">
         <span className="text-xs text-muted">Recorde: {best} {best === 1 ? "dia" : "dias"}</span>
         {!lit && <Link href={href} className={buttonClass("primary", "sm")}>Estudar agora</Link>}
