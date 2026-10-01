@@ -78,13 +78,13 @@ export function InstallSteps() {
 
 const DISMISS_KEY = "eduvia-install-dismissed";
 
-/** Aviso na tela inicial convidando a instalar o app (some se já instalou ou se a pessoa fechar). */
+/** Convite para instalar o app: aparece em toda visita até instalar (fechar esconde só nesta visita). */
 export function InstallAppBanner() {
   const { info, prompt, install } = useInstall();
   const [hidden, setHidden] = useState(true);
   useEffect(() => {
     try {
-      setHidden(localStorage.getItem(DISMISS_KEY) === "1");
+      setHidden(sessionStorage.getItem(DISMISS_KEY) === "1");
     } catch {
       setHidden(false);
     }
@@ -108,7 +108,7 @@ export function InstallAppBanner() {
         onClick={() => {
           setHidden(true);
           try {
-            localStorage.setItem(DISMISS_KEY, "1");
+            sessionStorage.setItem(DISMISS_KEY, "1"); // volta na próxima visita até instalar
           } catch {}
         }}
       >

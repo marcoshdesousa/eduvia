@@ -4,7 +4,7 @@ import { enqueue, getBoss, QUEUES, type JobPayloads } from "@/lib/queue";
 import { processMaterial } from "@/lib/materials/process";
 import { generatePlan } from "@/lib/plan";
 import { db } from "@/lib/db";
-import { sendBillingReminders, sendStudyReminders } from "@/lib/jobs/reminders";
+import { sendBillingReminders, sendDailyNudges, sendStudyReminders } from "@/lib/jobs/reminders";
 import { pushConfigured } from "@/lib/notifications";
 import { isMockAi } from "@/lib/ai/client";
 import { usingLocalEmbeddings } from "@/lib/ai/embeddings";
@@ -48,6 +48,8 @@ export async function startWorker({ handleSignals }: { handleSignals: boolean })
   await boss.work(QUEUES.reminders, async () => {
     const n = await sendStudyReminders();
     if (n) console.log(`[worker] ${n} lembrete(s) de estudo`);
+    const nudges = await sendDailyNudges().catch((e) => (console.error("[worker] chamadas do dia", e), 0));
+    if (nudges) console.log(`[worker] ${nudges} chamada(s) do dia`);
     await recoverStuckMaterials();
   });
 

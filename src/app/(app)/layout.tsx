@@ -11,7 +11,8 @@ import { getAccess } from "@/lib/billing";
 import { AccessBanner } from "@/components/access-banner";
 import { unreadCount } from "@/lib/notifications";
 import { db } from "@/lib/db";
-import { RegisterServiceWorker } from "@/components/push-settings";
+import { EnableNotificationsBanner, RegisterServiceWorker } from "@/components/push-settings";
+import { vapidPublicKey } from "@/lib/notifications";
 import { NotificationBell } from "@/components/notification-bell";
 import { PdfViewerHost } from "@/components/pdf-viewer";
 
@@ -61,6 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         <AccessBanner access={access} />
+        <EnableNotificationsBanner vapidKey={vapidPublicKey()} />
         {isMockAi() && (
           <div className="border-b border-warning/30 bg-warning/10 px-4 py-2 text-center text-xs text-warning">
             Modo de demonstração: IA simulada (AI_MODE=mock). Textos e questões não vêm do Gemini.

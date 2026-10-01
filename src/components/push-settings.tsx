@@ -27,6 +27,72 @@ export function RegisterServiceWorker() {
 
 type State = "unsupported" | "denied" | "off" | "on" | "loading";
 
+/** Pede permissão e inscreve este aparelho para receber notificações. */
+export async function enablePush(vapidKey: string): Promise<"on" | "denied" | "off" | { error: string }> {
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return permission === "denied" ? "denied" : "off";
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) });
+  const res = await fetch("/api/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub.toJSON()) });
+  if (!res.ok) {
+    await sub.unsubscribe();
+    return { error: (await res.json().catch(() => ({}))).error ?? "Não foi possível ativar." };
+  }
+  return "on";
+}
+
+/**
+ * Convite para ativar as notificações (aparece enquanto o aparelho não estiver inscrito).
+ * Fechar esconde só até a próxima visita.
+ */
+export function EnableNotificationsBanner({ vapidKey }: { vapidKey: string | null }) {
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    (async () => {
+      if (!vapidKey || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
+      if (Notification.permission === "denied") return;
+      try {
+        if (sessionStorage.getItem("eduvia:push-later") === "1") return;
+      } catch {}
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      if (!(await reg.pushManager.getSubscription())) setShow(true);
+    })().catch(() => {});
+  }, [vapidKey]);
+  if (!show) return null;
+  return (
+    <div className="flex items-center gap-3 border-b border-primary/30 bg-primary/10 px-4 py-2 text-sm">
+      <Bell size={16} className="shrink-0 text-primary" />
+      <span className="flex-1">Ative as notificações para receber o lembrete na hora de estudar.</span>
+      <Button
+        size="sm"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          const r = await enablePush(vapidKey!).catch(() => "off" as const);
+          setBusy(false);
+          if (r === "on" || r === "denied") setShow(false);
+        }}
+      >
+        Ativar
+      </Button>
+      <button
+        type="button"
+        aria-label="Agora não"
+        className="text-xs text-muted hover:text-foreground"
+        onClick={() => {
+          setShow(false);
+          try {
+            sessionStorage.setItem("eduvia:push-later", "1");
+          } catch {}
+        }}
+      >
+        Agora não
+      </button>
+    </div>
+  );
+}
+
 export function PushSettings({ vapidKey, remindersEnabled }: { vapidKey: string | null; remindersEnabled: boolean }) {
   const [state, setState] = useState<State>("loading");
   const [message, setMessage] = useState<string | null>(null);
@@ -45,17 +111,12 @@ export function PushSettings({ vapidKey, remindersEnabled }: { vapidKey: string 
 
   async function enable() {
     setMessage(null);
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") return setState(permission === "denied" ? "denied" : "off");
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey!) });
-    const res = await fetch("/api/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub.toJSON()) });
-    if (!res.ok) {
-      await sub.unsubscribe();
-      return setMessage((await res.json().catch(() => ({}))).error ?? "Não foi possível ativar.");
-    }
-    setState("on");
-    setMessage("Pronto! Enviamos uma notificação de teste.");
+    const r = await enablePush(vapidKey!);
+    if (r === "on") {
+      setState("on");
+      setMessage("Pronto! Enviamos uma notificação de teste.");
+    } else if (r === "denied" || r === "off") setState(r);
+    else setMessage(r.error);
   }
 
   async function disable() {
