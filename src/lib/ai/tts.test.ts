@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 import { cleanPcm, pcmToWav, rankTtsModels } from "./tts";
-import { sentenceTimeline, toBlocks, toSpeech } from "@/components/lesson-narrator";
+import { mapSentences, sentenceTimeline, toBlocks, toSpeech } from "@/components/lesson-narrator";
 
 describe("voz natural", () => {
   it("prefere modelos de voz flash e mais novos", () => {
@@ -47,5 +47,14 @@ describe("voz natural", () => {
   });
   it("o robô não lê as marcações de fonte", () => {
     expect(toSpeech("A fotossíntese [T1, T2] gera energia (T3). Fim.", ["T1", "T2", "T3"]).join(" ")).toBe("A fotossíntese gera energia. Fim.");
+  });
+  it("acha as frases no texto em ordem, sempre para a frente (a marcação não pula)", () => {
+    const flat = "Capítulo 1 — A fotossíntese Capítulo 1 — A fotossíntese é o processo pelo qual plantas transformam energia. p.1 Ela ocorre nos cloroplastos, organelas das folhas. p.1 Fim do capítulo.";
+    const parts = ["Capítulo 1 — A fotossíntese", "Capítulo 1 — A fotossíntese é o processo pelo qual plantas transformam energia.", "Ela ocorre nos cloroplastos, organelas das folhas.", "Fim do capítulo."];
+    const spots = mapSentences(flat, parts);
+    expect(spots.every(Boolean)).toBe(true);
+    for (let i = 1; i < spots.length; i++) expect(spots[i]!.start).toBeGreaterThanOrEqual(spots[i - 1]!.end - 1);
+    expect(flat.slice(spots[2]!.start, spots[2]!.end)).toBe("Ela ocorre nos cloroplastos, organelas das folhas.");
+    expect(flat.slice(spots[1]!.start, spots[1]!.end).startsWith("Capítulo 1 — A fotossíntese é")).toBe(true); // a 2ª ocorrência, não a 1ª
   });
 });

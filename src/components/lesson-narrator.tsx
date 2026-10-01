@@ -43,25 +43,76 @@ export function toBlocks(parts: string[], max = 2400): { text: string; from: num
   return blocks;
 }
 
-/** Momento (em segundos) em que cada frase começa no áudio da aula, pelo tamanho das frases de cada trecho. */
+/** "Peso" de fala de uma frase: letras + pausas de vírgula e de fim de frase (aproxima o tempo que a voz leva). */
+export function speechWeight(p: string) {
+  const letters = p.replace(/\s+/g, "").length;
+  const commas = (p.match(/[,;:]/g) ?? []).length;
+  const stops = (p.match(/[.!?]/g) ?? []).length || 1;
+  return letters + commas * 4 + stops * 7;
+}
+
+/** Momento (em segundos) em que cada frase começa no áudio da aula: tempo exato de cada trecho, dividido pelo peso das frases. */
 export function sentenceTimeline(parts: string[], blocks: { from: number; to: number }[], seconds: number[], tailPause = 0.35): number[] {
   const starts: number[] = [];
   let t = 0;
   blocks.forEach((b, i) => {
     const speech = Math.max(0.1, seconds[i] - tailPause);
-    const chars = parts.slice(b.from, b.to + 1).reduce((s, p) => s + p.length + 1, 0);
+    const weights = parts.slice(b.from, b.to + 1).map(speechWeight);
+    const total = weights.reduce((x, y) => x + y, 0) || 1;
     let acc = 0;
     for (let k = b.from; k <= b.to; k++) {
-      starts[k] = t + (acc / chars) * speech;
-      acc += parts[k].length + 1;
+      starts[k] = t + (acc / total) * speech;
+      acc += weights[k - b.from];
     }
     t += seconds[i];
   });
   return starts;
 }
 
+const plainChar = (c: string) =>
+  c
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+/**
+ * Acha cada frase no texto da aula, EM ORDEM e sempre para a frente (nunca volta para cima):
+ * compara só letras e números (ignora acentos, pontuação e as marcações "p.3").
+ * Devolve, para cada frase, o início e o fim no texto (ou null se não achou).
+ */
+export function mapSentences(flat: string, parts: string[]): ({ start: number; end: number } | null)[] {
+  let norm = "";
+  const back: number[] = [];
+  for (let i = 0; i < flat.length; i++) {
+    const c = plainChar(flat[i]);
+    for (const ch of c) {
+      norm += ch;
+      back.push(i);
+    }
+  }
+  let cursor = 0;
+  return parts.map((p) => {
+    const target = [...p].map(plainChar).join("");
+    if (target.length < 2) return null;
+    let at = norm.indexOf(target, cursor);
+    let len = target.length;
+    if (at === -1 || at - cursor > 4000) {
+      // frase com algo diferente no meio: procura pelo começo dela, perto de onde paramos
+      const head = target.slice(0, Math.min(30, target.length));
+      at = norm.indexOf(head, cursor);
+      if (at === -1 || at - cursor > 4000) return null;
+      len = Math.min(target.length, norm.length - at);
+    }
+    cursor = at + len;
+    let end = back[Math.min(at + len, back.length) - 1] + 1;
+    while (end < flat.length && /[.,;:!?)"”'»]/.test(flat[end])) end++; // inclui a pontuação do fim
+    return { start: back[at], end };
+  });
+}
+
 /** Marca em laranja a frase lida no texto da aula (CSS Custom Highlight; sem efeito em navegadores antigos). */
-function makeHighlighter(root: HTMLElement | null) {
+function makeHighlighter(root: HTMLElement | null, parts: string[]) {
   type H = { highlights?: Map<string, unknown> };
   const css = (globalThis as unknown as { CSS?: H }).CSS;
   const HighlightCtor = (globalThis as unknown as { Highlight?: new (r: Range) => unknown }).Highlight;
@@ -73,47 +124,37 @@ function makeHighlighter(root: HTMLElement | null) {
     style.textContent = "::highlight(eduvia-leitura){background-color:rgb(249 115 22 / 0.35);color:inherit}";
     document.head.appendChild(style);
   }
+  // texto da aula, sem as marcações de fonte ("p.3"), que o robô não lê
   const nodes: { node: Text; start: number }[] = [];
   let flat = "";
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => ((n.parentElement?.closest(".source-mark") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT)),
+  });
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     nodes.push({ node: n as Text, start: flat.length });
-    flat += (n as Text).data;
+    flat += (n as Text).data + " ";
   }
-  const lower = flat.toLowerCase();
-  let cursor = 0;
+  const spots = mapSentences(flat, parts);
   const at = (offset: number): [Text, number] => {
     let i = nodes.length - 1;
     while (i > 0 && nodes[i].start > offset) i--;
-    return [nodes[i].node, Math.min(offset - nodes[i].start, nodes[i].node.data.length)];
-  };
-  const find = (words: string[], from: number) => {
-    if (!words.length) return null;
-    const re = new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\s\\S]{0,12}?"), "g");
-    re.lastIndex = from;
-    const m = re.exec(lower);
-    return m ? { start: m.index, end: m.index + m[0].length } : null;
+    return [nodes[i].node, Math.max(0, Math.min(offset - nodes[i].start, nodes[i].node.data.length))];
   };
   return {
-    show(sentence: string) {
-      const words = sentence.toLowerCase().split(/\s+/).filter(Boolean);
-      const head = find(words.slice(0, Math.min(5, words.length)), Math.max(0, cursor - 200));
-      if (!head || !nodes.length) return;
-      const tail = words.length > 5 ? find(words.slice(-3), head.end) : null;
-      const end = tail && tail.end - head.start < sentence.length * 2 + 40 ? tail.end : Math.min(flat.length, head.start + sentence.length);
-      cursor = head.start;
+    show(i: number) {
+      const spot = spots[i];
+      if (!spot || !nodes.length) return; // não achou esta frase: mantém a marcação anterior (nunca pula)
       const range = document.createRange();
-      const [sn, so] = at(head.start);
-      const [en, eo] = at(end);
+      const [sn, so] = at(spot.start);
+      const [en, eo] = at(spot.end);
       range.setStart(sn, so);
       range.setEnd(en, eo);
       css.highlights!.set("eduvia-leitura", new HighlightCtor(range));
       const rect = range.getBoundingClientRect();
-      if (rect.top < 90 || rect.bottom > window.innerHeight - 120) window.scrollBy({ top: rect.top - window.innerHeight / 3, behavior: "smooth" });
+      if (rect.top < 140 || rect.bottom > window.innerHeight - 140) window.scrollBy({ top: rect.top - window.innerHeight / 3, behavior: "smooth" });
     },
     clear() {
       css.highlights!.delete("eduvia-leitura");
-      cursor = 0;
     },
   };
 }
@@ -155,6 +196,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
   const prepared = useRef(new Map<string, Prepared>());
   const highlighter = useRef<ReturnType<typeof makeHighlighter> | null>(null);
   const raf = useRef(0);
+  const current = useRef(-1);
   const stopped = useRef(false);
   const run = useRef(0);
 
@@ -179,9 +221,10 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
   }, [rate]);
 
   const mark = (i: number) => {
+    current.current = i;
     setSentence(i);
-    if (!highlighter.current) highlighter.current = makeHighlighter(targetRef?.current ?? null);
-    if (i >= 0 && parts[i]) highlighter.current.show(parts[i]);
+    if (!highlighter.current) highlighter.current = makeHighlighter(targetRef?.current ?? null, parts);
+    if (i >= 0 && parts[i]) highlighter.current.show(i);
     else highlighter.current.clear();
   };
 
@@ -189,6 +232,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     cancelAnimationFrame(raf.current);
     highlighter.current?.clear();
     highlighter.current = null;
+    current.current = -1;
     setSentence(-1);
     setState("idle");
   };
@@ -240,10 +284,10 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
       const t = a.currentTime;
       let i = 0;
       while (i + 1 < p.starts.length && p.starts[i + 1] <= t) i++;
-      setSentence((cur) => {
-        if (cur !== i) mark(i);
-        return i;
-      });
+      if (current.current !== i) {
+        current.current = i;
+        mark(i);
+      }
       raf.current = requestAnimationFrame(tick);
     };
     cancelAnimationFrame(raf.current);
@@ -320,6 +364,8 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
   };
   const pause = () => {
     cancelAnimationFrame(raf.current);
+    highlighter.current?.clear(); // parou de falar: a marcação some
+    current.current = -1;
     if (mode === "natural") audio.current?.pause();
     else speechSynthesis.pause();
     setState("paused");
@@ -363,7 +409,9 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
             </div>
           ) : (
             <p className="text-xs text-muted">
-              {state === "idle" ? "Toque no robô: uma voz natural lê o texto para você." : `Lendo a frase ${Math.max(1, sentence + 1)} de ${parts.length}`}
+              {state === "idle"
+                ? "Toque no robô: uma voz natural lê o texto para você."
+                : `${state === "paused" ? "Pausado na frase" : "Lendo a frase"} ${Math.max(1, sentence + 1)} de ${parts.length}`}
             </p>
           )}
           {note && <p className="text-xs text-warning">{note}</p>}
