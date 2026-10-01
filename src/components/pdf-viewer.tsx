@@ -10,10 +10,18 @@ type PdfPage = {
   getTextContent(): Promise<{ items: { str?: string; transform?: number[]; width?: number; height?: number }[] }>;
 };
 type PdfJs = {
-  getDocument(src: { url: string; withCredentials?: boolean }): { promise: Promise<PdfDoc> };
+  getDocument(src: Record<string, unknown>): { promise: Promise<PdfDoc> };
   GlobalWorkerOptions: { workerSrc: string };
   Util: { transform(a: number[], b: number[]): number[] };
 };
+
+/** Manda o erro do leitor para o log do servidor (para descobrir o motivo em aparelhos específicos). */
+function reportViewerError(e: unknown) {
+  try {
+    const body = JSON.stringify({ where: "pdf-viewer", message: String((e as Error)?.message ?? e).slice(0, 500), ua: navigator.userAgent.slice(0, 200) });
+    navigator.sendBeacon?.("/api/client-error", body) || fetch("/api/client-error", { method: "POST", body, keepalive: true }).catch(() => {});
+  } catch {}
+}
 
 let pdfjsPromise: Promise<PdfJs> | null = null;
 function loadPdfJs() {
@@ -79,14 +87,28 @@ export function PdfPageViewer({ materialId, page: initialPage, quote }: { materi
     let alive = true;
     let loaded: PdfDoc | null = null;
     loadPdfJs()
-      .then((lib) => lib.getDocument({ url: `/api/materials/${materialId}/pdf`, withCredentials: true }).promise)
+      .then(
+        (lib) =>
+          lib.getDocument({
+            url: `/api/materials/${materialId}/pdf`,
+            withCredentials: true,
+            // compatibilidade com o Safari do iPhone: baixa o PDF inteiro e desenha sem recursos novos do navegador
+            disableRange: true,
+            disableStream: true,
+            disableAutoFetch: true,
+            isOffscreenCanvasSupported: false,
+            isImageDecoderSupported: false,
+            useSystemFonts: true,
+          }).promise,
+      )
       .then((d) => {
         loaded = d;
         if (alive) setDoc(d);
         else d.destroy();
       })
       // sem PDF (DOCX, texto) ou o aparelho não abriu: mostra o texto da página
-      .catch(() => {
+      .catch((e) => {
+        reportViewerError(e);
         if (alive) setError("texto");
       });
     return () => {
@@ -103,7 +125,8 @@ export function PdfPageViewer({ materialId, page: initialPage, quote }: { materi
     const base = p.getViewport({ scale: 1 });
     const scale = Math.min(2.5, boxRef.current.clientWidth / base.width);
     const viewport = p.getViewport({ scale });
-    const ratio = window.devicePixelRatio || 1;
+    // nitidez sem estourar o limite de memória do canvas no celular
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
     const canvas = canvasRef.current;
     canvas.width = Math.floor(viewport.width * ratio);
     canvas.height = Math.floor(viewport.height * ratio);
@@ -130,7 +153,8 @@ export function PdfPageViewer({ materialId, page: initialPage, quote }: { materi
   useEffect(() => {
     draw().catch((e) => {
       console.error("[pdf]", e);
-      setError("Não foi possível mostrar esta página.");
+      reportViewerError(e);
+      setError("texto"); // não deu para desenhar o PDF neste aparelho: mostra o texto da página, com o trecho grifado
     });
   }, [draw]);
 
