@@ -210,7 +210,7 @@ function FinishCard({
         </div>
       )}
       <p className="text-lg font-semibold">
-        {!isLesson ? "Sessão concluída!" : passed ? "Aula aprovada! Próxima aula liberada." : "Ainda não foi dessa vez."}
+        {!isLesson ? "Sessão concluída!" : passed ? "Aula aprovada! Próxima aula liberada." : "Quase lá! Você ainda não passou nesta aula."}
       </p>
       {isLesson && !passed && (
         <p className="mx-auto max-w-md text-sm text-muted">

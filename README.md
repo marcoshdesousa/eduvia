@@ -50,16 +50,18 @@ e2e/                   testes de ponta a ponta (Playwright)
   - Se o Google recusar por cota (erro 429), a IA do aluno fica "em pausa" até a hora indicada (1 minuto, ou a meia-noite do Pacífico ≈ 4h/5h de Brasília para a cota diária) e o app mostra a tela **Descanse**.
 - **Planos** (padrões em `src/lib/plans.ts` e na migração `10_planos_torneios`; os valores reais ficam no banco e são editados em **/admin → Planos**, onde -1 = ilimitado). **PDFs e páginas não têm limite em nenhum plano** (só contam arquivos que deram certo). O que muda é a quantidade de **guias de estudo (preparações) criados por mês**: apagar ou editar um guia não devolve a vaga.
 
-  | | Grátis | Básico | Plus | Pro | Avançado | Ilimitado |
-  |---|---|---|---|---|---|---|
-  | Preço | — | R$ 7/7 dias ou R$ 15/30 dias | R$ 20/mês | R$ 25/mês | R$ 30/mês | R$ 80/mês |
-  | Guias de estudo por mês | 1 | 6 | 8 | 12 | 15 | 35 |
-  | Simulados por mês | 0 | 15 | 20 | 30 | 40 | à vontade |
-  | Redações corrigidas por dia | 1 | 3 | 4 | 5 | 6 | à vontade |
-  | Professor IA (mensagens por dia) | 5 | 40 | 60 | 80 | 100 | à vontade |
-  | Sessões novas por dia | 1 | 6 | 6 | 8 | 10 | à vontade |
-  | Testes rápidos | 3/dia | à vontade | à vontade | à vontade | à vontade | à vontade |
-  | Grupos e torneios (até 30 pessoas por grupo) | não | sim | sim | sim | sim | sim |
+  | | Grátis | Básico | Avançado | Ilimitado |
+  |---|---|---|---|---|
+  | Preço 7 / 15 / 30 dias | — | R$ 7 / 10 / 15 | R$ 12 / 19 / 30 | R$ 18 / 30 / 50 |
+  | PDFs | 1 PDF de até 100 páginas | sem limite | sem limite | sem limite |
+  | Guias de estudo por mês | 1 | 6 | 15 | 35 |
+  | Simulados por mês | 0 | 15 | 40 | à vontade |
+  | Redações corrigidas por dia | 1 | 3 | 6 | à vontade |
+  | Professor IA (mensagens por dia) | 5 | 40 | 100 | à vontade |
+  | Testes rápidos | 3/dia | à vontade | à vontade | à vontade |
+  | Grupos e torneios (até 30 pessoas) | não | sim | sim | sim |
+
+  Preços dos três períodos e limites são editáveis em **/admin → Planos** (preço 0 esconde aquele período; dá para tirar um plano da vitrine). Os antigos Plus e Pro saíram da vitrine; quem já tinha continua até o fim do período.
 
 - **Login único:** entrar em um aparelho desconecta os outros (`databaseHooks` em `src/lib/auth.ts`).
 - Sem assinatura, a conta fica no plano **Grátis** (aviso no topo com o botão "Assinar").
@@ -80,7 +82,7 @@ e2e/                   testes de ponta a ponta (Playwright)
 - **Ouvir a aula:** na sessão de estudo, um robozinho lê o texto em voz alta com a voz em português do próprio aparelho (sem custo; escolhe a voz mais natural disponível, com velocidade ajustável).
 - **Instalar o app:** `/instalar` (e um aviso na tela inicial do celular) ensina a instalar pelo navegador (Android/Chrome com botão direto; iPhone pelo Safari → Compartilhar → Adicionar à Tela de Início) e ativar as notificações.
 - **Grupos:** cada grupo tem um **código** de 6 caracteres (aparece no topo do grupo, com botão de copiar). Em `/grupos` dá para **entrar com o código** ou **criar** um grupo; convites pelo @ aparecem em "Você foi convidado", com aviso vermelho no menu.
-- **Foto de perfil:** 40 personagens em 4 categorias (Bichinhos, Heróis, MVP e Halloween; 5 femininos e 5 masculinos cada) em `public/avatars/`, lista em `src/lib/avatars.ts`. No plano Grátis só 1 feminino e 1 masculino de cada categoria ficam liberados (`free: true`); assinantes usam todos. O aluno muda o nome; o @ não pode ser trocado.
+- **Foto de perfil:** 50 personagens próprios (estilo retrato) em 5 abas: Heróis, Super-heróis, Halloween, MVP (games) e Princesas. Gerados por `node scripts/gen-avatars.mjs` (SVGs em `public/avatars/`, lista em `src/lib/avatar-list.json`). No plano Grátis só 1 feminino e 1 masculino de cada categoria ficam liberados (`free: true`); assinantes usam todos. O aluno muda o nome; o @ não pode ser trocado.
 - **Cadastro em 2 passos:** dados da conta → chave do Gemini, com botão "Voltar" que mantém o que foi digitado.
 
 ## Fase 2 — praticar
@@ -113,6 +115,16 @@ e2e/                   testes de ponta a ponta (Playwright)
   - Em Ajustes: **ativar notificações neste aparelho** (push via PWA) e ligar/desligar o **lembrete no horário de estudo**, que chega uma vez por dia se houver sessão pendente.
   - Avisos de convite, entrada no grupo, simulado compartilhado, conquista e plano vencendo.
   - No iPhone, o push funciona com o Eduvia **adicionado à tela de início** (iOS 16.4+).
+
+## Aulas com nota mínima
+
+- Cada aula (sessão de estudo) termina com a nota das perguntas dela. **Só com 75% ou mais** a aula conta como feita e a próxima é liberada (`PASS_SCORE` em `src/lib/study.ts`). Abaixo disso, o aluno relê o texto e refaz; a melhor nota fica guardada e dá para refazer só para melhorar.
+- Na mesma preparação, as aulas seguintes (inclusive as de amanhã) ficam com cadeado até a anterior ser aprovada. Revisões não bloqueiam.
+- Aula atrasada que já foi começada ou reprovada vem para hoje, antes das outras. As que nem começaram são replanejadas (o assunto não é deixado de lado).
+- Os testes rápidos e simulados não mudam a nota da aula.
+- **Fontes:** tocar numa referência abre o PDF dentro do app (pdf.js), na página certa e com o trecho grifado. DOCX/texto mostram o texto da página.
+- **Redação no plano:** ao criar o guia de estudo, a opção "Incluir redação no plano" coloca uma redação por semana em "O que fazer hoje".
+- **Chamadas do dia:** além do lembrete no horário de estudo, o app avisa 3x por dia para fazer teste rápido e 1x para redação, simulado, banco de erros e instalar o app (horários variam um pouco por aluno). Para o push chegar no celular, `VAPID_PRIVATE_KEY` precisa estar no Render e o aluno precisa tocar em "Ativar" no aviso do topo.
 
 ## Estabilidade e novidades
 

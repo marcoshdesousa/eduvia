@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { EDITAL, makeStudyPdf } from "./fixtures";
-import { signUp } from "./helpers";
+import { signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
 
@@ -38,6 +38,8 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
   await page.getByRole("link", { name: "Plano", exact: true }).click();
   await expect(page.getByText("Hoje")).toBeVisible();
   await expect(page.getByText(/15 min/).first()).toBeVisible();
+  // só a primeira aula está liberada; as próximas esperam 75% na anterior
+  await expect(page.getByText("Bloqueada").first()).toBeVisible();
   await page.getByRole("link", { name: "Estudar" }).first().click();
 
   // o aluno escolhe quanto tempo tem (5 a 45 min)
@@ -51,29 +53,22 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
   // cronômetro do tempo escolhido e aviso de conteúdo pronto
   await expect(page.getByText(/Sei que pode parecer muito ou pouco tempo/)).toBeVisible();
   await expect(page.getByText(/A IA terminou de criar o seu conteúdo/)).toBeVisible();
-  await page.getByRole("button", { name: /Já li|Continuar/ }).click();
-  const recall = page.getByPlaceholder("Escreva com suas palavras o que você lembra...");
-  while (await recall.count()) {
-    await recall.first().fill("Não sei direito, algo sobre células");
-    await page.getByRole("button", { name: "Enviar resposta" }).first().click();
-    await expect(page.getByText("Resposta-modelo").first()).toBeVisible();
-  }
-  await page.getByRole("button", { name: "Continuar" }).click();
-  // responde todas as objetivas escolhendo sempre a primeira alternativa (gera acertos e erros)
-  const cards = page.locator("[data-question]");
-  const total = await cards.count();
-  expect(total).toBeGreaterThan(0);
-  for (let i = 0; i < total; i++) {
-    const card = cards.nth(i);
-    await card.locator("button").first().click();
-    await card.getByRole("button", { name: "Responder" }).click();
-    await expect(card.getByText("Explicação:")).toBeVisible();
-  }
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByRole("button", { name: "Concluir sessão" }).click();
-  await expect(page.getByText("Sessão concluída!")).toBeVisible();
+  // 1ª tentativa: erra tudo de propósito → nota abaixo de 75% → a próxima aula não libera
+  await answerRound(page, false);
+  await expect(page.getByText("Quase lá! Você ainda não passou nesta aula.")).toBeVisible();
+  await expect(page.getByText(/Você precisa de pelo menos 75%/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Próxima aula" })).toHaveCount(0);
+
+  // refaz a aula e acerta → aprovada e a próxima aula libera
+  await page.getByRole("button", { name: /Reestudar e refazer a aula/ }).click();
+  await expect(page.getByRole("button", { name: /Já li|Continuar/ })).toBeVisible();
+  await expect(page.getByText(/Sei que pode parecer muito ou pouco tempo/)).toBeVisible();
+  await answerRound(page, true);
+  await expect(page.getByText("Aula aprovada! Próxima aula liberada.")).toBeVisible();
+  await expect(page.getByText("100%", { exact: true })).toBeVisible();
   await expect(page.getByText(/Você escolheu 10 min e terminou em|Você focou por/)).toBeVisible();
   await expect(page.getByText(/Sei que pode parecer muito ou pouco tempo/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Refazer para melhorar a nota/ })).toBeVisible();
 
   // início mostra progresso e sequência
   await page.goto("/inicio");
@@ -84,9 +79,11 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
   await expect(page.getByText("dia seguido")).toBeVisible();
   await expect(page.getByText(/Foguinho aceso!/)).toBeVisible();
 
-  // banco de erros tem as questões erradas
+  // errou na 1ª tentativa e acertou ao refazer: as questões saíram do banco de erros
   await page.goto("/revisoes?filtro=erros");
-  await expect(page.getByText(/Errou 1x/).first()).toBeVisible();
+  await expect(page.getByText(/Errou 1x/)).toHaveCount(0);
+  const errs = await sql<{ n: number }>(`SELECT count(*)::int AS n FROM "Attempt" a JOIN "user" u ON u.id = a."userId" WHERE u.handle = $1 AND a."isCorrect" = false`, [handle]);
+  expect(errs[0].n).toBeGreaterThan(0);
 
   // exportação de dados (LGPD)
   const res = await page.request.get("/api/account/export");
@@ -114,3 +111,34 @@ test("concurso: edital obrigatório define disciplinas e banca", async ({ page }
   await expect(page.getByRole("heading", { name: "Biologia" })).toBeVisible();
   await expect(page.getByText(/Fotossíntese/).first()).toBeVisible();
 });
+
+/** Responde a sessão inteira: certo (pega o gabarito no banco) ou errado de propósito. */
+async function answerRound(page: Page, correct: boolean) {
+  await page.getByRole("button", { name: /Já li|Continuar/ }).click();
+  const answerOf = async (card: ReturnType<Page["locator"]>) => {
+    const id = await card.getAttribute("data-question");
+    return (await sql<{ correctAnswer: string }>(`SELECT "correctAnswer" FROM "Question" WHERE id = $1`, [id]))[0].correctAnswer;
+  };
+  const recall = page.getByPlaceholder("Escreva com suas palavras o que você lembra...");
+  while (await recall.count()) {
+    const id = await page.locator("[data-question]").filter({ has: recall.first() }).first().getAttribute("data-question");
+    const card = page.locator(`[data-question="${id}"]`);
+    await recall.first().fill(correct ? await answerOf(card) : "Não sei direito");
+    await card.getByRole("button", { name: "Enviar resposta" }).click();
+    await expect(card.getByText("Resposta-modelo", { exact: true })).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Continuar" }).click();
+  const cards = page.locator("[data-question]");
+  const total = await cards.count();
+  expect(total).toBeGreaterThan(0);
+  for (let i = 0; i < total; i++) {
+    const card = cards.nth(i);
+    const right = Number(await answerOf(card));
+    const options = await card.locator("button").count() - 1; // o último é "Responder"
+    await card.locator("button").nth(correct ? right : (right + 1) % options).click();
+    await card.getByRole("button", { name: "Responder" }).click();
+    await expect(card.getByText("Explicação:")).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Concluir e ver a nota" }).click();
+}

@@ -21,9 +21,12 @@ test("plano Grátis → admin libera o Básico; chave do Gemini obrigatória", a
   expect(month).toContain("plano Básico mensal (30 dias)");
   expect(month).toContain("15,00");
   expect(month).toContain(`@${handle}`);
-  // faixas de planos: o Ilimitado (R$ 80) aparece com tudo à vontade; os outros planos só têm opção mensal
-  await expect(page.getByRole("link", { name: /Assinar Ilimitado mensal pelo WhatsApp/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Assinar Ilimitado semanal/ })).toHaveCount(0);
+  // três planos pagos, cada um por 7, 15 ou 30 dias; o Ilimitado custa R$ 50 por 30 dias
+  for (const p of ["semanal", "quinzenal", "mensal"]) await expect(page.getByRole("link", { name: new RegExp(`Assinar Ilimitado ${p} pelo WhatsApp`) })).toBeVisible();
+  const ilimitado = decodeURIComponent((await page.getByRole("link", { name: /Assinar Ilimitado mensal/ }).getAttribute("href"))!);
+  expect(ilimitado).toContain("50,00");
+  await expect(page.getByRole("link", { name: /Assinar Pro / })).toHaveCount(0);
+  await expect(page.getByText("1 PDF de até 100 páginas")).toBeVisible();
   await expect(page.getByText("35 guias de estudo por mês")).toBeVisible();
   await expect(page.getByText("PDFs e páginas sem limite").first()).toBeVisible();
 
