@@ -3,13 +3,14 @@
 import { createHash } from "node:crypto";
 import { GEMINI_API, AiQuotaError, AiUnavailableError, isMockAi, parseQuota, userGeminiKey } from "@/lib/ai/client";
 import { readObject, writeObject } from "@/lib/storage";
+import { Mp3Encoder } from "@breezystack/lamejs";
 
 export type TtsVoice = "f" | "m";
 /** Vozes do Gemini: Kore (feminina, firme e clara) e Charon (masculina, calma e informativa). */
 export const TTS_VOICES: Record<TtsVoice, string> = { f: "Kore", m: "Charon" };
-export const TTS_MAX_CHARS = 1800;
+export const TTS_MAX_CHARS = 2600;
 // versão do áudio guardado (mudou: sem instrução lida em voz alta e sem chiado)
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3-mp3";
 
 const found = new Map<string, { models: string[]; at: number }>();
 
@@ -90,16 +91,41 @@ export function pcmToWav(pcm: Buffer, rate = 24000) {
   return Buffer.concat([h, pcm]);
 }
 
-/** Gera (ou reaproveita) o áudio WAV de um trecho. */
+/** Pausa natural no fim de cada trecho (fim de frase/parágrafo), já dentro do áudio: os trechos emendam sem estalo. */
+const TAIL_PAUSE_S = 0.35;
+const MP3_KBPS = 48;
+
+/** PCM 16 bits mono → MP3 (48 kbps): ~8x menor que WAV, leve para baixar a aula inteira no celular. */
+export function pcmToMp3(pcm: Buffer, rate: number): Buffer {
+  const samples = new Int16Array(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.length - (pcm.length % 2)));
+  const enc = new Mp3Encoder(1, rate, MP3_KBPS);
+  const out: Uint8Array[] = [];
+  for (let i = 0; i < samples.length; i += 1152) {
+    const b = enc.encodeBuffer(samples.subarray(i, i + 1152));
+    if (b.length) out.push(b);
+  }
+  out.push(enc.flush());
+  return Buffer.concat(out.map((b) => Buffer.from(b.buffer, b.byteOffset, b.length)));
+}
+
+/** Duração aproximada de um MP3 de taxa constante (para acompanhar a leitura frase a frase). */
+export const mp3Seconds = (bytes: number) => (bytes * 8) / (MP3_KBPS * 1000);
+
+function toMp3WithPause(pcm: Buffer, rate: number) {
+  return pcmToMp3(Buffer.concat([pcm, Buffer.alloc(Math.round(rate * TAIL_PAUSE_S) * 2)]), rate);
+}
+
+/** Gera (ou reaproveita) o áudio MP3 de um trecho, já limpo e com a pausa do fim. */
 export async function speak(userId: string, text: string, voice: TtsVoice): Promise<Buffer> {
   const clean = text.trim().slice(0, TTS_MAX_CHARS);
-  const cacheKey = `tts/${createHash("sha256").update(`${CACHE_VERSION}:${voice}:${clean}`).digest("hex")}.wav`;
+  const cacheKey = `tts/${createHash("sha256").update(`${CACHE_VERSION}:${voice}:${clean}`).digest("hex")}.mp3`;
   try {
     return await readObject(cacheKey);
   } catch {}
   if (isMockAi()) {
-    const wav = pcmToWav(Buffer.alloc(24000 * 2 * Math.min(3, Math.max(1, Math.round(clean.length / 60)))), 24000); // silêncio
-    return wav;
+    // silêncio com duração parecida com a fala (para testar o carregamento e a marcação das frases)
+    const secs = Math.min(20, Math.max(1, clean.length / 15));
+    return toMp3WithPause(Buffer.alloc(Math.round(24000 * secs) * 2), 24000);
   }
   const key = await userGeminiKey(userId);
   const errors: string[] = [];
@@ -118,9 +144,9 @@ export async function speak(userId: string, text: string, voice: TtsVoice): Prom
       const part = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;
       if (part?.data) {
         const rate = Number(part.mimeType?.match(/rate=(\d+)/)?.[1]) || 24000;
-        const wav = pcmToWav(cleanPcm(Buffer.from(part.data, "base64"), rate), rate);
-        await writeObject(cacheKey, wav, "audio/wav").catch(() => {});
-        return wav;
+        const mp3 = toMp3WithPause(cleanPcm(Buffer.from(part.data, "base64"), rate), rate);
+        await writeObject(cacheKey, mp3, "audio/mpeg").catch(() => {});
+        return mp3;
       }
       errors.push(`${model}: sem áudio`);
       continue;

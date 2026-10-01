@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { LessonNarrator } from "@/components/lesson-narrator";
@@ -57,6 +57,7 @@ export function SessionView({
   const [comfort, setComfort] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const current = steps[step].key;
+  const articleRef = useRef<HTMLElement>(null);
 
   // conta o tempo de estudo (1 min por minuto com a aula aberta na tela): a sequência vale com 5 min no dia
   const active = !completed && !summary;
@@ -96,17 +97,17 @@ export function SessionView({
 
       {current === "texto" && text && (
         <div className="space-y-4">
-          {text.content && <LessonNarrator text={text.content} />}
+          {text.content && <LessonNarrator text={text.content} labels={text.refs.map((r) => r.label)} targetRef={articleRef} />}
           {text.content && (
             <p className="-mt-2 px-1 text-xs text-muted">
-              ℹ️ As marcações como <strong>T1, T2, T3…</strong> e os links <strong>↗ p.</strong> no texto mostram de qual trecho do seu PDF veio cada informação.
-              Toque no link para abrir a página do PDF com o trecho grifado.
+              ℹ️ As marcações pequenas como <span className="source-mark !align-baseline !text-xs">p.3</span> mostram de qual página do seu PDF veio cada informação
+              (a IA usa os trechos T1, T2… do seu material). Toque nelas para abrir a página com o trecho grifado. O robô não lê essas marcações.
             </p>
           )}
           {text.content && (
             <Card>
-              <article className="prose-study">
-                <ReactMarkdown components={{ a: (p) => <a {...p} target="_blank" rel="noreferrer" className="text-xs text-primary no-underline hover:underline" /> }}>
+              <article ref={articleRef} className="prose-study">
+                <ReactMarkdown components={{ a: (p) => <a {...p} className="source-mark" /> }}>
                   {linkSources(text.content, text.refs)}
                 </ReactMarkdown>
               </article>

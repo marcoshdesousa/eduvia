@@ -126,7 +126,7 @@ export function TutorChat({
               {m.role === "assistant" ? (
                 m.content ? (
                   <div className="prose-study text-sm">
-                    <ReactMarkdown components={{ a: (p) => <a {...p} target="_blank" rel="noreferrer" className="text-xs text-primary no-underline hover:underline" /> }}>
+                    <ReactMarkdown components={{ a: (p) => <a {...p} className="source-mark" /> }}>
                       {linkSources(m.content, m.refs.length ? m.refs : [])}
                     </ReactMarkdown>
                     {m.refs.length > 0 && <div className="mt-2 border-t border-border pt-2"><SourceLinks refs={m.refs} /></div>}

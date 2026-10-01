@@ -116,3 +116,8 @@ body {
 /* Professor IA pensando: cada mensagem entra suave */
 @keyframes thinking-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .thinking-msg { animation: thinking-in 0.35s ease-out; }
+
+
+/* marcação de fonte no texto ("p.3"): bem pequena, clicável, abre a página do PDF */
+.source-mark { font-size: 0.62em; vertical-align: super; line-height: 0; margin-left: 1px; color: var(--primary); text-decoration: none; opacity: 0.85; white-space: nowrap; }
+.source-mark:hover { text-decoration: underline; opacity: 1; }

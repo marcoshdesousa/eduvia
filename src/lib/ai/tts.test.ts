@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 import { cleanPcm, pcmToWav, rankTtsModels } from "./tts";
-import { toBlocks } from "@/components/lesson-narrator";
+import { sentenceTimeline, toBlocks, toSpeech } from "@/components/lesson-narrator";
 
 describe("voz natural", () => {
   it("prefere modelos de voz flash e mais novos", () => {
@@ -29,10 +29,23 @@ describe("voz natural", () => {
     expect(out.length / 2).toBeLessThan(rate * 1.3);
     expect(Math.abs(out.readInt16LE(0))).toBeLessThan(200); // começa suave (sem estalo)
   });
-  it("junta frases em blocos sem passar do tamanho (o primeiro é curto)", () => {
-    const blocks = toBlocks(Array.from({ length: 40 }, (_, i) => `Frase número ${i} com algum conteúdo.`), 200, 80);
-    expect(blocks[0].length).toBeLessThanOrEqual(80);
-    expect(blocks.every((b) => b.length <= 200)).toBe(true);
-    expect(blocks.join(" ").split("Frase").length - 1).toBe(40);
+  it("junta frases em blocos sem passar do tamanho e sabe quais frases estão em cada um", () => {
+    const parts = Array.from({ length: 40 }, (_, i) => `Frase número ${i} com algum conteúdo.`);
+    const blocks = toBlocks(parts, 200);
+    expect(blocks.every((b) => b.text.length <= 200)).toBe(true);
+    expect(blocks[0].from).toBe(0);
+    expect(blocks.at(-1)!.to).toBe(39);
+    blocks.forEach((b, i) => i && expect(b.from).toBe(blocks[i - 1].to + 1));
+  });
+  it("calcula quando cada frase começa no áudio (para a marcação laranja)", () => {
+    const parts = ["Uma frase.", "Outra frase maior aqui.", "Terceira."];
+    const starts = sentenceTimeline(parts, [{ from: 0, to: 1 }, { from: 2, to: 2 }], [5.35, 2.35]);
+    expect(starts[0]).toBe(0);
+    expect(starts[1]).toBeGreaterThan(1);
+    expect(starts[1]).toBeLessThan(5);
+    expect(starts[2]).toBeCloseTo(5.35);
+  });
+  it("o robô não lê as marcações de fonte", () => {
+    expect(toSpeech("A fotossíntese [T1, T2] gera energia (T3). Fim.", ["T1", "T2", "T3"]).join(" ")).toBe("A fotossíntese gera energia. Fim.");
   });
 });

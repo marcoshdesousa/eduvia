@@ -1,19 +1,18 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Pause, Play, Square } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { Pause, Play, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { stripSources } from "@/lib/sources";
 import { cn } from "@/lib/utils";
 
-/** Tira a marcação do texto (Markdown, referências [T1]) para ser lido em voz alta. */
-export function toSpeech(markdown: string): string[] {
-  const plain = markdown
-    .replace(/\[T\d+\]/g, "")
+/** Tira a marcação do texto (Markdown e marcações de fonte como [T1]) e separa em frases para ler em voz alta. */
+export function toSpeech(markdown: string, labels: string[] = []): string[] {
+  const plain = stripSources(markdown, labels)
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/^#{1,6}\s*/gm, "")
     .replace(/[*_`>|]/g, "")
     .replace(/^\s*[-•]\s+/gm, "")
     .replace(/\n{2,}/g, "\n");
-  // frases curtas: alguns navegadores cortam falas longas
   const parts: string[] = [];
   for (const line of plain.split("\n")) {
     const sentences = line.match(/[^.!?;:]+[.!?;:]*/g) ?? [];
@@ -24,26 +23,99 @@ export function toSpeech(markdown: string): string[] {
       else parts.push(...(t.match(/.{1,200}(\s|$)/g) ?? [t]).map((x) => x.trim()));
     }
   }
-  return parts.filter(Boolean);
+  return parts.filter((p) => /[\p{L}\p{N}]/u.test(p));
 }
 
-/**
- * Junta frases em blocos para a voz natural. O primeiro bloco é curto (começa a falar rápido);
- * os seguintes são maiores (menos pedidos, fala mais fluida).
- */
-export function toBlocks(parts: string[], max = 1200, firstMax = 260): string[] {
-  const blocks: string[] = [];
+/** Junta frases em blocos para a voz natural (poucos pedidos). Guarda quais frases estão em cada bloco. */
+export function toBlocks(parts: string[], max = 2400): { text: string; from: number; to: number }[] {
+  const blocks: { text: string; from: number; to: number }[] = [];
   let cur = "";
-  for (const p of parts) {
-    const limit = blocks.length === 0 ? firstMax : max;
-    if (cur && cur.length + p.length + 1 > limit) {
-      blocks.push(cur);
+  let from = 0;
+  parts.forEach((p, i) => {
+    if (cur && cur.length + p.length + 1 > max) {
+      blocks.push({ text: cur, from, to: i - 1 });
       cur = "";
+      from = i;
     }
     cur = cur ? `${cur} ${p}` : p;
-  }
-  if (cur) blocks.push(cur);
+  });
+  if (cur) blocks.push({ text: cur, from, to: parts.length - 1 });
   return blocks;
+}
+
+/** Momento (em segundos) em que cada frase começa no áudio da aula, pelo tamanho das frases de cada trecho. */
+export function sentenceTimeline(parts: string[], blocks: { from: number; to: number }[], seconds: number[], tailPause = 0.35): number[] {
+  const starts: number[] = [];
+  let t = 0;
+  blocks.forEach((b, i) => {
+    const speech = Math.max(0.1, seconds[i] - tailPause);
+    const chars = parts.slice(b.from, b.to + 1).reduce((s, p) => s + p.length + 1, 0);
+    let acc = 0;
+    for (let k = b.from; k <= b.to; k++) {
+      starts[k] = t + (acc / chars) * speech;
+      acc += parts[k].length + 1;
+    }
+    t += seconds[i];
+  });
+  return starts;
+}
+
+/** Marca em laranja a frase lida no texto da aula (CSS Custom Highlight; sem efeito em navegadores antigos). */
+function makeHighlighter(root: HTMLElement | null) {
+  type H = { highlights?: Map<string, unknown> };
+  const css = (globalThis as unknown as { CSS?: H }).CSS;
+  const HighlightCtor = (globalThis as unknown as { Highlight?: new (r: Range) => unknown }).Highlight;
+  if (!root || !css?.highlights || !HighlightCtor) return { show: () => {}, clear: () => {} };
+  // estilo da marcação (injetado aqui: o processador de CSS do build não reconhece ::highlight)
+  if (!document.getElementById("eduvia-leitura-style")) {
+    const style = document.createElement("style");
+    style.id = "eduvia-leitura-style";
+    style.textContent = "::highlight(eduvia-leitura){background-color:rgb(249 115 22 / 0.35);color:inherit}";
+    document.head.appendChild(style);
+  }
+  const nodes: { node: Text; start: number }[] = [];
+  let flat = "";
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    nodes.push({ node: n as Text, start: flat.length });
+    flat += (n as Text).data;
+  }
+  const lower = flat.toLowerCase();
+  let cursor = 0;
+  const at = (offset: number): [Text, number] => {
+    let i = nodes.length - 1;
+    while (i > 0 && nodes[i].start > offset) i--;
+    return [nodes[i].node, Math.min(offset - nodes[i].start, nodes[i].node.data.length)];
+  };
+  const find = (words: string[], from: number) => {
+    if (!words.length) return null;
+    const re = new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\s\\S]{0,12}?"), "g");
+    re.lastIndex = from;
+    const m = re.exec(lower);
+    return m ? { start: m.index, end: m.index + m[0].length } : null;
+  };
+  return {
+    show(sentence: string) {
+      const words = sentence.toLowerCase().split(/\s+/).filter(Boolean);
+      const head = find(words.slice(0, Math.min(5, words.length)), Math.max(0, cursor - 200));
+      if (!head || !nodes.length) return;
+      const tail = words.length > 5 ? find(words.slice(-3), head.end) : null;
+      const end = tail && tail.end - head.start < sentence.length * 2 + 40 ? tail.end : Math.min(flat.length, head.start + sentence.length);
+      cursor = head.start;
+      const range = document.createRange();
+      const [sn, so] = at(head.start);
+      const [en, eo] = at(end);
+      range.setStart(sn, so);
+      range.setEnd(en, eo);
+      css.highlights!.set("eduvia-leitura", new HighlightCtor(range));
+      const rect = range.getBoundingClientRect();
+      if (rect.top < 90 || rect.bottom > window.innerHeight - 120) window.scrollBy({ top: rect.top - window.innerHeight / 3, behavior: "smooth" });
+    },
+    clear() {
+      css.highlights!.delete("eduvia-leitura");
+      cursor = 0;
+    },
+  };
 }
 
 const FEMALE = /francisca|thalita|luciana|maria|vit[oó]ria|raquel|leila|fernanda|helo[ií]sa|female|feminina|joana|catarina/i;
@@ -61,123 +133,147 @@ function rankVoice(v: SpeechSynthesisVoice, gender: "f" | "m") {
   return score;
 }
 
-type Mode = "natural" | "device";
+type Prepared = { url: string; starts: number[] };
+type State = "idle" | "loading" | "playing" | "paused";
 
 /**
- * Robozinho que lê o texto da aula em voz alta. Usa a voz natural do Gemini (feminina ou masculina),
- * guardada para não gastar de novo; se não der, cai para a voz do aparelho, mais devagar.
+ * Robô que lê a aula em voz alta. Voz natural do Gemini (feminina ou masculina): baixa o áudio da aula
+ * INTEIRO antes de começar (com porcentagem), junta num áudio só e toca sem travar entre os trechos.
+ * Enquanto lê, a frase atual fica marcada em laranja no texto. Sem voz natural, usa a voz do aparelho.
  */
-export function LessonNarrator({ text }: { text: string }) {
-  const parts = useMemo(() => toSpeech(text), [text]);
+export function LessonNarrator({ text, labels = [], targetRef }: { text: string; labels?: string[]; targetRef?: RefObject<HTMLElement | null> }) {
+  const parts = useMemo(() => toSpeech(text, labels), [text, labels]);
   const blocks = useMemo(() => toBlocks(parts), [parts]);
   const [gender, setGender] = useState<"f" | "m">("f");
   const [rate, setRate] = useState(1);
-  const [state, setState] = useState<"idle" | "loading" | "playing" | "paused">("idle");
-  const [index, setIndex] = useState(0);
-  const [mode, setMode] = useState<Mode>("natural");
+  const [state, setState] = useState<State>("idle");
+  const [progress, setProgress] = useState(0);
+  const [sentence, setSentence] = useState(-1);
+  const [mode, setMode] = useState<"natural" | "device">("natural");
   const [note, setNote] = useState<string | null>(null);
-  // voz natural: os trechos tocam emendados num só tocador (Web Audio), sem troca de arquivo entre eles
-  const ctx = useRef<AudioContext | null>(null);
-  const sources = useRef<AudioBufferSourceNode[]>([]);
-  const nextAt = useRef(0);
-  const cache = useRef(new Map<string, Promise<ArrayBuffer>>());
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const prepared = useRef(new Map<string, Prepared>());
+  const highlighter = useRef<ReturnType<typeof makeHighlighter> | null>(null);
+  const raf = useRef(0);
   const stopped = useRef(false);
   const run = useRef(0);
-  const rateRef = useRef(rate);
-  rateRef.current = rate;
 
   useEffect(() => {
     try {
       const g = localStorage.getItem("eduvia:voz");
       if (g === "f" || g === "m") setGender(g);
     } catch {}
+    const cache = prepared.current;
     return () => {
       stopped.current = true;
-      ctx.current?.close().catch(() => {});
+      cancelAnimationFrame(raf.current);
+      audio.current?.pause();
+      highlighter.current?.clear();
       if ("speechSynthesis" in window) speechSynthesis.cancel();
+      for (const p of cache.values()) URL.revokeObjectURL(p.url);
     };
   }, []);
 
-  /** Baixa o áudio de um trecho (fica guardado; ouvir de novo não gasta a cota). */
-  const fetchBlock = (i: number) => {
-    const k = `${gender}:${i}`;
-    if (!cache.current.has(k)) {
-      const p = fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: blocks[i], voice: gender }) }).then(async (r) => {
-        if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "voz indisponível");
-        return r.arrayBuffer();
-      });
-      p.catch(() => cache.current.delete(k));
-      cache.current.set(k, p);
-    }
-    return cache.current.get(k)!;
+  useEffect(() => {
+    if (audio.current) audio.current.playbackRate = rate;
+  }, [rate]);
+
+  const mark = (i: number) => {
+    setSentence(i);
+    if (!highlighter.current) highlighter.current = makeHighlighter(targetRef?.current ?? null);
+    if (i >= 0 && parts[i]) highlighter.current.show(parts[i]);
+    else highlighter.current.clear();
   };
 
   const finish = () => {
+    cancelAnimationFrame(raf.current);
+    highlighter.current?.clear();
+    highlighter.current = null;
+    setSentence(-1);
     setState("idle");
-    setIndex(0);
   };
 
-  /** Pausa natural entre trechos (fim de frase/parágrafo): curta, sem estalo. */
-  const GAP = 0.32;
+  /** Baixa todos os trechos (2 de cada vez), mostrando a porcentagem, e junta num MP3 só. */
+  const prepare = async (myRun: number): Promise<Prepared> => {
+    const key = gender;
+    const hit = prepared.current.get(key);
+    if (hit) return hit;
+    const chunks: ArrayBuffer[] = new Array(blocks.length);
+    const seconds: number[] = new Array(blocks.length).fill(0);
+    let done = 0;
+    let next = 0;
+    setProgress(0);
+    const worker = async () => {
+      while (next < blocks.length) {
+        const i = next++;
+        let lastError: Error | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (stopped.current || run.current !== myRun) throw new Error("cancelado");
+          const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: blocks[i].text, voice: gender }) }).catch(
+            (e: Error) => e,
+          );
+          if (r instanceof Response && r.ok) {
+            chunks[i] = await r.arrayBuffer();
+            seconds[i] = Number(r.headers.get("x-audio-seconds")) || chunks[i].byteLength / 6000;
+            lastError = null;
+            break;
+          }
+          lastError = r instanceof Response ? new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "voz indisponível") : r;
+          if (r instanceof Response && r.status !== 503 && r.status < 500) break;
+          await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
+        }
+        if (lastError) throw lastError;
+        done++;
+        setProgress(Math.round((done / blocks.length) * 100));
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    const url = URL.createObjectURL(new Blob(chunks, { type: "audio/mpeg" }));
+    const p = { url, starts: sentenceTimeline(parts, blocks, seconds) };
+    prepared.current.set(key, p);
+    return p;
+  };
 
-  const playNatural = async (from: number) => {
+  const follow = (p: Prepared, a: HTMLAudioElement, myRun: number) => {
+    const tick = () => {
+      if (run.current !== myRun || stopped.current) return;
+      const t = a.currentTime;
+      let i = 0;
+      while (i + 1 < p.starts.length && p.starts[i + 1] <= t) i++;
+      setSentence((cur) => {
+        if (cur !== i) mark(i);
+        return i;
+      });
+      raf.current = requestAnimationFrame(tick);
+    };
+    cancelAnimationFrame(raf.current);
+    raf.current = requestAnimationFrame(tick);
+  };
+
+  const playNatural = async () => {
     const myRun = ++run.current;
-    // iPhone: toca mesmo com o celular no modo silencioso (como um vídeo ou música)
-    const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
-    if (session) session.type = "playback";
-    const ac = ctx.current && ctx.current.state !== "closed" ? ctx.current : (ctx.current = new AudioContext());
-    await ac.resume().catch(() => {});
-    nextAt.current = ac.currentTime + 0.05;
-    setIndex(from);
+    // cria o tocador já no toque (o iPhone só libera áudio iniciado por um toque)
+    const a = audio.current ?? (audio.current = new Audio());
+    a.preload = "auto";
+    (a as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
     setState("loading");
-    let playing = false;
-    for (let i = from; i < blocks.length; i++) {
+    try {
+      const p = await prepare(myRun);
       if (stopped.current || run.current !== myRun) return;
-      let buffer: AudioBuffer;
-      try {
-        // já pede os próximos enquanto este toca
-        for (const k of [i + 1, i + 2]) if (k < blocks.length) fetchBlock(k).catch(() => {});
-        buffer = await ac.decodeAudioData((await fetchBlock(i)).slice(0));
-      } catch (e) {
-        if (stopped.current || run.current !== myRun) return;
-        if (i > from) break; // o que já foi agendado termina; depois para
-        // sem voz natural agora: segue com a voz do aparelho, sem travar a aula
-        setMode("device");
-        setNote(`${(e as Error).message} Usando a voz do aparelho.`);
-        playDevice(Math.max(0, parts.findIndex((p) => blocks[i].startsWith(p))));
-        return;
-      }
-      if (stopped.current || run.current !== myRun) return;
-      const src = ac.createBufferSource();
-      src.buffer = buffer;
-      src.playbackRate.value = rateRef.current;
-      src.connect(ac.destination);
-      const at = Math.max(nextAt.current, ac.currentTime + 0.03);
-      src.start(at);
-      nextAt.current = at + buffer.duration / rateRef.current + GAP;
-      sources.current.push(src);
-      const n = i;
-      // atualiza "Lendo X de Y" quando cada trecho começa
-      setTimeout(() => run.current === myRun && !stopped.current && setIndex(n), Math.max(0, (at - ac.currentTime) * 1000));
-      src.onended = () => {
-        sources.current = sources.current.filter((x) => x !== src);
-        if (n === blocks.length - 1 && run.current === myRun && !stopped.current) finish();
-      };
-      if (!playing) {
-        playing = true;
-        setState("playing");
-      }
+      if (a.src !== p.url) a.src = p.url;
+      a.currentTime = 0;
+      a.playbackRate = rate;
+      a.onended = () => run.current === myRun && finish();
+      await a.play();
+      setState("playing");
+      follow(p, a, myRun);
+    } catch (e) {
+      if (stopped.current || run.current !== myRun || (e as Error).message === "cancelado") return;
+      // sem voz natural agora: usa a voz do aparelho, sem travar a aula
+      setMode("device");
+      setNote(`${(e as Error).message} Usando a voz do aparelho.`);
+      playDevice(0);
     }
-  };
-
-  const stopNatural = () => {
-    run.current++;
-    for (const src of sources.current) {
-      try {
-        src.stop();
-      } catch {}
-    }
-    sources.current = [];
   };
 
   const playDevice = (i: number) => {
@@ -192,40 +288,47 @@ export function LessonNarrator({ text }: { text: string }) {
     const voices = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("pt"));
     voices.sort((a, b) => rankVoice(b, gender) - rankVoice(a, gender));
     if (voices[0]) u.voice = voices[0];
-    u.rate = rateRef.current;
+    u.rate = rate * 0.95;
     u.pitch = gender === "m" ? 0.9 : 1.05;
+    u.onstart = () => mark(i);
     u.onend = () => {
       if (stopped.current) return;
       playDevice(i + 1);
     };
-    setIndex(i);
     setState("playing");
     speechSynthesis.speak(u);
   };
 
   const play = () => {
+    stopped.current = false;
     if (state === "paused") {
-      if (mode === "natural") ctx.current?.resume();
-      else speechSynthesis.resume();
+      if (mode === "natural") {
+        audio.current?.play();
+        if (audio.current) {
+          const p = prepared.current.get(gender);
+          if (p) follow(p, audio.current, run.current);
+        }
+      } else speechSynthesis.resume();
       setState("playing");
       return;
     }
-    stopped.current = false;
-    if (mode === "natural") playNatural(index);
+    if (mode === "natural") void playNatural();
     else {
       speechSynthesis.cancel();
-      playDevice(index);
+      playDevice(Math.max(0, sentence));
     }
   };
   const pause = () => {
-    if (mode === "natural") ctx.current?.suspend();
+    cancelAnimationFrame(raf.current);
+    if (mode === "natural") audio.current?.pause();
     else speechSynthesis.pause();
     setState("paused");
   };
   const stop = () => {
     stopped.current = true;
-    stopNatural();
-    ctx.current?.resume().catch(() => {});
+    run.current++;
+    audio.current?.pause();
+    if (audio.current) audio.current.currentTime = 0;
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     finish();
   };
@@ -237,14 +340,13 @@ export function LessonNarrator({ text }: { text: string }) {
   };
 
   if (!parts.length) return null;
-  const total = mode === "natural" ? blocks.length : parts.length;
   const busy = state === "playing" || state === "loading";
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center">
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={state === "playing" ? pause : play}
+          onClick={state === "playing" ? pause : state === "loading" ? undefined : play}
           aria-label={state === "playing" ? "Pausar a leitura" : "Ouvir a aula"}
           className="rounded-full transition hover:scale-105 active:scale-95"
         >
@@ -252,17 +354,24 @@ export function LessonNarrator({ text }: { text: string }) {
         </button>
         <div className="min-w-0">
           <p className="text-sm font-semibold">Ouvir a aula</p>
-          <p className="text-xs text-muted">
-            {state === "idle" ? "Toque no robô: uma voz natural lê o texto para você." : state === "loading" ? "Preparando a voz…" : `Lendo ${index + 1} de ${total}…`}
-          </p>
+          {state === "loading" ? (
+            <div className="w-44 max-w-full" role="progressbar" aria-label="Preparando o áudio" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+              <p className="text-xs text-muted">Preparando o áudio… {progress}%</p>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted">
+              {state === "idle" ? "Toque no robô: uma voz natural lê o texto para você." : `Lendo a frase ${Math.max(1, sentence + 1)} de ${parts.length}`}
+            </p>
+          )}
           {note && <p className="text-xs text-warning">{note}</p>}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
         {busy ? (
-          <Button size="sm" onClick={pause} disabled={state === "loading"} aria-label="Pausar">
-            {state === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Pause size={16} />} Pausar
-          </Button>
+          <Button size="sm" onClick={pause} disabled={state === "loading"} aria-label="Pausar"><Pause size={16} /> Pausar</Button>
         ) : (
           <Button size="sm" onClick={play} aria-label={state === "paused" ? "Continuar" : "Ouvir"}><Play size={16} /> {state === "paused" ? "Continuar" : "Ouvir"}</Button>
         )}
@@ -282,8 +391,8 @@ export function LessonNarrator({ text }: { text: string }) {
             </button>
           ))}
         </div>
-        <select aria-label="Velocidade" value={rate} disabled={state !== "idle"} onChange={(e) => setRate(Number(e.target.value))} className="h-8 rounded-lg border border-border bg-surface px-2 text-xs">
-          {[0.9, 1, 1.15, 1.3].map((r) => <option key={r} value={r}>{r === 1 ? "Normal" : r < 1 ? "Devagar" : `${r}x`}</option>)}
+        <select aria-label="Velocidade" value={rate} onChange={(e) => setRate(Number(e.target.value))} className="h-8 rounded-lg border border-border bg-surface px-2 text-xs">
+          {[0.85, 1, 1.15, 1.3].map((r) => <option key={r} value={r}>{r === 1 ? "Normal" : r < 1 ? "Devagar" : `${r}x`}</option>)}
         </select>
       </div>
     </div>
