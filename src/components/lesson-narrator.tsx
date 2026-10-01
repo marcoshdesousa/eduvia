@@ -2,47 +2,11 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Pause, Play, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { stripSources } from "@/lib/sources";
 import { decodeTimes, splitWords } from "@/lib/speech-align";
+import { toBlocks, toSpeech } from "@/lib/speech-text";
 import { cn } from "@/lib/utils";
 
-/** Tira a marcação do texto (Markdown e marcações de fonte como [T1]) e separa em frases para ler em voz alta. */
-export function toSpeech(markdown: string, labels: string[] = []): string[] {
-  const plain = stripSources(markdown, labels)
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/^#{1,6}\s*/gm, "")
-    .replace(/[*_`>|]/g, "")
-    .replace(/^\s*[-•]\s+/gm, "")
-    .replace(/\n{2,}/g, "\n");
-  const parts: string[] = [];
-  for (const line of plain.split("\n")) {
-    const sentences = line.match(/[^.!?;:]+[.!?;:]*/g) ?? [];
-    for (const s of sentences) {
-      const t = s.trim();
-      if (!t) continue;
-      if (t.length <= 220) parts.push(t);
-      else parts.push(...(t.match(/.{1,200}(\s|$)/g) ?? [t]).map((x) => x.trim()));
-    }
-  }
-  return parts.filter((p) => /[\p{L}\p{N}]/u.test(p));
-}
-
-/** Junta frases em blocos para a voz natural (poucos pedidos). Guarda quais frases estão em cada bloco. */
-export function toBlocks(parts: string[], max = 2400): { text: string; from: number; to: number }[] {
-  const blocks: { text: string; from: number; to: number }[] = [];
-  let cur = "";
-  let from = 0;
-  parts.forEach((p, i) => {
-    if (cur && cur.length + p.length + 1 > max) {
-      blocks.push({ text: cur, from, to: i - 1 });
-      cur = "";
-      from = i;
-    }
-    cur = cur ? `${cur}\n${p}` : p; // uma frase por linha: a voz faz uma pausa clara entre as frases
-  });
-  if (cur) blocks.push({ text: cur, from, to: parts.length - 1 });
-  return blocks;
-}
+export { toBlocks, toSpeech };
 
 /** "Peso" de fala de uma frase: letras + pausas de vírgula e de fim de frase (aproxima o tempo que a voz leva). */
 export function speechWeight(p: string) {
@@ -267,9 +231,9 @@ type Prepared = { url: string; words: { s: number; t: number }[] };
 type State = "idle" | "loading" | "playing" | "paused";
 
 /**
- * Robô que lê a aula em voz alta. Voz natural do Gemini (feminina ou masculina): baixa o áudio da aula
+ * Robô que lê a aula em voz alta. Voz Piper (grátis e sem limite, gerada no servidor): baixa o áudio da aula
  * INTEIRO antes de começar (com porcentagem), junta num áudio só e toca sem travar entre os trechos.
- * Enquanto lê, a frase atual fica marcada em laranja no texto. Sem voz natural, usa a voz do aparelho.
+ * Enquanto lê, a frase atual fica marcada em laranja no texto. Se a voz do servidor falhar, usa a voz do aparelho.
  */
 export function LessonNarrator({ text, labels = [], targetRef }: { text: string; labels?: string[]; targetRef?: RefObject<HTMLElement | null> }) {
   const parts = useMemo(() => toSpeech(text, labels), [text, labels]);
@@ -284,7 +248,8 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     }
     return off;
   }, [parts]);
-  const [gender, setGender] = useState<"f" | "m">("f");
+  // a voz do robô (Piper) é masculina; a voz do aparelho (reserva) segue o mesmo tom
+  const gender = "m" as "f" | "m";
   const [rate, setRate] = useState(1);
   const [state, setState] = useState<State>("idle");
   const [progress, setProgress] = useState(0);
@@ -302,10 +267,6 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
   const run = useRef(0);
 
   useEffect(() => {
-    try {
-      const g = localStorage.getItem("eduvia:voz");
-      if (g === "f" || g === "m") setGender(g);
-    } catch {}
     const cache = prepared.current;
     return () => {
       stopped.current = true;
@@ -374,7 +335,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
         let lastError: Error | null = null;
         for (let attempt = 0; attempt < 3; attempt++) {
           if (stopped.current || run.current !== myRun) throw new Error("cancelado");
-          const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: blocks[i].text, voice: gender }) }).catch(
+          const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: blocks[i].text }) }).catch(
             (e: Error) => e,
           );
           if (r instanceof Response && r.ok) {
@@ -441,7 +402,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
       follow(p, a, myRun);
     } catch (e) {
       if (stopped.current || run.current !== myRun || (e as Error).message === "cancelado") return;
-      // sem voz natural agora: usa a voz do aparelho, sem travar a aula
+      // voz do robô indisponível agora: usa a voz do aparelho, sem travar a aula
       setMode("device");
       setNote(`${(e as Error).message} Usando a voz do aparelho.`);
       playDevice(0);
@@ -514,12 +475,6 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     finish();
   };
-  const chooseGender = (g: "f" | "m") => {
-    setGender(g);
-    try {
-      localStorage.setItem("eduvia:voz", g);
-    } catch {}
-  };
 
   if (!parts.length) return null;
   const busy = state === "playing" || state === "loading";
@@ -546,7 +501,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
           ) : (
             <p className="text-xs text-muted">
               {state === "idle"
-                ? "Toque no robô: uma voz natural lê o texto para você."
+                ? "Toque no robô: ele lê o texto para você, sem limite."
                 : `${state === "paused" ? "Pausado na frase" : "Lendo a frase"} ${Math.max(1, sentence + 1)} de ${parts.length}`}
             </p>
           )}
@@ -560,21 +515,6 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
           <Button size="sm" onClick={play} aria-label={state === "paused" ? "Continuar" : "Ouvir"}><Play size={16} /> {state === "paused" ? "Continuar" : "Ouvir"}</Button>
         )}
         {state !== "idle" && <Button size="sm" variant="ghost" onClick={stop} aria-label="Parar"><Square size={14} /></Button>}
-        <div className="flex rounded-lg border border-border p-0.5 text-xs" role="radiogroup" aria-label="Voz">
-          {(["f", "m"] as const).map((g) => (
-            <button
-              key={g}
-              type="button"
-              role="radio"
-              aria-checked={gender === g}
-              disabled={state !== "idle"}
-              onClick={() => chooseGender(g)}
-              className={cn("rounded-md px-2 py-1", gender === g ? "bg-primary text-primary-foreground" : "text-muted")}
-            >
-              {g === "f" ? "Feminina" : "Masculina"}
-            </button>
-          ))}
-        </div>
         <select aria-label="Velocidade" value={rate} onChange={(e) => setRate(Number(e.target.value))} className="h-8 rounded-lg border border-border bg-surface px-2 text-xs">
           {[0.85, 1, 1.15, 1.3].map((r) => <option key={r} value={r}>{r === 1 ? "Normal" : r < 1 ? "Devagar" : `${r}x`}</option>)}
         </select>

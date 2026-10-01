@@ -1,21 +1,17 @@
-// Voz natural da aula: Gemini TTS com a chave do próprio aluno (vozes femininas e masculinas).
-// O áudio de cada trecho fica guardado: ouvir de novo não gasta a cota.
+// Voz da aula: Piper (grátis, sem limite, no próprio servidor), sempre em português do Brasil.
+// O áudio de cada trecho fica guardado: ouvir de novo é instantâneo.
 import { createHash } from "node:crypto";
-import { GEMINI_API, AiQuotaError, AiUnavailableError, isMockAi, parseQuota, userGeminiKey } from "@/lib/ai/client";
+import { isMockAi } from "@/lib/ai/client";
+import { piperSpeak } from "@/lib/ai/piper";
 import { readObject, writeObject } from "@/lib/storage";
 import { Mp3Encoder } from "@breezystack/lamejs";
-import { alignLevels, frameLevels, packLevels, unpackLevels } from "@/lib/speech-align";
+import { alignLevels, frameLevels } from "@/lib/speech-align";
+import { toBlocks, toSpeech } from "@/lib/speech-text";
 
 export type TtsVoice = "f" | "m";
-/** Vozes do Gemini: Kore (feminina, firme e clara) e Charon (masculina, calma e informativa). */
-export const TTS_VOICES: Record<TtsVoice, string> = { f: "Kore", m: "Charon" };
 export const TTS_MAX_CHARS = 2600;
-// versão do áudio guardado (v6: voz travada em português do Brasil; antes a voz às vezes trocava para espanhol)
-const CACHE_VERSION = "v6-mp3";
-/** A voz fala SEMPRE em português do Brasil (sem isso, nomes em espanhol faziam a voz mudar de idioma). */
-const TTS_LANGUAGE = "pt-BR";
-
-const found = new Map<string, { models: string[]; at: number }>();
+// versão do áudio guardado (v7: voz Piper, frase por frase, com o tempo exato de cada frase)
+const CACHE_VERSION = "v7-piper";
 
 /** Modelos de voz disponíveis para a chave (flash antes de pro; mais novo primeiro). */
 export function rankTtsModels(names: string[]) {
@@ -24,22 +20,6 @@ export function rankTtsModels(names: string[]) {
     .map((n) => ({ n, v: parseFloat(n.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] ?? "0"), pro: /pro/.test(n) ? 1 : 0 }))
     .sort((a, b) => a.pro - b.pro || b.v - a.v)
     .map((x) => x.n);
-}
-
-async function ttsModels(key: string): Promise<string[]> {
-  const hit = found.get(key);
-  if (hit && Date.now() - hit.at < 6 * 3600_000) return hit.models;
-  let names: string[] = [];
-  try {
-    const res = await fetch(`${GEMINI_API}/models?pageSize=200`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(15_000) });
-    if (res.ok) {
-      const body = (await res.json()) as { models?: { name?: string }[] };
-      names = (body.models ?? []).flatMap((m) => (m.name ? [m.name.replace(/^models\//, "")] : []));
-    }
-  } catch {}
-  const models = [...new Set([...rankTtsModels(names), "gemini-2.5-flash-preview-tts"])];
-  found.set(key, { models, at: Date.now() });
-  return models;
 }
 
 /**
@@ -111,102 +91,140 @@ export function pcmToMp3(pcm: Buffer, rate: number): Buffer {
   return Buffer.concat(out.map((b) => Buffer.from(b.buffer, b.byteOffset, b.length)));
 }
 
-/** Duração aproximada de um MP3 de taxa constante (para acompanhar a leitura frase a frase). */
+/** Duração aproximada de um MP3 de taxa constante (reserva, se não der para contar os quadros). */
 export const mp3Seconds = (bytes: number) => (bytes * 8) / (MP3_KBPS * 1000);
+
+/** Duração exata do MP3: conta os quadros (cada pedaço emenda no outro sem a marcação escorregar). */
+export function mp3Duration(buf: Buffer): number {
+  const KBPS = [
+    [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320], // MPEG-1 camada III
+    [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160], // MPEG-2/2.5 camada III
+  ];
+  const RATES: Record<number, number[]> = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
+  let off = 0;
+  let samples = 0;
+  let rate = 0;
+  while (off + 4 <= buf.length) {
+    if (buf[off] !== 0xff || (buf[off + 1] & 0xe0) !== 0xe0) {
+      off++;
+      continue;
+    }
+    const version = (buf[off + 1] >> 3) & 3; // 3 = MPEG-1, 2 = MPEG-2, 0 = MPEG-2.5
+    const br = (buf[off + 2] >> 4) & 15;
+    const sr = (buf[off + 2] >> 2) & 3;
+    const pad = (buf[off + 2] >> 1) & 1;
+    if (version === 1 || br === 0 || br === 15 || sr === 3) {
+      off++;
+      continue;
+    }
+    const mpeg1 = version === 3;
+    rate = RATES[version][sr];
+    const len = Math.floor(((mpeg1 ? 144 : 72) * KBPS[mpeg1 ? 0 : 1][br] * 1000) / rate) + pad;
+    if (len < 4) break;
+    samples += mpeg1 ? 1152 : 576;
+    off += len;
+  }
+  return rate ? samples / rate : mp3Seconds(buf.length);
+}
+
+/** Silêncio que o codificador MP3 põe no começo de cada pedaço (o som da fala começa depois dele). */
+export const MP3_START_DELAY_SAMPLES = 1105;
 
 function toMp3WithPause(pcm: Buffer, rate: number) {
   return pcmToMp3(Buffer.concat([pcm, Buffer.alloc(Math.round(rate * TAIL_PAUSE_S) * 2)]), rate);
 }
 
-/** Fala de teste (modo sem IA): um "bip" por palavra e silêncio nas vírgulas e pontos, para testar a marcação. */
+/** Fala de teste (modo sem IA): um "bip" por sílaba e silêncio nas vírgulas, para testar a marcação. */
 function mockSpeech(text: string, rate: number) {
   const parts: Buffer[] = [];
   for (const m of text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)) {
     const len = Math.round(rate * (0.08 + m[0].length * 0.035));
     const b = Buffer.alloc(len * 2);
-    for (let i = 0; i < len; i++) b.writeInt16LE(Math.round(4000 * Math.sin(i / 4)), i * 2);
+    for (let i = 0; i < len; i++) b.writeInt16LE(Math.round(4000 * Math.sin((Math.PI * i) / len) * Math.sin(i / 4)), i * 2);
     const after = text.slice(m.index! + m[0].length, m.index! + m[0].length + 2);
-    const gap = /[.!?]/.test(after) ? 0.4 : /[,;:]/.test(after) ? 0.2 : 0.04;
-    parts.push(b, Buffer.alloc(Math.round(rate * gap) * 2));
+    parts.push(b, Buffer.alloc(Math.round(rate * (/[,;:]/.test(after) ? 0.2 : 0.04)) * 2));
   }
   return Buffer.concat(parts);
 }
 
 export type Spoken = { mp3: Buffer; times: number[] | null };
 
-/** Gera (ou reaproveita) o áudio MP3 de um trecho, já limpo e com a pausa do fim, e o tempo de cada palavra. */
-export async function speak(userId: string, text: string, voice: TtsVoice): Promise<Spoken> {
+/** Pausa depois de cada frase: maior no fim de frase e depois de títulos (linhas sem ponto). */
+const pauseAfterLine = (line: string) => (/[.!?]["”')\]]*$/.test(line) ? 0.45 : /[:;]$/.test(line) ? 0.35 : 0.6);
+
+/**
+ * Gera (ou reaproveita) o áudio MP3 de um trecho e o momento em que cada palavra começa.
+ * Cada frase (uma por linha) é falada separadamente: o começo de cada frase no áudio é EXATO;
+ * dentro da frase, as palavras são encaixadas pelas pausas e sílabas da própria voz.
+ */
+const inflight = new Map<string, Promise<Spoken>>();
+
+export function speak(text: string): Promise<Spoken> {
   const clean = text.trim().slice(0, TTS_MAX_CHARS);
-  const hash = (v: string) => createHash("sha256").update(`${v}:${voice}:${clean}`).digest("hex");
-  const cacheKey = `tts/${hash(CACHE_VERSION)}.mp3`;
-  const timesFrom = (levels: number[]) => {
+  const hash = createHash("sha256").update(`${CACHE_VERSION}:${clean}`).digest("hex");
+  // o mesmo trecho pedido duas vezes ao mesmo tempo (ex.: o servidor já está preparando): gera uma vez só
+  let job = inflight.get(hash);
+  if (!job) {
+    job = speakNow(clean, hash).finally(() => inflight.delete(hash));
+    inflight.set(hash, job);
+  }
+  return job;
+}
+
+/**
+ * Prepara o áudio da aula inteira em segundo plano (quando o aluno abre a aula),
+ * um trecho de cada vez: quando ele tocar no robô, o áudio já está pronto ou quase.
+ */
+export async function warmLesson(markdown: string, labels: string[]) {
+  for (const b of toBlocks(toSpeech(markdown, labels))) {
     try {
-      return alignLevels(levels, clean);
+      await speak(b.text);
+    } catch (e) {
+      console.error("[voz] preparar aula", e);
+      return;
+    }
+  }
+}
+
+async function speakNow(clean: string, hash: string): Promise<Spoken> {
+  const mp3Key = `tts/${hash}.mp3`;
+  const timesKey = `tts/${hash}.json`;
+  try {
+    const mp3 = await readObject(mp3Key);
+    const times = await readObject(timesKey)
+      .then((b) => (JSON.parse(b.toString()) as { times?: number[] | null }).times ?? null)
+      .catch(() => null);
+    return { mp3, times };
+  } catch {}
+  const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean);
+  let rate = 22050;
+  let pcms: Buffer[];
+  if (isMockAi()) {
+    rate = 24000;
+    pcms = lines.map((l) => mockSpeech(l, rate));
+  } else ({ rate, pcms } = await piperSpeak(lines));
+  const pieces: Buffer[] = [];
+  const times: number[] = [];
+  let at = 0;
+  lines.forEach((line, i) => {
+    const pcm = cleanPcm(pcms[i], rate);
+    const words = [...line.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)].length;
+    let local: number[] | null = null;
+    try {
+      local = alignLevels(frameLevels(pcm, rate), line);
     } catch (e) {
       console.error("[voz] tempos das palavras", e);
-      return null;
     }
-  };
-  try {
-    const mp3 = await readObject(cacheKey);
-    const meta = await readObject(`tts/${hash(CACHE_VERSION)}.json`)
-      .then((b) => JSON.parse(b.toString()) as { levels?: string })
-      .catch(() => null);
-    return { mp3, times: meta?.levels ? timesFrom(unpackLevels(meta.levels)) : null };
-  } catch {}
-  const finish = async (pcm: Buffer, rate: number): Promise<Spoken> => {
-    const cleaned = cleanPcm(pcm, rate);
-    const mp3 = toMp3WithPause(cleaned, rate);
-    const levels = frameLevels(cleaned, rate);
-    await writeObject(cacheKey, mp3, "audio/mpeg").catch(() => {});
-    await writeObject(`tts/${hash(CACHE_VERSION)}.json`, Buffer.from(JSON.stringify({ levels: packLevels(levels) })), "application/json").catch(() => {});
-    return { mp3, times: timesFrom(levels) };
-  };
-  if (isMockAi()) return finish(mockSpeech(clean, 24000), 24000);
-  // sem cota: dá erro e a aula usa a voz do aparelho (em português); áudios antigos não são reaproveitados
-  // porque podiam ter trechos em outro idioma
-  return generate(userId, clean, voice, finish);
-}
-
-function ttsRequest(key: string, model: string, text: string, voice: TtsVoice, withLanguage: boolean): Promise<Response> {
-  const speechConfig = {
-    ...(withLanguage ? { languageCode: TTS_LANGUAGE } : {}),
-    voiceConfig: { prebuiltVoiceConfig: { voiceName: TTS_VOICES[voice] } },
-  };
-  return fetch(`${GEMINI_API}/models/${model}:generateContent`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": key },
-    body: JSON.stringify({ contents: [{ parts: [{ text }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig } }),
-    signal: AbortSignal.timeout(90_000),
-  }).catch((e: Error) => new Response(JSON.stringify({ error: { message: e.message } }), { status: 599 }));
-}
-
-async function generate(userId: string, clean: string, voice: TtsVoice, finish: (pcm: Buffer, rate: number) => Promise<Spoken>): Promise<Spoken> {
-  const key = await userGeminiKey(userId);
-  const errors: string[] = [];
-  for (const model of (await ttsModels(key)).slice(0, 3)) {
-    let res = await ttsRequest(key, model, clean, voice, true);
-    if (res.status === 400) {
-      // modelo que não aceita escolher o idioma: tenta de novo sem (o texto é todo em português)
-      const msg = JSON.stringify(await res.clone().json().catch(() => ({})));
-      if (/language/i.test(msg)) res = await ttsRequest(key, model, clean, voice, false);
-    }
-    if (res.ok) {
-      const body = (await res.json()) as { candidates?: { content?: { parts?: { inlineData?: { data?: string; mimeType?: string } }[] } }[] };
-      const part = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;
-      if (part?.data) {
-        const rate = Number(part.mimeType?.match(/rate=(\d+)/)?.[1]) || 24000;
-        return finish(Buffer.from(part.data, "base64"), rate);
-      }
-      errors.push(`${model}: sem áudio`);
-      continue;
-    }
-    const body = (await res.json().catch(() => ({}))) as Parameters<typeof parseQuota>[0];
-    if (res.status === 429) {
-      const q = parseQuota(body);
-      throw new AiQuotaError("A voz natural chegou ao limite por agora.", q.retryAt, q.daily);
-    }
-    errors.push(`${model}: ${res.status} ${body.error?.message ?? ""}`);
-  }
-  throw new AiUnavailableError("A voz natural não está disponível agora.", errors.join(" | "));
+    const secs = pcm.length / 2 / rate;
+    for (let k = 0; k < words; k++) times.push(Math.round((at + (local && local.length === words ? local[k] : (k / Math.max(1, words)) * secs)) * 100) / 100);
+    const gap = i < lines.length - 1 ? pauseAfterLine(line) : 0;
+    pieces.push(pcm, Buffer.alloc(Math.round(rate * gap) * 2));
+    at += secs + Math.round(rate * gap) / rate;
+  });
+  const mp3 = toMp3WithPause(Buffer.concat(pieces), rate);
+  const delay = MP3_START_DELAY_SAMPLES / rate;
+  for (let k = 0; k < times.length; k++) times[k] = Math.round((times[k] + delay) * 100) / 100;
+  await writeObject(mp3Key, mp3, "audio/mpeg").catch(() => {});
+  await writeObject(timesKey, Buffer.from(JSON.stringify({ times })), "application/json").catch(() => {});
+  return { mp3, times };
 }

@@ -47,6 +47,7 @@ services:
       - key: BILLING_ENFORCED
         value: "true" # sem assinatura, a conta fica no plano Grátis (limitado)
       # IA: Google Gemini com a chave de cada aluno (informada no cadastro). Nada a configurar aqui.
+      # Voz do robô: Piper (grátis, sem limite), baixado sozinho para /var/data/piper na primeira partida.
       # notificações push: as chaves são geradas sozinhas e guardadas no banco na primeira vez.
       # (Opcional) para usar chaves próprias, preencha VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY juntas.
       - key: VAPID_PUBLIC_KEY

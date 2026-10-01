@@ -1,4 +1,5 @@
 // Worker: processa a fila (materiais, planos) e tarefas agendadas (lembretes, replanejamento diário).
+import { ensurePiper } from "@/lib/ai/piper";
 // Roda como processo separado (npm run worker) ou dentro do próprio app web (RUN_WORKER_IN_WEB=true).
 import { enqueue, getBoss, QUEUES, type JobPayloads } from "@/lib/queue";
 import { processMaterial } from "@/lib/materials/process";
@@ -45,6 +46,8 @@ export async function startWorker({ handleSignals }: { handleSignals: boolean })
   globalForWorker.workerStarted = true;
   const boss = await getBoss();
   await wipeFilesIfRequested().catch((e) => console.error("[worker] limpeza de arquivos", e));
+  // baixa a voz do robô (Piper) para o disco já na partida, para a primeira aula não esperar o download
+  if (!isMockAi()) void ensurePiper().catch((e) => console.error("[voz] instalar Piper", e));
   console.log(
     `[worker] iniciado. IA: ${isMockAi() ? "SIMULADA (AI_MODE=mock)" : "Gemini (chave de cada aluno)"}; embeddings: ${usingLocalEmbeddings() ? "locais" : "Voyage AI"}; push: ${(await pushConfigured()) ? "ativo" : "desligado"}`,
   );

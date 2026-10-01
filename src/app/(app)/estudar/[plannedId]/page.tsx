@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { after } from "next/server";
+import { warmLesson } from "@/lib/ai/tts";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { getOwnedPlanned, lessonBlocker, nearestSessionMinutes, SESSION_MINUTES } from "@/lib/study";
@@ -78,6 +80,13 @@ export default async function Page({ params }: { params: Promise<{ plannedId: st
     !text && planned.kind === "REVIEW"
       ? await db.studyText.findMany({ where: { topicId: planned.topicId, studentType: planned.plan.preparation.studentType }, orderBy: { part: "asc" } })
       : [];
+
+  // já vai preparando a voz do robô para esta aula (no servidor, sem atrasar a página)
+  if (text?.content) {
+    const { content } = text;
+    const labels = (text.sourceRefs as SourceRef[]).map((r) => r.label);
+    after(() => warmLesson(content, labels));
+  }
 
   const byId = new Map(questions.map((q) => [q.id, q]));
   const ordered: SessionQuestion[] = session.questionIds.flatMap((id) => {
