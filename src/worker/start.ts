@@ -27,12 +27,24 @@ async function recoverStuckMaterials() {
   if (stuck.length) console.log(`[worker] ${stuck.length} material(is) parado(s) voltaram para a fila`);
 }
 
+/** Limpeza única dos arquivos no disco depois de "recomeçar do zero" (marcada no banco pela migração 19). */
+async function wipeFilesIfRequested() {
+  const flag = await db.siteSetting.findUnique({ where: { key: "wipe-files" } });
+  if (flag?.value !== "pending") return;
+  const { wipeLocalFiles } = await import("@/lib/storage");
+  // só arquivos com mais de 10 minutos: não pega um envio que acabou de começar
+  const removed = await wipeLocalFiles(10 * 60_000);
+  await db.siteSetting.update({ where: { key: "wipe-files" }, data: { value: `done:${removed}` } });
+  console.log(`[worker] limpeza de arquivos: ${removed} arquivo(s) apagado(s)`);
+}
+
 const globalForWorker = globalThis as unknown as { workerStarted?: boolean };
 
 export async function startWorker({ handleSignals }: { handleSignals: boolean }) {
   if (globalForWorker.workerStarted) return;
   globalForWorker.workerStarted = true;
   const boss = await getBoss();
+  await wipeFilesIfRequested().catch((e) => console.error("[worker] limpeza de arquivos", e));
   console.log(
     `[worker] iniciado. IA: ${isMockAi() ? "SIMULADA (AI_MODE=mock)" : "Gemini (chave de cada aluno)"}; embeddings: ${usingLocalEmbeddings() ? "locais" : "Voyage AI"}; push: ${(await pushConfigured()) ? "ativo" : "desligado"}`,
   );

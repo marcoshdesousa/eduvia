@@ -87,3 +87,25 @@ function localPath(key: string) {
   if (!file.startsWith(localDir() + path.sep)) throw new Error("Chave de arquivo inválida");
   return file;
 }
+
+/**
+ * Apaga os arquivos guardados no disco local mais antigos que `olderThanMs` (limpeza única após
+ * recomeçar do zero). No S3/R2 não faz nada (lá se limpa pelo painel do provedor).
+ */
+export async function wipeLocalFiles(olderThanMs: number) {
+  if (driver() === "s3") return 0;
+  const { readdir, stat, rm } = await import("node:fs/promises");
+  let removed = 0;
+  const walk = async (dir: string) => {
+    for (const entry of await readdir(/*turbopackIgnore: true*/ dir, { withFileTypes: true }).catch(() => [])) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (Date.now() - (await stat(/*turbopackIgnore: true*/ full)).mtimeMs > olderThanMs) {
+        await rm(/*turbopackIgnore: true*/ full, { force: true });
+        removed++;
+      }
+    }
+  };
+  await walk(localDir());
+  return removed;
+}
