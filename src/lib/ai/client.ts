@@ -118,6 +118,10 @@ async function keyFor(userId: string | null | undefined): Promise<string> {
   return key;
 }
 
+/** Chave do Gemini do aluno (para chamadas especiais, como a voz da aula). */
+export const userGeminiKey = keyFor;
+export const GEMINI_API = API;
+
 function quotaError(retryAt: Date, daily: boolean) {
   return new AiQuotaError(
     daily

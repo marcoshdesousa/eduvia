@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pause, Play, Square } from "lucide-react";
+import { Loader2, Pause, Play, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -27,127 +27,213 @@ export function toSpeech(markdown: string): string[] {
   return parts.filter(Boolean);
 }
 
-/** Escolhe a voz em português que soa mais natural (vozes "Natural"/"Online"/Google primeiro). */
-function rankVoice(v: SpeechSynthesisVoice) {
+/** Junta frases em blocos maiores para a voz natural (menos pedidos, fala mais fluida). */
+export function toBlocks(parts: string[], max = 1500): string[] {
+  const blocks: string[] = [];
+  let cur = "";
+  for (const p of parts) {
+    if (cur && cur.length + p.length + 1 > max) {
+      blocks.push(cur);
+      cur = "";
+    }
+    cur = cur ? `${cur} ${p}` : p;
+  }
+  if (cur) blocks.push(cur);
+  return blocks;
+}
+
+const FEMALE = /francisca|thalita|luciana|maria|vit[oó]ria|raquel|leila|fernanda|helo[ií]sa|female|feminina|joana|catarina/i;
+const MALE = /antonio|ant[oô]nio|felipe|daniel|ricardo|duarte|julio|j[uú]lio|male|masculin|fabio|humberto/i;
+
+/** Voz do aparelho (reserva): natural/online primeiro e do gênero escolhido. */
+function rankVoice(v: SpeechSynthesisVoice, gender: "f" | "m") {
   const n = v.name.toLowerCase();
   let score = 0;
   if (v.lang.toLowerCase() === "pt-br") score += 10;
   if (/natural|online|neural/.test(n)) score += 8;
-  if (/google/.test(n)) score += 5;
-  if (/francisca|thalita|antonio|luciana|felipe|daniel|maria/.test(n)) score += 3;
+  if (/google/.test(n)) score += 4;
+  if ((gender === "f" ? FEMALE : MALE).test(n)) score += 6;
+  if ((gender === "f" ? MALE : FEMALE).test(n)) score -= 6;
   return score;
 }
 
-/** Robozinho que lê o texto da aula em voz alta (voz do próprio aparelho, sem custo). */
+type Mode = "natural" | "device";
+
+/**
+ * Robozinho que lê o texto da aula em voz alta. Usa a voz natural do Gemini (feminina ou masculina),
+ * guardada para não gastar de novo; se não der, cai para a voz do aparelho, mais devagar.
+ */
 export function LessonNarrator({ text }: { text: string }) {
   const parts = useMemo(() => toSpeech(text), [text]);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [voiceName, setVoiceName] = useState("");
-  const [rate, setRate] = useState(1);
-  const [state, setState] = useState<"idle" | "playing" | "paused">("idle");
+  const blocks = useMemo(() => toBlocks(parts), [parts]);
+  const [gender, setGender] = useState<"f" | "m">("f");
+  const [rate, setRate] = useState(0.9);
+  const [state, setState] = useState<"idle" | "loading" | "playing" | "paused">("idle");
   const [index, setIndex] = useState(0);
-  const [supported, setSupported] = useState(true);
+  const [mode, setMode] = useState<Mode>("natural");
+  const [note, setNote] = useState<string | null>(null);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const cache = useRef(new Map<string, Promise<string>>());
   const stopped = useRef(false);
+  const rateRef = useRef(rate);
+  rateRef.current = rate;
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      setSupported(false);
-      return;
-    }
-    const load = () => {
-      const pt = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("pt"));
-      pt.sort((a, b) => rankVoice(b) - rankVoice(a));
-      setVoices(pt);
-      setVoiceName((cur) => cur || pt[0]?.name || "");
-    };
-    load();
-    speechSynthesis.addEventListener("voiceschanged", load);
+    try {
+      const g = localStorage.getItem("eduvia:voz");
+      if (g === "f" || g === "m") setGender(g);
+    } catch {}
     return () => {
-      speechSynthesis.removeEventListener("voiceschanged", load);
-      speechSynthesis.cancel();
+      stopped.current = true;
+      audio.current?.pause();
+      if ("speechSynthesis" in window) speechSynthesis.cancel();
+      for (const p of cache.current.values()) p.then((u) => URL.revokeObjectURL(u)).catch(() => {});
     };
   }, []);
 
-  const speakFrom = (i: number) => {
-    if (i >= parts.length) {
-      setState("idle");
-      setIndex(0);
-      return;
+  useEffect(() => {
+    if (audio.current) audio.current.playbackRate = rate;
+  }, [rate]);
+
+  const fetchBlock = (i: number) => {
+    const k = `${gender}:${i}`;
+    if (!cache.current.has(k)) {
+      const p = fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: blocks[i], voice: gender }) }).then(async (r) => {
+        if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "voz indisponível");
+        return URL.createObjectURL(await r.blob());
+      });
+      p.catch(() => cache.current.delete(k));
+      cache.current.set(k, p);
     }
+    return cache.current.get(k)!;
+  };
+
+  const finish = () => {
+    setState("idle");
+    setIndex(0);
+  };
+
+  const playNatural = async (i: number) => {
+    if (stopped.current) return;
+    if (i >= blocks.length) return finish();
+    setIndex(i);
+    setState("loading");
+    try {
+      const url = await fetchBlock(i);
+      if (stopped.current) return;
+      if (i + 1 < blocks.length) fetchBlock(i + 1).catch(() => {}); // já prepara o próximo
+      const a = audio.current ?? (audio.current = new Audio());
+      a.src = url;
+      a.playbackRate = rateRef.current;
+      a.onended = () => playNatural(i + 1);
+      await a.play();
+      setState("playing");
+    } catch (e) {
+      if (stopped.current) return;
+      // sem voz natural agora: segue com a voz do aparelho, sem travar a aula
+      setMode("device");
+      setNote(`${(e as Error).message} Usando a voz do aparelho.`);
+      playDevice(Math.max(0, parts.findIndex((p) => blocks[i].startsWith(p))));
+    }
+  };
+
+  const playDevice = (i: number) => {
+    if (!("speechSynthesis" in window)) {
+      setNote("Seu navegador não tem leitura em voz alta.");
+      return finish();
+    }
+    if (stopped.current) return;
+    if (i >= parts.length) return finish();
     const u = new SpeechSynthesisUtterance(parts[i]);
     u.lang = "pt-BR";
-    const voice = voices.find((v) => v.name === voiceName);
-    if (voice) u.voice = voice;
-    u.rate = rate;
+    const voices = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("pt"));
+    voices.sort((a, b) => rankVoice(b, gender) - rankVoice(a, gender));
+    if (voices[0]) u.voice = voices[0];
+    u.rate = rateRef.current;
+    u.pitch = gender === "m" ? 0.9 : 1.05;
     u.onend = () => {
       if (stopped.current) return;
-      setIndex(i + 1);
-      speakFrom(i + 1);
+      playDevice(i + 1);
     };
     setIndex(i);
+    setState("playing");
     speechSynthesis.speak(u);
   };
 
   const play = () => {
     if (state === "paused") {
-      speechSynthesis.resume();
+      if (mode === "natural") audio.current?.play();
+      else speechSynthesis.resume();
       setState("playing");
       return;
     }
     stopped.current = false;
-    speechSynthesis.cancel();
-    setState("playing");
-    speakFrom(index);
+    if (mode === "natural") playNatural(index);
+    else {
+      speechSynthesis.cancel();
+      playDevice(index);
+    }
   };
   const pause = () => {
-    speechSynthesis.pause();
+    if (mode === "natural") audio.current?.pause();
+    else speechSynthesis.pause();
     setState("paused");
   };
   const stop = () => {
     stopped.current = true;
-    speechSynthesis.cancel();
-    setState("idle");
-    setIndex(0);
+    audio.current?.pause();
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+    finish();
+  };
+  const chooseGender = (g: "f" | "m") => {
+    setGender(g);
+    try {
+      localStorage.setItem("eduvia:voz", g);
+    } catch {}
   };
 
-  if (!supported || !parts.length) return null;
-  const speaking = state === "playing";
+  if (!parts.length) return null;
+  const total = mode === "natural" ? blocks.length : parts.length;
+  const busy = state === "playing" || state === "loading";
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center">
       <div className="flex items-center gap-3">
-        <Robot speaking={speaking} />
+        <Robot speaking={state === "playing"} />
         <div className="min-w-0">
           <p className="text-sm font-semibold">Ouvir a aula</p>
-          <p className="truncate text-xs text-muted">{state === "idle" ? "O robozinho lê o texto para você." : `Lendo ${index + 1} de ${parts.length}…`}</p>
+          <p className="text-xs text-muted">
+            {state === "idle" ? "Uma voz natural lê o texto para você." : state === "loading" ? "Preparando a voz…" : `Lendo ${index + 1} de ${total}…`}
+          </p>
+          {note && <p className="text-xs text-warning">{note}</p>}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-        {speaking ? (
-          <Button size="sm" onClick={pause} aria-label="Pausar"><Pause size={16} /> Pausar</Button>
+        {busy ? (
+          <Button size="sm" onClick={pause} disabled={state === "loading"} aria-label="Pausar">
+            {state === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Pause size={16} />} Pausar
+          </Button>
         ) : (
           <Button size="sm" onClick={play} aria-label={state === "paused" ? "Continuar" : "Ouvir"}><Play size={16} /> {state === "paused" ? "Continuar" : "Ouvir"}</Button>
         )}
         {state !== "idle" && <Button size="sm" variant="ghost" onClick={stop} aria-label="Parar"><Square size={14} /></Button>}
-        <select
-          aria-label="Velocidade"
-          value={rate}
-          onChange={(e) => setRate(Number(e.target.value))}
-          disabled={state !== "idle"}
-          className="h-8 rounded-lg border border-border bg-surface px-2 text-xs"
-        >
-          {[0.8, 1, 1.2, 1.5].map((r) => <option key={r} value={r}>{r}x</option>)}
+        <div className="flex rounded-lg border border-border p-0.5 text-xs" role="radiogroup" aria-label="Voz">
+          {(["f", "m"] as const).map((g) => (
+            <button
+              key={g}
+              type="button"
+              role="radio"
+              aria-checked={gender === g}
+              disabled={state !== "idle"}
+              onClick={() => chooseGender(g)}
+              className={cn("rounded-md px-2 py-1", gender === g ? "bg-primary text-primary-foreground" : "text-muted")}
+            >
+              {g === "f" ? "Feminina" : "Masculina"}
+            </button>
+          ))}
+        </div>
+        <select aria-label="Velocidade" value={rate} onChange={(e) => setRate(Number(e.target.value))} className="h-8 rounded-lg border border-border bg-surface px-2 text-xs">
+          {[0.75, 0.9, 1, 1.15, 1.3].map((r) => <option key={r} value={r}>{r === 0.9 ? "Normal" : `${r}x`}</option>)}
         </select>
-        {voices.length > 1 && (
-          <select
-            aria-label="Voz"
-            value={voiceName}
-            onChange={(e) => setVoiceName(e.target.value)}
-            disabled={state !== "idle"}
-            className="h-8 max-w-40 rounded-lg border border-border bg-surface px-2 text-xs"
-          >
-            {voices.map((v) => <option key={v.name} value={v.name}>{v.name.replace(/Microsoft |Google /, "").replace(/ Online \(Natural\)/, " (natural)")}</option>)}
-          </select>
-        )}
       </div>
     </div>
   );
