@@ -73,6 +73,6 @@ describe("planos", () => {
     expect(by.gratis.limits.materials).toBe(1);
     expect(by.gratis.limits.pagesPerPdf).toBe(100);
     expect(planFeatures(by.gratis.limits)).toContain("1 PDF de até 100 páginas");
-    expect(DEFAULT_PLANS.filter((p) => p.active !== false && p.slug !== "gratis")).toHaveLength(3);
+    expect(DEFAULT_PLANS.filter((p) => p.slug !== "gratis").map((p) => p.slug)).toEqual(["eduvia", "avancado", "ilimitado"]);
   });
 });

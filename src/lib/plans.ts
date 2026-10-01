@@ -27,7 +27,7 @@ export type PlanLimits = {
   restAfterMinutes: number;
 };
 
-export type PlanSlug = "gratis" | "eduvia" | "plus" | "pro" | "avancado" | "ilimitado";
+export type PlanSlug = "gratis" | "eduvia" | "avancado" | "ilimitado";
 export type PlanDef = { slug: PlanSlug; name: string; order: number; priceWeekCents: number; priceFortnightCents: number; priceMonthCents: number; limits: PlanLimits; active?: boolean };
 
 const PAID_BASE = { activePreparations: -1, materials: -1, pagesPerDay: -1, pagesPerPdf: -1, scannedPagesPerDay: -1, gamesPerDay: -1, groups: true, groupsOwned: 5, restAfterMinutes: 180 };
@@ -70,9 +70,6 @@ export const DEFAULT_PLANS: PlanDef[] = [
     priceMonthCents: 5000,
     limits: { ...PAID_BASE, preparationsPerMonth: 35, newSessionsPerDay: -1, examsPerMonth: -1, essaysPerDay: -1, tutorMessagesPerDay: -1, groupsOwned: -1 },
   },
-  // fora da vitrine (assinaturas antigas continuam valendo até o fim do período)
-  { slug: "plus", name: "Plus", order: 8, active: false, priceWeekCents: 0, priceFortnightCents: 0, priceMonthCents: 2000, limits: { ...PAID_BASE, preparationsPerMonth: 8, newSessionsPerDay: 6, examsPerMonth: 20, essaysPerDay: 4, tutorMessagesPerDay: 60 } },
-  { slug: "pro", name: "Pro", order: 9, active: false, priceWeekCents: 0, priceFortnightCents: 0, priceMonthCents: 2500, limits: { ...PAID_BASE, preparationsPerMonth: 12, newSessionsPerDay: 8, examsPerMonth: 30, essaysPerDay: 5, tutorMessagesPerDay: 80 } },
 ];
 
 /** Plano pago de entrada. */

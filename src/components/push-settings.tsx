@@ -31,7 +31,11 @@ type State = "unsupported" | "denied" | "off" | "on" | "loading";
 export async function enablePush(vapidKey: string): Promise<"on" | "denied" | "off" | { error: string }> {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return permission === "denied" ? "denied" : "off";
-  const reg = await navigator.serviceWorker.ready;
+  // não deixa o botão travado se o celular demorar a responder
+  const reg = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 15_000)),
+  ]);
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) });
   const res = await fetch("/api/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub.toJSON()) });
   if (!res.ok) {
@@ -48,6 +52,7 @@ export async function enablePush(vapidKey: string): Promise<"on" | "denied" | "o
 export function EnableNotificationsBanner({ vapidKey }: { vapidKey: string | null }) {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   useEffect(() => {
     (async () => {
       if (!vapidKey || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
@@ -59,19 +64,43 @@ export function EnableNotificationsBanner({ vapidKey }: { vapidKey: string | nul
       if (!(await reg.pushManager.getSubscription())) setShow(true);
     })().catch(() => {});
   }, [vapidKey]);
+  if (note) {
+    return (
+      <div role="status" className="border-b border-primary/30 bg-primary/10 px-4 py-2 text-center text-sm">
+        {note}
+      </div>
+    );
+  }
   if (!show) return null;
+  const later = () => {
+    try {
+      sessionStorage.setItem("eduvia:push-later", "1");
+    } catch {}
+  };
   return (
     <div className="flex items-center gap-3 border-b border-primary/30 bg-primary/10 px-4 py-2 text-sm">
       <Bell size={16} className="shrink-0 text-primary" />
-      <span className="flex-1">Ative as notificações para receber o lembrete na hora de estudar.</span>
+      <span className="min-w-0 flex-1">Ative as notificações para receber o lembrete na hora de estudar.</span>
       <Button
         size="sm"
         disabled={busy}
         onClick={async () => {
+          // o aviso some assim que a pessoa toca, dando certo ou não
           setBusy(true);
-          const r = await enablePush(vapidKey!).catch(() => "off" as const);
+          later();
+          const r = await enablePush(vapidKey!).catch(() => ({ error: "Não foi possível ativar agora." }));
           setBusy(false);
-          if (r === "on" || r === "denied") setShow(false);
+          setShow(false);
+          setNote(
+            r === "on"
+              ? "Pronto! Notificações ativadas ✅"
+              : r === "denied"
+                ? "As notificações ficaram bloqueadas. Dá para liberar nos ajustes do celular."
+                : r === "off"
+                  ? null
+                  : `${r.error} Você pode tentar de novo em Mais → Configurações.`,
+          );
+          setTimeout(() => setNote(null), 5000);
         }}
       >
         Ativar
@@ -82,9 +111,7 @@ export function EnableNotificationsBanner({ vapidKey }: { vapidKey: string | nul
         className="text-xs text-muted hover:text-foreground"
         onClick={() => {
           setShow(false);
-          try {
-            sessionStorage.setItem("eduvia:push-later", "1");
-          } catch {}
+          later();
         }}
       >
         Agora não

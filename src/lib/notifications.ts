@@ -37,8 +37,9 @@ export function pushConfigured() {
   return vapidReady;
 }
 
+/** Chave pública para o navegador; só existe quando o push está configurado de verdade (pública + privada). */
 export function vapidPublicKey() {
-  return process.env.VAPID_PUBLIC_KEY ?? null;
+  return pushConfigured() ? (process.env.VAPID_PUBLIC_KEY ?? null) : null;
 }
 
 /** Cria a notificação (ignorando repetidas pelo dedupeKey) e envia push para os aparelhos do aluno. */
