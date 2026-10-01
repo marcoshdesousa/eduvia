@@ -8,7 +8,7 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { Field, FormError, Input } from "@/components/ui/form";
 
 type Props = {
-  prep: { id: string; title: string; status: string; dailyMinutes: number; studyDays: number[]; studyTime: string; examDate: string; reviewIntervals: string };
+  prep: { id: string; title: string; status: string; dailyMinutes: number; studyDays: number[]; studyTime: string; examDate: string; reviewIntervals: string; includeEssay: boolean };
 };
 
 export function PrepSettings({ prep }: Props) {
@@ -22,7 +22,7 @@ export function PrepSettings({ prep }: Props) {
           <FormError message={state?.error} />
           {state?.message && <p className="text-sm text-success">{state.message}</p>}
           <Field label="Nome" htmlFor="title"><Input id="title" name="title" defaultValue={prep.title} /></Field>
-          <AgendaFields defaults={prep} />
+          <AgendaFields defaults={prep} essayDefault={prep.includeEssay} />
           <Field label="Intervalos das revisões (dias)" htmlFor="reviewIntervals" hint="R1, R2, R3, R4... contados a partir da conclusão do assunto.">
             <Input id="reviewIntervals" name="reviewIntervals" defaultValue={prep.reviewIntervals} />
           </Field>

@@ -33,7 +33,9 @@ function parseAgenda(formData: FormData, tz: string) {
     examDate = new Date(`${r.data.examDate}T00:00:00Z`);
     if (examDate <= today(tz)) return { error: "A data da prova precisa ser no futuro." } as const;
   }
-  return { data: { dailyMinutes: r.data.dailyMinutes, studyDays: [...new Set(r.data.studyDays)].sort(), studyTime: r.data.studyTime, examDate } } as const;
+  return {
+    data: { dailyMinutes: r.data.dailyMinutes, studyDays: [...new Set(r.data.studyDays)].sort(), studyTime: r.data.studyTime, examDate, includeEssay: formData.get("includeEssay") === "on" },
+  } as const;
 }
 
 export async function createPreparationAction(_: FormState, formData: FormData): Promise<FormState> {

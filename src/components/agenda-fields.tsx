@@ -9,9 +9,11 @@ const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 export function AgendaFields({
   defaults = { dailyMinutes: 30, studyDays: [1, 2, 3, 4, 5], studyTime: "19:00", examDate: "" },
   examHint,
+  essayDefault = false,
 }: {
   defaults?: { dailyMinutes: number; studyDays: number[]; studyTime: string; examDate: string };
   examHint?: string;
+  essayDefault?: boolean;
 }) {
   const [minutes, setMinutes] = useState(defaults.dailyMinutes);
   const [days, setDays] = useState<number[]>(defaults.studyDays);
@@ -60,6 +62,13 @@ export function AgendaFields({
           <Input id="examDate" name="examDate" type="date" defaultValue={defaults.examDate} min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} />
         </Field>
       </div>
+      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 text-sm hover:bg-surface-2">
+        <input type="checkbox" name="includeEssay" defaultChecked={essayDefault} className="mt-0.5 size-4 accent-[var(--primary)]" />
+        <span>
+          <span className="font-medium">Incluir redação no plano</span>
+          <span className="block text-xs text-muted">Uma redação por semana aparece em &quot;O que fazer hoje&quot;, com tema sorteado e correção.</span>
+        </span>
+      </label>
     </div>
   );
 }

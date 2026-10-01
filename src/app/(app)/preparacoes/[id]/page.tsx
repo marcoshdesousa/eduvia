@@ -150,6 +150,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
             studyTime: prep.studyTime,
             examDate: prep.examDate ? keyFromDay(prep.examDate) : "",
             reviewIntervals: prep.reviewIntervals.join(", "),
+            includeEssay: prep.includeEssay,
           }}
         />
       )}

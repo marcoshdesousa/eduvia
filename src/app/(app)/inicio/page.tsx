@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Lock, Play, RotateCcw, Target, Zap } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Lock, PenLine, Play, RotateCcw, Target, Zap } from "lucide-react";
 import { db } from "@/lib/db";
 import { InstallAppBanner } from "@/components/install-app";
 import { requireReadyUser } from "@/lib/session";
@@ -7,6 +7,7 @@ import { ensurePlanFresh } from "@/lib/plan";
 import { addDays, keyFromDay, today, weekday } from "@/lib/core/dates";
 import { levelFromXp, liveStreak } from "@/lib/gamification";
 import { StreakCard } from "@/components/streak-card";
+import { weeklyEssays } from "@/lib/essay-plan";
 import { MasteryBadge, Progress } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle, Stat } from "@/components/ui/card";
@@ -43,6 +44,7 @@ export default async function Page() {
     }),
     db.studyDay.findMany({ where: { userId: user.id, date: { gte: addDays(day, -6) }, minutes: { gt: 0 } }, select: { date: true } }),
   ]);
+  const essays = await weeklyEssays(user);
   const streak = liveStreak(user, preps.flatMap((p) => p.studyDays), day);
   const studied = new Set(lastDays.map((d) => keyFromDay(d.date)));
 
@@ -111,7 +113,21 @@ export default async function Page() {
                 )}
               </li>
             ))}
-            {!todaySessions.length && <li className="py-3 text-sm text-muted">Sem sessões hoje. Que tal praticar o banco de erros?</li>}
+            {essays.map((e) => (
+              <li key={e.prep.id} className="flex items-center gap-3 py-3">
+                {e.essayId ? <CheckCircle2 size={18} className="shrink-0 text-success" /> : <PenLine size={18} className="shrink-0 text-primary" />}
+                <div className="min-w-0 flex-1">
+                  <div className={cn("truncate text-sm font-medium", e.essayId && "text-muted line-through")}>Redação da semana</div>
+                  <div className="truncate text-xs text-muted">{e.prep.title} · tema sorteado com correção</div>
+                </div>
+                {e.essayId ? (
+                  <Link href={`/redacao/${e.essayId}`} className="text-xs text-primary">Ver nota</Link>
+                ) : (
+                  <Link href={`/redacao/nova?prep=${e.prep.id}`} className={buttonClass("outline", "sm")}>Escrever</Link>
+                )}
+              </li>
+            ))}
+            {!todaySessions.length && !essays.length && <li className="py-3 text-sm text-muted">Sem sessões hoje. Que tal praticar o banco de erros?</li>}
           </ul>
           {dueQuestions > 0 && (
             <Link href="/revisoes" className="mt-2 flex items-center justify-between rounded-lg bg-surface-2 p-3 text-sm hover:bg-border">

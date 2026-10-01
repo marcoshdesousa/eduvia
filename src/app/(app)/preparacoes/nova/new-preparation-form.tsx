@@ -107,7 +107,11 @@ export function NewPreparationForm() {
       <section className={cn("space-y-4", step !== 3 && "hidden")}>
         <h2 className="font-semibold">3. Sua rotina</h2>
         <Card>
-          <AgendaFields examHint={type === "CONCURSO" ? "Se o edital trouxer a data, preenchemos automaticamente." : undefined} />
+          <AgendaFields
+            key={type ?? "x"}
+            essayDefault={type === "ENEM_VESTIBULAR" || type === "MEDIO" || type === "CONCURSO"}
+            examHint={type === "CONCURSO" ? "Se o edital trouxer a data, preenchemos automaticamente." : undefined}
+          />
         </Card>
         <div className="flex justify-between">
           <Button type="button" variant="ghost" onClick={() => setStep(2)}>Voltar</Button>

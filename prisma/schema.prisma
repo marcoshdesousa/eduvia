@@ -184,6 +184,8 @@ model Preparation {
   title           String
   studentType     StudentType
   details         Json              @default("{}")
+  /// Redação no plano: uma por semana aparece em "O que fazer hoje".
+  includeEssay    Boolean           @default(false)
   examDate        DateTime?         @db.Date
   dailyMinutes    Int
   studyDays       Int[]

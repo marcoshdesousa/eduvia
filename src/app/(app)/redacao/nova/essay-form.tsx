@@ -17,7 +17,7 @@ const timeLabel = (m: number) => (m >= 60 ? `${m / 60} h` : `${m} min`);
  * Redação com tema sorteado (correção estilo ENEM, com textos motivadores) ou teste de português.
  * O aluno escolhe o tempo; quando acaba, o texto é enviado sozinho para correção.
  */
-export function EssayForm({ mode, initial }: { mode: "redacao" | "portugues"; initial: EssayPrompt }) {
+export function EssayForm({ mode, initial, preparationId = null }: { mode: "redacao" | "portugues"; initial: EssayPrompt; preparationId?: string | null }) {
   const [state, action, pending] = useActionState(submitEssayAction, undefined);
   const [prompt, setPrompt] = useState(initial);
   const [text, setText] = useState("");
@@ -122,6 +122,7 @@ export function EssayForm({ mode, initial }: { mode: "redacao" | "portugues"; in
       <input type="hidden" name="theme" value={prompt.theme} />
       <input type="hidden" name="instructions" value={prompt.instructions} />
       <input type="hidden" name="timeLimit" value={minutes} />
+      {preparationId && <input type="hidden" name="preparationId" value={preparationId} />}
       {!timeUp && (
         <div className="sticky top-2 z-20 flex items-center gap-3 rounded-xl border border-primary/40 bg-surface/95 px-3 py-2 shadow-sm backdrop-blur" role="timer">
           <Timer size={18} className={cn("shrink-0", left < 60 ? "text-danger" : "text-primary")} />
