@@ -4,14 +4,14 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { addPeriod, getPlan } from "@/lib/billing";
-import { LIMIT_FIELDS, type PlanLimits } from "@/lib/plans";
+import { LIMIT_FIELDS, PERIOD_DAYS, priceFor, type Interval, type PlanLimits } from "@/lib/plans";
 import { today } from "@/lib/core/dates";
 
 /**
  * Admin confirma o pagamento (recebido pelo WhatsApp) e libera o plano por 1 semana ou 1 mês.
  * Mesmo plano ainda ativo: o período é somado ao final. Troca de plano: vale a partir de agora.
  */
-export async function grantPlanAction(userId: string, planSlug: string, interval: "WEEK" | "MONTH") {
+export async function grantPlanAction(userId: string, planSlug: string, interval: Interval) {
   await requireAdmin();
   const plan = await getPlan(planSlug);
   if (!plan || plan.slug === "gratis") return { error: "Plano inválido." };
@@ -21,7 +21,8 @@ export async function grantPlanAction(userId: string, planSlug: string, interval
   });
   const samePlan = current?.planSlug === plan.slug;
   const until = addPeriod(samePlan ? current!.currentPeriodEnd : new Date(), interval);
-  const price = interval === "WEEK" ? plan.priceWeekCents : plan.priceMonthCents;
+  if (!(interval in PERIOD_DAYS)) return { error: "Período inválido." };
+  const price = priceFor(plan, interval);
 
   await db.$transaction(async (tx) => {
     if (current && !samePlan) {
@@ -67,8 +68,9 @@ export async function updatePlanAction(slug: string, _: unknown, f: FormData) {
   const cents = (v: FormDataEntryValue | null) => Math.round(Number(String(v ?? "0").replace(",", ".")) * 100);
   const name = String(f.get("name") ?? "").trim() || plan.name;
   const priceWeekCents = cents(f.get("priceWeek"));
+  const priceFortnightCents = cents(f.get("priceFortnight"));
   const priceMonthCents = cents(f.get("priceMonth"));
-  if (![priceWeekCents, priceMonthCents].every((c) => Number.isFinite(c) && c >= 0 && c <= 100_000_00)) return { error: "Preço inválido." };
+  if (![priceWeekCents, priceFortnightCents, priceMonthCents].every((c) => Number.isFinite(c) && c >= 0 && c <= 100_000_00)) return { error: "Preço inválido." };
   const limits = {} as Record<string, number | boolean>;
   for (const field of LIMIT_FIELDS) {
     if (field.kind === "boolean") limits[field.key] = f.get(field.key) === "on";
@@ -79,7 +81,7 @@ export async function updatePlanAction(slug: string, _: unknown, f: FormData) {
       limits[field.key] = n;
     }
   }
-  await db.plan.update({ where: { slug }, data: { name: name.slice(0, 40), priceWeekCents, priceMonthCents, limits: limits as PlanLimits } });
+  await db.plan.update({ where: { slug }, data: { name: name.slice(0, 40), priceWeekCents, priceFortnightCents, priceMonthCents, limits: limits as PlanLimits, active: slug === "gratis" || f.get("active") === "on" } });
   revalidatePath("/admin");
   revalidatePath("/assinatura");
   return { ok: true, message: `Plano ${name} atualizado.` };

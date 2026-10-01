@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Field, FormError, Input } from "@/components/ui/form";
 import { LIMIT_FIELDS, type PlanLimits } from "@/lib/plans";
 
-type Plan = { slug: string; name: string; priceWeekCents: number; priceMonthCents: number; limits: PlanLimits; subscribers: number };
+type Plan = { slug: string; name: string; priceWeekCents: number; priceFortnightCents: number; priceMonthCents: number; limits: PlanLimits; subscribers: number; active: boolean };
 
 const money = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
@@ -23,11 +23,12 @@ export function PlanEditor({ plan }: { plan: Plan }) {
         </div>
         <FormError message={state?.error} />
         {state?.message && <p className="text-sm text-success">{state.message}</p>}
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-4">
           <Field label="Nome" htmlFor={`${plan.slug}-name`}><Input id={`${plan.slug}-name`} name="name" defaultValue={plan.name} /></Field>
           {!isFree && (
             <>
               <Field label="Preço 7 dias (R$)" htmlFor={`${plan.slug}-w`}><Input id={`${plan.slug}-w`} name="priceWeek" inputMode="decimal" defaultValue={money(plan.priceWeekCents)} /></Field>
+              <Field label="Preço 15 dias (R$)" htmlFor={`${plan.slug}-f`}><Input id={`${plan.slug}-f`} name="priceFortnight" inputMode="decimal" defaultValue={money(plan.priceFortnightCents)} /></Field>
               <Field label="Preço 30 dias (R$)" htmlFor={`${plan.slug}-m`}><Input id={`${plan.slug}-m`} name="priceMonth" inputMode="decimal" defaultValue={money(plan.priceMonthCents)} /></Field>
             </>
           )}
@@ -46,7 +47,13 @@ export function PlanEditor({ plan }: { plan: Plan }) {
             ),
           )}
         </div>
-        <p className="text-xs text-muted">Use -1 para ilimitado. As mudanças valem na hora para todos os alunos deste plano.</p>
+        {!isFree && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="active" defaultChecked={plan.active} className="accent-[var(--primary)]" />
+            Mostrar este plano na página de assinatura
+          </label>
+        )}
+        <p className="text-xs text-muted">Preço 0 esconde aquele período. Use -1 para ilimitado. As mudanças valem na hora para todos os alunos deste plano.</p>
       </ActionForm>
     </Card>
   );

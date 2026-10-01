@@ -615,6 +615,7 @@ model StudyDay {
 
 enum BillingInterval {
   WEEK
+  FORTNIGHT
   MONTH
 }
 
@@ -623,8 +624,9 @@ model Plan {
   slug            String  @id
   name            String
   order           Int     @default(0)
-  priceWeekCents  Int     @default(0)
-  priceMonthCents Int     @default(0)
+  priceWeekCents      Int     @default(0)
+  priceFortnightCents Int     @default(0)
+  priceMonthCents     Int     @default(0)
   /// Limites do plano (ver PlanLimits em src/lib/plans.ts). -1 = ilimitado.
   limits          Json    @default("{}")
   active          Boolean @default(true)

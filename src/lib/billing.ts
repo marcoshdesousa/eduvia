@@ -3,11 +3,11 @@
 // PDFs e páginas não têm limite em nenhum plano.
 import { db } from "@/lib/db";
 import { addDays, today } from "@/lib/core/dates";
-import { DEFAULT_PLANS, isUnlimited, normalizeLimits, PAID_PLAN, PERIOD_DAYS, type PlanLimits, type PlanSlug } from "@/lib/plans";
+import { DEFAULT_PLANS, intervalInfo, isUnlimited, normalizeLimits, PAID_PLAN, PERIOD_DAYS, priceFor, type Interval, type PlanLimits, type PlanSlug } from "@/lib/plans";
 
 type UserLike = { id: string; timezone?: string; isAdmin?: boolean };
 
-export type PlanRow = { slug: string; name: string; order: number; priceWeekCents: number; priceMonthCents: number; limits: PlanLimits; active: boolean };
+export type PlanRow = { slug: string; name: string; order: number; priceWeekCents: number; priceFortnightCents: number; priceMonthCents: number; limits: PlanLimits; active: boolean };
 
 /** Planos do banco (com os padrões como reserva). */
 export async function listPlans(): Promise<PlanRow[]> {
@@ -16,8 +16,8 @@ export async function listPlans(): Promise<PlanRow[]> {
   const merged = DEFAULT_PLANS.map((d) => {
     const r = bySlug.get(d.slug);
     return r
-      ? { slug: r.slug, name: r.name, order: r.order, priceWeekCents: r.priceWeekCents, priceMonthCents: r.priceMonthCents, limits: normalizeLimits(r.limits, r.slug), active: r.active }
-      : { ...d, active: true };
+      ? { slug: r.slug, name: r.name, order: r.order, priceWeekCents: r.priceWeekCents, priceFortnightCents: r.priceFortnightCents, priceMonthCents: r.priceMonthCents, limits: normalizeLimits(r.limits, r.slug), active: r.active }
+      : { ...d, active: d.active ?? true };
   });
   return merged.sort((a, b) => a.order - b.order);
 }
@@ -35,8 +35,13 @@ export function whatsappLink(message: string) {
   return `https://wa.me/${whatsappNumber()}?text=${encodeURIComponent(message)}`;
 }
 
-export function subscribeMessage(plan: { name: string; priceWeekCents: number; priceMonthCents: number }, interval: "WEEK" | "MONTH", user: { name: string; handle: string | null }) {
-  const period = interval === "WEEK" ? `semanal (7 dias) por ${formatBRL(plan.priceWeekCents)}` : `mensal (30 dias) por ${formatBRL(plan.priceMonthCents)}`;
+export function subscribeMessage(
+  plan: { name: string; priceWeekCents: number; priceFortnightCents: number; priceMonthCents: number },
+  interval: Interval,
+  user: { name: string; handle: string | null },
+) {
+  const info = intervalInfo(interval);
+  const period = `${info.adjective} (${info.label}) por ${formatBRL(priceFor(plan, interval))}`;
   return `Olá! Quero assinar o plano ${plan.name} ${period}.\nNome: ${user.name}\nUsuário: @${user.handle}`;
 }
 
@@ -54,7 +59,7 @@ export async function activeSubscription(userId: string) {
 }
 
 export type Access = { planSlug: PlanSlug; planName: string; limits: PlanLimits } & (
-  | { mode: "full"; reason: "subscription"; until: Date; interval: "WEEK" | "MONTH" }
+  | { mode: "full"; reason: "subscription"; until: Date; interval: Interval }
   | { mode: "full"; reason: "dev" }
   | { mode: "limited"; reason: "free" }
 );
@@ -96,7 +101,7 @@ export async function usage(user: UserLike) {
   const [preparationsThisMonth, activePreparations, materials, pages, newSessionsToday, gamesToday, examsThisMonth, essaysToday, tutorToday, groupsOwned, studyDay] = await Promise.all([
     db.preparationCreation.count({ where: { userId: user.id, createdAt: { gte: monthStart } } }),
     db.preparation.count({ where: { userId: user.id, status: "ACTIVE" } }),
-    db.material.count({ where: { preparation: { userId: user.id }, role: "CONTENT", status: "READY" } }),
+    db.material.count({ where: { preparation: { userId: user.id }, role: "CONTENT", status: { not: "ERROR" } } }),
     pagesToday(user.id, dayStart),
     db.studySession.count({ where: { userId: user.id, kind: "STUDY", startedAt: { gte: dayStart } } }),
     db.gameRun.count({ where: { userId: user.id, startedAt: { gte: dayStart } } }),
@@ -173,6 +178,9 @@ export async function uploadLimitError(user: UserLike, role: "CONTENT" | "EDITAL
 export async function pageQuotaError(userId: string, materialId: string, pages: number) {
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
   const a = await getAccess(user);
+  if (!isUnlimited(a.limits.pagesPerPdf) && pages > a.limits.pagesPerPdf) {
+    return `Este arquivo tem ${pages} páginas. No plano ${a.planName}, cada PDF pode ter até ${a.limits.pagesPerPdf} páginas. Envie só a parte que vai estudar agora ou assine um plano para PDFs sem limite.`;
+  }
   if (isUnlimited(a.limits.pagesPerDay)) return null;
   const used = (await pagesToday(userId, localDayStart(user.timezone), materialId)).pages;
   const left = Math.max(0, a.limits.pagesPerDay - used);
@@ -256,8 +264,8 @@ function localMidnight(day: Date, tz: string) {
   return new Date(day.getTime() - offsetMin * 60_000);
 }
 
-/** Soma um período de cobrança: 7 dias (semanal) ou 30 dias (mensal). */
-export function addPeriod(from: Date, interval: "WEEK" | "MONTH"): Date {
+/** Soma um período de cobrança: 7, 15 ou 30 dias. */
+export function addPeriod(from: Date, interval: Interval): Date {
   return addDays(from, PERIOD_DAYS[interval]);
 }
 

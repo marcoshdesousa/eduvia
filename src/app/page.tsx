@@ -59,7 +59,7 @@ const FAQ = [
   },
   {
     q: "Quanto custa?",
-    a: "Você começa grátis, com limites pequenos para testar. Os planos começam em R$ 7 a cada 7 dias ou R$ 15 a cada 30 dias (Básico) e vão até o Ilimitado, por R$ 80. Todos têm PDFs e páginas sem limite; o que muda é quantos guias de estudo você cria por mês. O pagamento é combinado pelo WhatsApp (Pix) e não há renovação automática.",
+    a: "Você começa grátis, com limites pequenos para testar. São três planos: Básico (R$ 15 por 30 dias), Avançado (R$ 30) e Ilimitado (R$ 50), cada um também por 7 ou 15 dias. Todos têm PDFs e páginas sem limite; o que muda é quantos guias de estudo você cria por mês. O pagamento é combinado pelo WhatsApp (Pix) e não há renovação automática.",
   },
   {
     q: "Meus materiais e dados ficam seguros?",
@@ -165,7 +165,7 @@ export default async function Home() {
 
         {/* ── Preço */}
         <section id="preco" className="scroll-mt-20 py-14">
-          <SectionTitle kicker="Preço" title="Planos que cabem no bolso" subtitle="Comece grátis. Todos os planos têm PDFs e páginas sem limite; o que muda é quantos guias de estudo você cria por mês." />
+          <SectionTitle kicker="Preço" title="Planos que cabem no bolso" subtitle="Comece grátis. Os planos pagos têm PDFs e páginas sem limite, por 7, 15 ou 30 dias; o que muda é quantos guias de estudo você cria por mês." />
           <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {plans.map((p) => (
               <PriceCard
@@ -173,7 +173,7 @@ export default async function Home() {
                 label={p.name}
                 price={formatBRL(p.priceMonthCents)}
                 period="30 dias"
-                extra={p.priceWeekCents > 0 ? `ou ${formatBRL(p.priceWeekCents)} por 7 dias` : undefined}
+                extra={[p.priceWeekCents > 0 && `${formatBRL(p.priceWeekCents)}/7 dias`, p.priceFortnightCents > 0 && `${formatBRL(p.priceFortnightCents)}/15 dias`].filter(Boolean).join(" · ") || undefined}
                 features={planFeatures(p.limits).filter((f) => !f.startsWith("Sem "))}
                 highlight={p.slug === "ilimitado"}
               />
@@ -238,7 +238,8 @@ function PriceCard({ label, price, period, extra, features, highlight }: { label
         {highlight && <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">Tudo ilimitado</span>}
       </div>
       <div className="font-display mt-3 text-4xl font-extrabold">{price}</div>
-      <p className="text-sm text-muted">por {period}{extra ? ` · ${extra}` : ""}</p>
+      <p className="text-sm text-muted">por {period}</p>
+      {extra && <p className="text-xs text-muted">ou {extra}</p>}
       <ul className="mt-4 flex-1 space-y-1.5 text-sm">
         {features.map((f) => (
           <li key={f} className="flex items-start gap-2"><Check size={15} className="mt-0.5 shrink-0 text-success" />{f}</li>

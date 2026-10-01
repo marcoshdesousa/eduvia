@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { formatBRL, getAccess, listPlans, subscribeMessage, usage, whatsappLink } from "@/lib/billing";
-import { formatLimit, isUnlimited, planFeatures } from "@/lib/plans";
+import { formatLimit, INTERVALS, intervalInfo, isUnlimited, planFeatures, priceFor } from "@/lib/plans";
 import { formatDay } from "@/lib/core/dates";
 import { Check, MessageCircle } from "lucide-react";
 import { Badge, Progress } from "@/components/ui/badge";
@@ -49,7 +49,7 @@ export default async function Page() {
         </div>
         <p className="text-sm text-muted">
           {access.reason === "subscription"
-            ? `Plano ${access.interval === "WEEK" ? "semanal (7 dias)" : "mensal (30 dias)"} válido até ${longDate(access.until)}. Para continuar depois disso, é só renovar pelo WhatsApp.`
+            ? `Plano ${intervalInfo(access.interval).adjective} (${intervalInfo(access.interval).label}) válido até ${longDate(access.until)}. Para continuar depois disso, é só renovar pelo WhatsApp.`
             : access.reason === "dev"
               ? "Tudo liberado (conta de administrador ou cobrança desativada)."
               : "Você está no plano Grátis, para testar com limites bem pequenos. Escolha um plano abaixo para liberar tudo."}
@@ -76,10 +76,7 @@ export default async function Page() {
           {paidPlans.map((p) => {
             const current = subscribed && access.planSlug === p.slug;
             const best = p.slug === "ilimitado";
-            const opts = [
-              ...(p.priceWeekCents > 0 ? [{ key: "WEEK" as const, label: "semanal", price: p.priceWeekCents, days: 7 }] : []),
-              { key: "MONTH" as const, label: "mensal", price: p.priceMonthCents, days: 30 },
-            ];
+            const opts = INTERVALS.filter((i) => priceFor(p, i.key) > 0).map((i) => ({ key: i.key, label: i.adjective, days: i.days, price: priceFor(p, i.key) }));
             return (
               <Card key={p.slug} className={`flex flex-col gap-3 ${current ? "border-primary bg-primary/5" : best ? "border-primary" : ""}`}>
                 <div className="flex items-center justify-between gap-2">
@@ -89,7 +86,9 @@ export default async function Page() {
                 <div>
                   <span className="text-3xl font-bold">{formatBRL(p.priceMonthCents)}</span>
                   <span className="text-sm text-muted"> / 30 dias</span>
-                  {p.priceWeekCents > 0 && <div className="text-sm text-muted">ou {formatBRL(p.priceWeekCents)} por 7 dias</div>}
+                  <div className="text-sm text-muted">
+                    {opts.filter((o) => o.key !== "MONTH").map((o) => `${formatBRL(o.price)} por ${o.days} dias`).join(" · ")}
+                  </div>
                 </div>
                 <ul className="flex-1 space-y-1.5 text-sm">
                   {planFeatures(p.limits).map((f) => (
@@ -106,7 +105,7 @@ export default async function Page() {
                       aria-label={`${current ? "Renovar" : "Assinar"} ${p.name} ${o.label} pelo WhatsApp`}
                       className={buttonClass(o.key === "MONTH" ? "primary" : "outline", "md", "w-full")}
                     >
-                      <MessageCircle size={16} /> {current ? "Renovar" : "Assinar"} {o.label} ({formatBRL(o.price)})
+                      <MessageCircle size={16} /> {o.days} dias por {formatBRL(o.price)}
                     </a>
                   ))}
                 </div>
@@ -126,7 +125,7 @@ export default async function Page() {
       <Card className="space-y-2 text-sm">
         <CardTitle>Como funciona</CardTitle>
         <ol className="list-decimal space-y-1 pl-5 text-muted">
-          <li>Escolha o plano e toque em &quot;Assinar&quot;: a mensagem com o plano e o seu @ já vai pronta no WhatsApp.</li>
+          <li>Escolha o plano e o período (7, 15 ou 30 dias): a mensagem com o plano e o seu @ já vai pronta no WhatsApp.</li>
           <li>Combine o pagamento por lá (Pix).</li>
           <li>Assim que o pagamento for confirmado, liberamos o plano na sua conta. Não há cobrança automática: quando vencer, é só renovar.</li>
         </ol>
@@ -139,7 +138,7 @@ export default async function Page() {
             {payments.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-3 py-2">
                 <span className="w-28 text-muted">{formatDay(p.dueDate, { day: "2-digit", month: "short", year: "numeric" })}</span>
-                <span className="flex-1">Plano {p.subscription.plan.name} ({p.subscription.interval === "WEEK" ? "7 dias" : "30 dias"})</span>
+                <span className="flex-1">Plano {p.subscription.plan.name} ({intervalInfo(p.subscription.interval).label})</span>
                 <span className="font-medium">{formatBRL(p.valueCents)}</span>
                 <Badge tone="success">Pago</Badge>
               </li>

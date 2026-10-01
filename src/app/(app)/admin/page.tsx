@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
+import { INTERVALS, intervalInfo, priceFor } from "@/lib/plans";
 import { formatBRL, listPlans, localDayStart, localMonthStart } from "@/lib/billing";
 import { onlyDigits } from "@/lib/core/cpf";
 import { formatCpf, formatPhone } from "@/lib/core/phone";
@@ -198,7 +199,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
               return (
                 <li key={u.userId ?? "sistema"} className="flex flex-wrap items-center justify-between gap-3 py-2">
                   <span className="min-w-0 flex-1 truncate">{info ? `${info.name} @${info.handle}` : "Sistema"}</span>
-                  <span className="text-xs text-muted">{plan ? `${plan.plan.name} ${plan.interval === "WEEK" ? "7 dias" : "30 dias"}` : "Grátis"}</span>
+                  <span className="text-xs text-muted">{plan ? `${plan.plan.name} ${intervalInfo(plan.interval).label}` : "Grátis"}</span>
                   <span className="w-24 text-right font-medium">{u._count} uso(s)</span>
                 </li>
               );
@@ -227,7 +228,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
     orderBy: { createdAt: "desc" },
     take: 30,
   });
-  const paidPlans = plans.filter((p) => p.slug !== "gratis").map((p) => ({ slug: p.slug, name: p.name, week: p.priceWeekCents > 0 ? formatBRL(p.priceWeekCents) : null, month: formatBRL(p.priceMonthCents) }));
+  const paidPlans = plans
+    .filter((p) => p.slug !== "gratis")
+    .map((p) => ({ slug: p.slug, name: p.active ? p.name : `${p.name} (fora da vitrine)`, prices: INTERVALS.flatMap((i) => (priceFor(p, i.key) > 0 ? [{ key: i.key, label: `${i.label} (${formatBRL(priceFor(p, i.key))})` }] : [])) }));
 
   return (
     <div className="space-y-6">
@@ -248,7 +251,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
                   <span className="font-semibold">{u.name}</span>
                   <span className="text-sm text-muted">@{u.handle}</span>
                   {sub ? (
-                    <Badge tone="success">{sub.plan.name} {sub.interval === "WEEK" ? "semanal" : "mensal"} até {formatDay(sub.currentPeriodEnd, { day: "2-digit", month: "short" })}</Badge>
+                    <Badge tone="success">{sub.plan.name} {intervalInfo(sub.interval).adjective} até {formatDay(sub.currentPeriodEnd, { day: "2-digit", month: "short" })}</Badge>
                   ) : (
                     <Badge tone="warning">Grátis</Badge>
                   )}

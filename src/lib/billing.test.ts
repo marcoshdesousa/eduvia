@@ -23,8 +23,9 @@ describe("telefone", () => {
 });
 
 describe("assinatura", () => {
-  it("soma 7 ou 30 dias", () => {
+  it("soma 7, 15 ou 30 dias", () => {
     expect(addPeriod(new Date("2026-10-01T10:00:00Z"), "WEEK").toISOString()).toBe("2026-10-08T10:00:00.000Z");
+    expect(addPeriod(new Date("2026-10-01T10:00:00Z"), "FORTNIGHT").toISOString()).toBe("2026-10-16T10:00:00.000Z");
     expect(addPeriod(new Date("2026-01-31T10:00:00Z"), "MONTH").toISOString()).toBe("2026-03-02T10:00:00.000Z");
   });
   it("monta o link do WhatsApp com a mensagem do plano", () => {
@@ -57,17 +58,21 @@ describe("planos", () => {
     const f = planFeatures(DEFAULT_PLANS[0].limits);
     expect(f).toContain("Sem grupos");
     expect(f).toContain("3 testes rápidos por dia");
-    expect(f).toContain("PDFs e páginas sem limite");
     expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("6 guias de estudo por mês");
     expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Professor IA: 40 mensagens por dia");
     expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Testes rápidos à vontade");
   });
-  it("faixas de guias e simulados por plano", () => {
+  it("três planos pagos com 7, 15 e 30 dias; Grátis com 1 PDF de até 100 páginas", () => {
     const by = Object.fromEntries(DEFAULT_PLANS.map((p) => [p.slug, p]));
-    expect([by.eduvia, by.plus, by.pro, by.avancado, by.ilimitado].map((p) => p.limits.preparationsPerMonth)).toEqual([6, 8, 12, 15, 35]);
-    expect([by.eduvia, by.plus, by.pro, by.avancado, by.ilimitado].map((p) => p.limits.examsPerMonth)).toEqual([15, 20, 30, 40, -1]);
-    expect([by.eduvia, by.plus, by.pro, by.avancado, by.ilimitado].map((p) => p.priceMonthCents)).toEqual([1500, 2000, 2500, 3000, 8000]);
+    const paid = [by.eduvia, by.avancado, by.ilimitado];
+    expect(paid.map((p) => p.limits.preparationsPerMonth)).toEqual([6, 15, 35]);
+    expect(paid.map((p) => p.priceMonthCents)).toEqual([1500, 3000, 5000]);
+    expect(paid.every((p) => p.priceWeekCents > 0 && p.priceFortnightCents > p.priceWeekCents && p.priceMonthCents > p.priceFortnightCents)).toBe(true);
     expect(by.ilimitado.limits.essaysPerDay).toBe(-1);
-    expect(DEFAULT_PLANS.every((p) => p.limits.pagesPerDay === -1 && p.limits.materials === -1)).toBe(true);
+    expect(paid.every((p) => p.limits.materials === -1 && p.limits.pagesPerPdf === -1)).toBe(true);
+    expect(by.gratis.limits.materials).toBe(1);
+    expect(by.gratis.limits.pagesPerPdf).toBe(100);
+    expect(planFeatures(by.gratis.limits)).toContain("1 PDF de até 100 páginas");
+    expect(DEFAULT_PLANS.filter((p) => p.active !== false && p.slug !== "gratis")).toHaveLength(3);
   });
 });
