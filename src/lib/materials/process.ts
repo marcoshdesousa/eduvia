@@ -12,6 +12,7 @@ import { pageQuotaError, scannedQuotaError } from "@/lib/billing";
 import { AiQuotaError, AiUnavailableError, AiUserError } from "@/lib/ai/client";
 import { enqueue } from "@/lib/queue";
 import { generatePlan } from "@/lib/plan";
+import { coverAllPages } from "@/lib/core/coverage";
 
 export async function processMaterial(materialId: string) {
   const material = await db.material.findUnique({
@@ -171,7 +172,9 @@ async function organizeContent(materialId: string) {
   const pace = PROFILES[prep.studentType].paceFactor;
   const baseOrder = await db.topic.count({ where: { subject: { preparationId: prep.id } } });
 
-  for (const [i, t] of outline.topics.entries()) {
+  // nada do material fica de fora: os assuntos cobrem todas as páginas, sem buracos
+  const lastPage = pages.length ? pages[pages.length - 1].pageNumber : 1;
+  for (const [i, t] of coverAllPages(outline.topics, lastPage).entries()) {
     const subject = material.subject ?? (await upsertSubject(prep.id, t.subject || "Geral"));
     const linked = chunks.filter((c) => c.pageStart <= t.pageEnd && c.pageEnd >= t.pageStart);
     const tokens = linked.reduce((s, c) => s + c.tokenCount, 0);

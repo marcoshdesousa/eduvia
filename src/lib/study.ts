@@ -15,7 +15,8 @@ import { canAccessQuestion } from "@/lib/groups";
 export type { SourceRef } from "@/lib/sources";
 import type { SourceRef } from "@/lib/sources";
 
-const MAX_CONTEXT_CHARS = 60_000;
+/** Limite de segurança do texto enviado por aula (o Gemini aceita bem mais; a parte da aula inteira vai junto). */
+const MAX_CONTEXT_CHARS = 400_000;
 
 /** Durações que o aluno pode escolher ao começar uma sessão. */
 export const SESSION_MINUTES = [5, 10, 15, 20, 30, 45] as const;

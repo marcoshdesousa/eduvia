@@ -88,6 +88,12 @@ export function SessionView({
         <div className="space-y-4">
           {text.content && <LessonNarrator text={text.content} />}
           {text.content && (
+            <p className="-mt-2 px-1 text-xs text-muted">
+              ℹ️ As marcações como <strong>T1, T2, T3…</strong> e os links <strong>↗ p.</strong> no texto mostram de qual trecho do seu PDF veio cada informação.
+              Toque no link para abrir a página do PDF com o trecho grifado.
+            </p>
+          )}
+          {text.content && (
             <Card>
               <article className="prose-study">
                 <ReactMarkdown components={{ a: (p) => <a {...p} target="_blank" rel="noreferrer" className="text-xs text-primary no-underline hover:underline" /> }}>

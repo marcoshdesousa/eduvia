@@ -47,6 +47,7 @@ export async function extractOutline(input: {
     system: `${BASE}
 Tarefa: montar o índice de estudo de um material enviado pelo aluno.
 - Divida o conteúdo em tópicos estudáveis (cada um com 5 a 40 páginas, conforme a densidade), seguindo o sumário/títulos do material quando existirem.
+- Cubra o material INTEIRO: todo conteúdo precisa estar em algum tópico, do começo ao fim, sem pular capítulos ou seções. Os tópicos devem ser seguidos (um começa onde o anterior termina).
 - Informe pageStart/pageEnd reais (os marcadores [p.N] indicam a página).
 - Ignore capa, sumário, referências e páginas em branco.
 - "subject" é a disciplina. Se o aluno já indicou a disciplina, use exatamente esse nome em todos os tópicos. Prefira reutilizar disciplinas existentes.
@@ -132,12 +133,12 @@ export async function generateSessionContent(input: {
     maxTokens: 24000,
     system: `${BASE}
 Tarefa: montar uma sessão de estudo a partir dos trechos do material do aluno (rotulados T1, T2...).
-- studyText: explicação clara e bem organizada, para ~${readingMinutes} minutos de leitura. Não copie o material: explique, organize, dê exemplos. Cite o rótulo do trecho entre colchetes quando usar uma informação específica, ex.: [T2].
+- studyText: explicação clara e bem organizada de TODO o conteúdo dos trechos, na ordem do material. Não escolha só alguns assuntos: cada trecho (T1, T2...) precisa ser explicado, sem pular nenhum conceito, definição, exemplo ou lista. Se for muito conteúdo, seja mais direto, mas não deixe nada de fora (tempo de referência: ~${readingMinutes} minutos de leitura). Não copie o material: explique, organize, dê exemplos. Cite o rótulo do trecho entre colchetes quando usar uma informação específica, ex.: [T2].
 - highlights: 3 a 5 frases essenciais.
 - keyPoints: 3 a 6 conceitos-chave com explicação curta.
 - recallQuestions: ${recallCount} pergunta(s) de recuperação ativa (resposta aberta curta, sem consultar).
 - objectiveQuestions: ${objectiveCount} questões. ${styleRule} Varie a posição da resposta correta.
-- Todas as questões precisam ser respondíveis com base nos trechos fornecidos.`,
+- Todas as questões precisam ser respondíveis com base nos trechos fornecidos. Espalhe as questões por todo o conteúdo (não só o começo).`,
     content: [
       {
         type: "text",
