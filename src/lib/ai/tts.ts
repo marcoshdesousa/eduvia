@@ -10,10 +10,10 @@ export type TtsVoice = "f" | "m";
 /** Vozes do Gemini: Kore (feminina, firme e clara) e Charon (masculina, calma e informativa). */
 export const TTS_VOICES: Record<TtsVoice, string> = { f: "Kore", m: "Charon" };
 export const TTS_MAX_CHARS = 2600;
-// versão do áudio guardado (v5: guarda junto o volume a cada 10 ms, de onde saem os tempos das palavras)
-const CACHE_VERSION = "v5-mp3";
-// áudios de versões anteriores (sem esse volume): usados só se a voz estiver sem cota agora
-const OLD_CACHE_VERSIONS = ["v4-mp3", "v3-mp3"];
+// versão do áudio guardado (v6: voz travada em português do Brasil; antes a voz às vezes trocava para espanhol)
+const CACHE_VERSION = "v6-mp3";
+/** A voz fala SEMPRE em português do Brasil (sem isso, nomes em espanhol faziam a voz mudar de idioma). */
+const TTS_LANGUAGE = "pt-BR";
 
 const found = new Map<string, { models: string[]; at: number }>();
 
@@ -163,31 +163,34 @@ export async function speak(userId: string, text: string, voice: TtsVoice): Prom
     return { mp3, times: timesFrom(levels) };
   };
   if (isMockAi()) return finish(mockSpeech(clean, 24000), 24000);
-  try {
-    return await generate(userId, clean, voice, finish);
-  } catch (e) {
-    // sem cota agora: usa o áudio antigo desta aula (se já foi ouvido antes), sem os tempos das palavras
-    for (const v of OLD_CACHE_VERSIONS) {
-      const old = await readObject(`tts/${hash(v)}.mp3`).catch(() => null);
-      if (old) return { mp3: old, times: null };
-    }
-    throw e;
-  }
+  // sem cota: dá erro e a aula usa a voz do aparelho (em português); áudios antigos não são reaproveitados
+  // porque podiam ter trechos em outro idioma
+  return generate(userId, clean, voice, finish);
+}
+
+function ttsRequest(key: string, model: string, text: string, voice: TtsVoice, withLanguage: boolean): Promise<Response> {
+  const speechConfig = {
+    ...(withLanguage ? { languageCode: TTS_LANGUAGE } : {}),
+    voiceConfig: { prebuiltVoiceConfig: { voiceName: TTS_VOICES[voice] } },
+  };
+  return fetch(`${GEMINI_API}/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": key },
+    body: JSON.stringify({ contents: [{ parts: [{ text }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig } }),
+    signal: AbortSignal.timeout(90_000),
+  }).catch((e: Error) => new Response(JSON.stringify({ error: { message: e.message } }), { status: 599 }));
 }
 
 async function generate(userId: string, clean: string, voice: TtsVoice, finish: (pcm: Buffer, rate: number) => Promise<Spoken>): Promise<Spoken> {
   const key = await userGeminiKey(userId);
   const errors: string[] = [];
   for (const model of (await ttsModels(key)).slice(0, 3)) {
-    const res = await fetch(`${GEMINI_API}/models/${model}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: clean }] }],
-        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: TTS_VOICES[voice] } } } },
-      }),
-      signal: AbortSignal.timeout(90_000),
-    }).catch((e: Error) => ({ ok: false, status: 0, json: async () => ({ error: { message: e.message } }) }) as unknown as Response);
+    let res = await ttsRequest(key, model, clean, voice, true);
+    if (res.status === 400) {
+      // modelo que não aceita escolher o idioma: tenta de novo sem (o texto é todo em português)
+      const msg = JSON.stringify(await res.clone().json().catch(() => ({})));
+      if (/language/i.test(msg)) res = await ttsRequest(key, model, clean, voice, false);
+    }
     if (res.ok) {
       const body = (await res.json()) as { candidates?: { content?: { parts?: { inlineData?: { data?: string; mimeType?: string } }[] } }[] };
       const part = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;
