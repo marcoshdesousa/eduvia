@@ -248,7 +248,7 @@ function MaterialList({ materials, onRemove, onRetry }: { materials: MaterialRow
             <div className="flex shrink-0 gap-1">
               {m.status === "ERROR" && <Button size="sm" variant="ghost" onClick={() => onRetry(m.id)} aria-label="Tentar de novo"><RotateCw size={15} /></Button>}
               {m.status === "READY" && (
-                <a href={`/api/materials/${m.id}/file`} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center rounded-lg px-2 text-muted hover:bg-surface-2" aria-label="Abrir arquivo"><ExternalLink size={15} /></a>
+                <a href={`/fonte/${m.id}?p=1`} data-title={m.title} className="inline-flex h-8 items-center rounded-lg px-2 text-muted hover:bg-surface-2" aria-label="Abrir arquivo"><ExternalLink size={15} /></a>
               )}
               <Button size="sm" variant="ghost" onClick={() => onRemove(m.id, m.title)} aria-label="Remover"><Trash2 size={15} /></Button>
             </div>

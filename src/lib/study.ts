@@ -12,7 +12,8 @@ import { addXp, registerStudy, XP } from "@/lib/gamification";
 import { checkAchievementsSafe } from "@/lib/achievements";
 import { canAccessQuestion } from "@/lib/groups";
 
-export type SourceRef = { label: string; materialId: string; title: string; pageStart: number; pageEnd: number };
+export type { SourceRef } from "@/lib/sources";
+import type { SourceRef } from "@/lib/sources";
 
 const MAX_CONTEXT_CHARS = 60_000;
 
@@ -90,7 +91,7 @@ async function getOrCreateStudyText(input: {
 
   const topic = await db.topic.findUniqueOrThrow({ where: { id: input.topicId }, include: { subject: true } });
   const chunks = await chunksForPart(input.prep.id, topic, input.part, input.partCount);
-  const refs: SourceRef[] = chunks.map((c) => ({ label: c.label, materialId: c.materialId, title: c.materialTitle, pageStart: c.pageStart, pageEnd: c.pageEnd }));
+  const refs: SourceRef[] = chunks.map((c) => ({ label: c.label, materialId: c.materialId, title: c.materialTitle, pageStart: c.pageStart, pageEnd: c.pageEnd, quote: c.content.slice(0, 180) }));
   const profile = PROFILES[input.prep.studentType];
   const questionStyle = input.prep.editalAnalysis?.questionStyle === "CERTO_ERRADO" ? "CERTO_ERRADO" : profile.defaultQuestionType;
 

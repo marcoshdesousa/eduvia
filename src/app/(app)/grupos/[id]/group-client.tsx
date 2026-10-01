@@ -66,7 +66,7 @@ export function SharedItemActions({
       <div className="flex flex-wrap gap-2">
         {share.type === "MATERIAL" && (
           <>
-            <a href={`/api/materials/${share.resourceId}/file`} target="_blank" rel="noreferrer" className={buttonClass("outline", "sm")}>Abrir</a>
+            <a href={`/fonte/${share.resourceId}?p=1`} className={buttonClass("outline", "sm")}>Abrir</a>
             {!isMine && preparations.length > 0 && <Button size="sm" onClick={() => setImporting((v) => !v)}>Adicionar à minha preparação</Button>}
           </>
         )}

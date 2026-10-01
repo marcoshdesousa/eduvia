@@ -13,6 +13,7 @@ import { unreadCount } from "@/lib/notifications";
 import { db } from "@/lib/db";
 import { RegisterServiceWorker } from "@/components/push-settings";
 import { NotificationBell } from "@/components/notification-bell";
+import { PdfViewerHost } from "@/components/pdf-viewer";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireReadyUser();
@@ -69,6 +70,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
       <BottomNav badges={badges} />
       <RegisterServiceWorker />
+      <PdfViewerHost />
     </div>
   );
 }

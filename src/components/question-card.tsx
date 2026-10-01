@@ -1,4 +1,5 @@
 "use client";
+import { sourceHref } from "@/lib/sources";
 import { useRef, useState, useTransition } from "react";
 import { CheckCircle2, ExternalLink, XCircle } from "lucide-react";
 import { answerAction } from "@/app/actions/study";
@@ -9,7 +10,8 @@ import { Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
 
 export type Answered = { answer: string; isCorrect: boolean; score: number; feedback: string | null; correctAnswer: string; explanation: string };
-export type SourceRef = { label: string; materialId: string; title: string; pageStart: number; pageEnd: number };
+export type { SourceRef } from "@/lib/sources";
+import type { SourceRef } from "@/lib/sources";
 export type QuestionData = {
   id: string;
   type: "MULTIPLE_CHOICE" | "CERTO_ERRADO" | "OPEN_RECALL";
@@ -26,7 +28,7 @@ export function SourceLinks({ refs }: { refs: SourceRef[] }) {
   return (
     <div className="flex flex-wrap gap-2 text-xs">
       {refs.map((r, i) => (
-        <a key={i} href={`/api/materials/${r.materialId}/file?page=${r.pageStart}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+        <a key={i} href={sourceHref(r)} data-title={`${r.title}, p. ${r.pageStart}`} className="inline-flex items-center gap-1 text-primary hover:underline">
           <ExternalLink size={12} /> {r.title}, p. {r.pageStart}{r.pageEnd !== r.pageStart ? `–${r.pageEnd}` : ""}
         </a>
       ))}

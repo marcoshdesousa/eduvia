@@ -36,7 +36,7 @@ export async function tutorReply(input: {
   // contexto: trechos relevantes do material
   const lastAssistant = thread.messages.find((m) => m.role === "assistant")?.content.slice(0, 400) ?? "";
   const hits = await searchChunks(prep.id, `${input.content}\n${input.shortcut === "testar" ? lastAssistant : ""}`, 8);
-  const refs: SourceRef[] = hits.map((h, i) => ({ label: `T${i + 1}`, materialId: h.materialId, title: h.materialTitle, pageStart: h.pageStart, pageEnd: h.pageEnd }));
+  const refs: SourceRef[] = hits.map((h, i) => ({ label: `T${i + 1}`, materialId: h.materialId, title: h.materialTitle, pageStart: h.pageStart, pageEnd: h.pageEnd, quote: h.content?.slice(0, 180) }));
   let extra = "";
   if (input.shortcut === "erros") extra = await errorsContext(input.userId, prep.id);
   if (input.shortcut === "testar") extra = await recentTopicsContext(input.userId, prep.id);

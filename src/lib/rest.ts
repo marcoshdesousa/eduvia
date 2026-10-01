@@ -65,14 +65,14 @@ export async function restSuggestions(user: RestUser, topicId?: string | null): 
   let pdf: RestSuggestions["pdf"] = null;
   if (topic.materialId) {
     const m = await db.material.findUnique({ where: { id: topic.materialId }, select: { id: true, title: true } });
-    if (m) pdf = { title: m.title, href: `/api/materials/${m.id}/file?page=${topic.pageStart ?? 1}`, page: topic.pageStart ?? 1 };
+    if (m) pdf = { title: m.title, href: `/fonte/${m.id}?p=${topic.pageStart ?? 1}`, page: topic.pageStart ?? 1 };
   }
   if (!pdf) {
     const link = await db.topicChunk.findFirst({ where: { topicId: topic.id }, orderBy: { score: "desc" }, include: { chunk: { select: { blobId: true, pageStart: true } } } });
     const m = link
       ? await db.material.findFirst({ where: { blobId: link.chunk.blobId, preparationId: topic.subject.preparationId }, select: { id: true, title: true } })
       : null;
-    if (m && link) pdf = { title: m.title, href: `/api/materials/${m.id}/file?page=${link.chunk.pageStart}`, page: link.chunk.pageStart };
+    if (m && link) pdf = { title: m.title, href: `/fonte/${m.id}?p=${link.chunk.pageStart}`, page: link.chunk.pageStart };
   }
   const books = Array.isArray(topic.subject.books) ? (topic.subject.books as { title: string; author: string }[]) : [];
   return { subject: topic.subject.name, topic: topic.title, pdf, books, resetAt };

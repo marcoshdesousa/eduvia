@@ -1,4 +1,5 @@
 "use client";
+import { sourceHref } from "@/lib/sources";
 import { useState, useTransition } from "react";
 import ReactMarkdown from "react-markdown";
 import { BookOpenCheck, Check, FileText, Loader2 } from "lucide-react";
@@ -46,7 +47,7 @@ export function ErrorBankItem({
       {sources.length > 0 && (
         <div className="flex flex-wrap gap-3 text-xs">
           {sources.map((r, i) => (
-            <a key={i} href={`/api/materials/${r.materialId}/file?page=${r.pageStart}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+            <a key={i} href={sourceHref(r)} data-title={`${r.title}, p. ${r.pageStart}`} className="inline-flex items-center gap-1 text-primary hover:underline">
               <FileText size={12} /> {r.title}, p. {r.pageStart}
             </a>
           ))}
