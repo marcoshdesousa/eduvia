@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Play, RotateCcw, Target, Zap } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Lock, Play, RotateCcw, Target, Zap } from "lucide-react";
 import { db } from "@/lib/db";
 import { InstallAppBanner } from "@/components/install-app";
 import { requireReadyUser } from "@/lib/session";
@@ -25,7 +25,7 @@ export default async function Page() {
   const [todaySessions, dueQuestions, errorBank, weekDays, critical, topicStats, lastDays] = await Promise.all([
     db.plannedSession.findMany({
       where: { plan: { preparation: { userId: user.id, status: "ACTIVE" } }, date: day, status: { in: ["PENDING", "DONE"] } },
-      include: { topic: { include: { subject: { include: { preparation: true } } } } },
+      include: { topic: { include: { subject: { include: { preparation: true } } } }, studySession: { select: { bestScore: true, tries: true, passedAt: true } } },
       orderBy: [{ status: "asc" }, { order: "asc" }],
     }),
     db.reviewItem.count({ where: { userId: user.id, dueAt: { lte: day }, question: { topic: { subject: { preparation: { status: "ACTIVE" } } } } } }),
@@ -47,6 +47,16 @@ export default async function Page() {
   const studied = new Set(lastDays.map((d) => keyFromDay(d.date)));
 
   const pending = todaySessions.filter((s) => s.status === "PENDING");
+  // só a primeira aula pendente de cada preparação fica liberada (as outras esperam 75% na anterior)
+  const unlocked = new Set<string>();
+  for (const s of [...pending].sort((a, b) => a.order - b.order)) {
+    if (s.kind !== "STUDY") {
+      unlocked.add(s.id);
+      continue;
+    }
+    const prepId = s.topic.subject.preparationId;
+    if (![...unlocked].some((id) => pending.find((p) => p.id === id && p.kind === "STUDY" && p.topic.subject.preparationId === prepId))) unlocked.add(s.id);
+  }
   const doneToday = todaySessions.filter((s) => s.status === "DONE");
   const todayMinutes = todaySessions.reduce((s, x) => s + x.durationMin, 0);
   const weekMinutes = weekDays.reduce((s, d) => s + d.minutes, 0);
@@ -63,7 +73,7 @@ export default async function Page() {
         </p>
       </div>
 
-      <StreakCard streak={streak} best={user.longestStreak} day={day} studied={studied} href={pending[0] ? `/estudar/${pending[0].id}` : preps.length ? "/revisoes" : "/preparacoes/nova"} />
+      <StreakCard streak={streak} best={user.longestStreak} day={day} studied={studied} href={pending.find((p) => unlocked.has(p.id)) ? `/estudar/${pending.find((p) => unlocked.has(p.id))!.id}` : preps.length ? "/revisoes" : "/preparacoes/nova"} />
 
       {!preps.length ? (
         <Card className="text-center">
@@ -88,7 +98,17 @@ export default async function Page() {
                     {s.topic.subject.preparation.title} · {s.kind === "REVIEW" ? (s.reviewNumber ? `Revisão R${s.reviewNumber}` : "Reforço") : s.partCount > 1 ? `Parte ${s.part}/${s.partCount}` : "Estudo"} · {formatMinutes(s.durationMin)}
                   </div>
                 </div>
-                {s.status === "PENDING" && <Link href={`/estudar/${s.id}`} className={buttonClass(s === pending[0] ? "primary" : "outline", "sm")}>{s.kind === "REVIEW" ? "Revisar" : "Estudar"}</Link>}
+                {s.status === "DONE" && s.kind === "STUDY" && s.studySession?.bestScore != null && (
+                  <span className="text-xs font-semibold text-success">{Math.round(s.studySession.bestScore * 100)}%</span>
+                )}
+                {s.status === "PENDING" && !unlocked.has(s.id) && (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted" title="Libera quando você tirar 75% na aula anterior"><Lock size={14} /> Bloqueada</span>
+                )}
+                {s.status === "PENDING" && unlocked.has(s.id) && (
+                  <Link href={`/estudar/${s.id}`} className={buttonClass(s.kind === "STUDY" ? "primary" : "outline", "sm")}>
+                    {s.kind === "REVIEW" ? "Revisar" : s.studySession?.tries ? `Refazer (${Math.round((s.studySession.bestScore ?? 0) * 100)}%)` : "Estudar"}
+                  </Link>
+                )}
               </li>
             ))}
             {!todaySessions.length && <li className="py-3 text-sm text-muted">Sem sessões hoje. Que tal praticar o banco de erros?</li>}

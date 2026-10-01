@@ -324,20 +324,91 @@ async function updateMastery(userId: string, topicId: string, score: number) {
   });
 }
 
-/** Conclui a sessão: marca no plano, agenda R1..Rn ao terminar o assunto, soma XP, minutos e sequência. */
-export async function completeSession(sessionId: string, userId: string) {
+/** Nota mínima (0 a 1) para a aula contar como aprovada e liberar a próxima. */
+export const PASS_SCORE = 0.75;
+
+/** Nota da tentativa atual: média das notas das questões (aberta parcial vale meio ponto, etc.). */
+export async function roundScore(session: { id: string; userId: string; questionIds: string[]; roundStartedAt: Date }) {
+  if (!session.questionIds.length) return { score: 1, correct: 0, total: 0 };
+  const attempts = await db.attempt.findMany({ where: { userId: session.userId, contextId: session.id, createdAt: { gte: session.roundStartedAt } } });
+  const latest = new Map(attempts.map((a) => [a.questionId, a]));
+  const sum = session.questionIds.reduce((acc, id) => acc + (latest.get(id)?.score ?? 0), 0);
+  return { score: sum / session.questionIds.length, correct: [...latest.values()].filter((a) => a.isCorrect).length, total: session.questionIds.length };
+}
+
+/**
+ * Aula bloqueada? Na mesma preparação, uma aula só libera quando todas as anteriores
+ * (dias anteriores e as de antes no mesmo dia) foram aprovadas com 75% ou mais.
+ * Revisões não bloqueiam e não ficam bloqueadas.
+ */
+export async function lessonBlocker(planned: { id: string; kind: string; status: string; date: Date; order: number; planId: string }) {
+  if (planned.kind !== "STUDY" || planned.status !== "PENDING") return null;
+  const plan = await db.studyPlan.findUnique({ where: { id: planned.planId }, select: { preparationId: true } });
+  if (!plan) return null;
+  return db.plannedSession.findFirst({
+    where: {
+      id: { not: planned.id },
+      kind: "STUDY",
+      status: "PENDING",
+      plan: { preparationId: plan.preparationId },
+      OR: [{ date: { lt: planned.date } }, { date: planned.date, order: { lt: planned.order } }],
+    },
+    orderBy: [{ date: "asc" }, { order: "asc" }],
+    include: { topic: { select: { title: true } } },
+  });
+}
+
+/** Próxima aula liberada da preparação (para o botão "Próxima aula"). */
+export async function nextLesson(preparationId: string) {
+  return db.plannedSession.findFirst({
+    where: { plan: { preparationId }, kind: "STUDY", status: "PENDING" },
+    orderBy: [{ date: "asc" }, { order: "asc" }],
+    select: { id: true },
+  });
+}
+
+/** Refazer a aula: começa uma nova rodada de respostas (a melhor nota fica guardada). */
+export async function retakeSession(sessionId: string, userId: string) {
+  const session = await db.studySession.findFirst({ where: { id: sessionId, userId } });
+  if (!session) return null;
+  return db.studySession.update({ where: { id: sessionId }, data: { roundStartedAt: new Date(), completedAt: null } });
+}
+
+export type CompleteResult = { correct: number; total: number; score: number; passed: boolean; firstPass: boolean; best: number };
+
+/**
+ * Conclui a tentativa: calcula a nota. Aula (STUDY) só conta como feita com 75% ou mais;
+ * abaixo disso continua pendente e o aluno reestuda e refaz. Revisões sempre contam.
+ * Na primeira aprovação: marca no plano, agenda R1..Rn ao terminar o assunto, soma XP.
+ */
+export async function completeSession(sessionId: string, userId: string): Promise<CompleteResult | null> {
   const session = await db.studySession.findFirst({
     where: { id: sessionId, userId },
     include: { plannedSession: { include: { plan: { include: { preparation: true } } } } },
   });
-  if (!session || session.completedAt) return session;
+  if (!session) return null;
+  const r = await roundScore(session);
+  const best = Math.max(session.bestScore ?? 0, r.score);
+  const passed = session.kind !== "STUDY" || r.score >= PASS_SCORE - 1e-9;
+  if (session.completedAt) return { ...r, passed, firstPass: false, best };
   const planned = session.plannedSession;
-  const minutes = planned?.durationMin ?? Math.max(1, Math.round((Date.now() - session.startedAt.getTime()) / 60000));
+  const minutes = Math.max(1, Math.min(planned?.durationMin ?? 60, Math.round((Date.now() - session.roundStartedAt.getTime()) / 60000)));
+  const firstPass = passed && !session.passedAt;
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
   const day = today(user.timezone);
 
-  await db.studySession.update({ where: { id: sessionId }, data: { completedAt: new Date(), minutesSpent: minutes } });
-  if (planned) {
+  await db.studySession.update({
+    where: { id: sessionId },
+    data: {
+      completedAt: new Date(),
+      minutesSpent: (session.minutesSpent ?? 0) + minutes,
+      lastScore: r.score,
+      bestScore: best,
+      tries: { increment: 1 },
+      ...(firstPass ? { passedAt: new Date() } : {}),
+    },
+  });
+  if (planned && firstPass) {
     await db.plannedSession.update({ where: { id: planned.id }, data: { status: "DONE" } });
     const prep = planned.plan.preparation;
 
@@ -347,11 +418,11 @@ export async function completeSession(sessionId: string, userId: string) {
         create: { userId, topicId: planned.topicId, studyDone: true },
         update: { studyDone: true },
       });
-      for (const r of topicReviewDates(day, prep.reviewIntervals)) {
+      for (const rv of topicReviewDates(day, prep.reviewIntervals)) {
         await db.topicReview.upsert({
-          where: { userId_topicId_reviewNumber: { userId, topicId: planned.topicId, reviewNumber: r.reviewNumber } },
-          create: { userId, topicId: planned.topicId, reviewNumber: r.reviewNumber, dueDate: r.dueDate },
-          update: { dueDate: r.dueDate, doneAt: null },
+          where: { userId_topicId_reviewNumber: { userId, topicId: planned.topicId, reviewNumber: rv.reviewNumber } },
+          create: { userId, topicId: planned.topicId, reviewNumber: rv.reviewNumber, dueDate: rv.dueDate },
+          update: { dueDate: rv.dueDate, doneAt: null },
         });
       }
     }
@@ -362,8 +433,8 @@ export async function completeSession(sessionId: string, userId: string) {
       });
     }
   }
-  await addXp(userId, planned?.kind === "REVIEW" ? XP.reviewDone : XP.sessionDone, "sessao", sessionId);
+  if (firstPass) await addXp(userId, planned?.kind === "REVIEW" ? XP.reviewDone : XP.sessionDone, "sessao", sessionId);
   await registerStudy(userId, minutes);
   await checkAchievementsSafe(userId);
-  return session;
+  return { ...r, passed, firstPass, best };
 }

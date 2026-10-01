@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock, Play, RotateCcw } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock, Play, RotateCcw, Lock } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { ensurePlanFresh, latestPlan } from "@/lib/plan";
@@ -160,9 +160,11 @@ export default async function Page({ params, searchParams }: { params: Promise<{
 async function PlanTab({ preparationId, day, hasTopics }: { preparationId: string; day: Date; hasTopics: boolean }) {
   const sessions = await db.plannedSession.findMany({
     where: { plan: { preparationId }, date: { gte: addDays(day, -1), lt: addDays(day, 21) }, status: { in: ["PENDING", "DONE", "MISSED"] } },
-    include: { topic: { include: { subject: true } } },
+    include: { topic: { include: { subject: true } }, studySession: { select: { bestScore: true, tries: true } } },
     orderBy: [{ date: "asc" }, { order: "asc" }],
   });
+  // a primeira aula pendente é a única liberada; as seguintes esperam 75% na anterior
+  const firstOpen = sessions.find((s) => s.kind === "STUDY" && s.status === "PENDING")?.id;
   const byDay = new Map<string, typeof sessions>();
   for (const s of sessions) {
     const k = keyFromDay(s.date);
@@ -210,12 +212,22 @@ async function PlanTab({ preparationId, day, hasTopics }: { preparationId: strin
                     </div>
                   </div>
                   {s.status === "DONE" ? (
-                    <Badge tone="success">Feito</Badge>
+                    <span className="flex items-center gap-2">
+                      {s.kind === "STUDY" && s.studySession?.bestScore != null && <span className="text-xs font-semibold text-success">{Math.round(s.studySession.bestScore * 100)}%</span>}
+                      <Link href={`/estudar/${s.id}`} className="text-xs text-primary hover:underline">Refazer</Link>
+                      <Badge tone="success">Feito</Badge>
+                    </span>
                   ) : s.status === "MISSED" ? (
-                    <Badge tone="danger">Perdida</Badge>
-                  ) : isToday ? (
-                    <Link href={`/estudar/${s.id}`} className={buttonClass("primary", "sm")}>Estudar</Link>
-                  ) : null}
+                    <Badge tone="neutral">Remarcada</Badge>
+                  ) : s.kind === "REVIEW" ? (
+                    isToday ? <Link href={`/estudar/${s.id}`} className={buttonClass("outline", "sm")}>Revisar</Link> : null
+                  ) : s.id === firstOpen ? (
+                    <Link href={`/estudar/${s.id}`} className={buttonClass("primary", "sm")}>
+                      {s.studySession?.tries ? `Refazer (${Math.round((s.studySession.bestScore ?? 0) * 100)}%)` : "Estudar"}
+                    </Link>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted" title="Libera quando você tirar 75% na aula anterior"><Lock size={14} /> Bloqueada</span>
+                  )}
                 </li>
               ))}
             </ul>

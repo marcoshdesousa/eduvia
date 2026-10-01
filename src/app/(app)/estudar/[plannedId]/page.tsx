@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
-import { getOwnedPlanned, nearestSessionMinutes, SESSION_MINUTES } from "@/lib/study";
+import { getOwnedPlanned, lessonBlocker, nearestSessionMinutes, SESSION_MINUTES } from "@/lib/study";
+import Link from "next/link";
+import { Lock } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { buttonClass } from "@/components/ui/button";
 import { restAdvice, restSuggestions } from "@/lib/rest";
 import { RestCard } from "@/components/rest-card";
 import { SessionStart } from "./session-start";
@@ -27,6 +31,28 @@ export default async function Page({ params }: { params: Promise<{ plannedId: st
     minutes: planned.durationMin,
   };
 
+  // a próxima aula só libera quando as anteriores foram aprovadas (75% ou mais)
+  const blocker = await lessonBlocker(planned);
+  if (blocker) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4">
+        <div>
+          <p className="text-sm text-muted">{header.subject} · {header.label}</p>
+          <h1 className="text-2xl font-bold">{header.topic}</h1>
+        </div>
+        <Card className="space-y-3 text-center">
+          <Lock className="mx-auto text-muted" size={32} />
+          <p className="font-semibold">Aula bloqueada</p>
+          <p className="text-sm text-muted">
+            Para liberar esta aula, faça antes <strong className="text-foreground">{blocker.topic.title}</strong> e tire pelo menos 75%.
+            Assim você aprende de verdade, um passo de cada vez.
+          </p>
+          <Link href={`/estudar/${blocker.id}`} className={buttonClass("primary")}>Ir para a aula pendente</Link>
+        </Card>
+      </div>
+    );
+  }
+
   const session = planned.studySession;
   if (!session) {
     if (planned.kind !== "STUDY") return <SessionLoader plannedId={plannedId} header={header} />;
@@ -45,7 +71,7 @@ export default async function Page({ params }: { params: Promise<{ plannedId: st
   const [text, questions, attempts] = await Promise.all([
     session.studyTextId ? db.studyText.findUnique({ where: { id: session.studyTextId } }) : null,
     db.question.findMany({ where: { id: { in: session.questionIds } } }),
-    db.attempt.findMany({ where: { userId: user.id, contextId: session.id } }),
+    db.attempt.findMany({ where: { userId: user.id, contextId: session.id, createdAt: { gte: session.roundStartedAt } } }),
   ]);
   // Na revisão, relembra os pontos-chave dos textos já estudados do assunto.
   const recap =
@@ -74,9 +100,11 @@ export default async function Page({ params }: { params: Promise<{ plannedId: st
 
   return (
     <SessionView
+      key={session.roundStartedAt.toISOString()}
+      grade={planned.kind === "STUDY" ? { tries: session.tries, best: session.bestScore, last: session.lastScore, passed: !!session.passedAt } : null}
       header={header}
       sessionId={session.id}
-      startedAt={session.startedAt.toISOString()}
+      startedAt={session.roundStartedAt.toISOString()}
       completed={!!session.completedAt}
       text={
         text

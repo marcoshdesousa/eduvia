@@ -4,8 +4,9 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { LessonNarrator } from "@/components/lesson-narrator";
 import { ContentReadyToast, finishMessage, StudyTimer } from "./study-timer";
-import { BookOpen, Brain, CheckCircle2, Lightbulb, PartyPopper } from "lucide-react";
-import { completeSessionAction } from "@/app/actions/study";
+import { BookOpen, Brain, CheckCircle2, Lightbulb, PartyPopper, RotateCcw, XCircle } from "lucide-react";
+import { completeSessionAction, retakeSessionAction } from "@/app/actions/study";
+import { useRouter } from "next/navigation";
 import { QuestionCard, SourceLinks, type QuestionData, type SourceRef } from "@/components/question-card";
 import { linkSources } from "@/lib/sources";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -18,7 +19,27 @@ export type SessionQuestion = QuestionData;
 type Header = { topic: string; subject: string; preparation: string; preparationId: string; kind: string; label: string; minutes: number };
 type Text = { content: string | null; highlights: string[]; keyPoints: { term: string; explanation: string }[]; refs: SourceRef[] } | null;
 
-export function SessionView({ header, sessionId, startedAt, completed, text, questions }: { header: Header; sessionId: string; startedAt: string; completed: boolean; text: Text; questions: SessionQuestion[] }) {
+type Grade = { tries: number; best: number | null; last: number | null; passed: boolean } | null;
+const pct = (x: number) => `${Math.round(x * 100)}%`;
+
+export function SessionView({
+  header,
+  sessionId,
+  startedAt,
+  completed,
+  text,
+  questions,
+  grade,
+}: {
+  header: Header;
+  sessionId: string;
+  startedAt: string;
+  completed: boolean;
+  text: Text;
+  questions: SessionQuestion[];
+  grade: Grade;
+}) {
+  const router = useRouter();
   const recall = questions.filter((q) => q.type === "OPEN_RECALL");
   const objective = questions.filter((q) => q.type !== "OPEN_RECALL");
   const steps = useMemo(
@@ -32,7 +53,7 @@ export function SessionView({ header, sessionId, startedAt, completed, text, que
   );
   const [step, setStep] = useState(completed ? steps.length - 1 : 0);
   const [answeredIds, setAnsweredIds] = useState(() => new Set(questions.filter((q) => q.answered).map((q) => q.id)));
-  const [summary, setSummary] = useState<{ correct: number; total: number } | null>(null);
+  const [summary, setSummary] = useState<{ correct: number; total: number; score: number; passed: boolean; best: number; nextPlannedId: string | null } | null>(null);
   const [comfort, setComfort] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const current = steps[step].key;
@@ -119,28 +140,95 @@ export function SessionView({ header, sessionId, startedAt, completed, text, que
 
       {current === "fim" && (
         <Card className="text-center">
-          {completed || summary ? (
-            <>
-              <PartyPopper className="mx-auto text-primary" size={32} />
-              <p className="mt-3 text-lg font-semibold">Sessão concluída!</p>
-              {summary && summary.total > 0 && <p className="mt-1 text-sm text-muted">Você acertou {summary.correct} de {summary.total}. Os erros foram para o banco de erros.</p>}
-              {comfort && <p className="mx-auto mt-2 max-w-md text-sm">{comfort}</p>}
-              <Link href="/inicio" className={buttonClass("primary", "md", "mt-4")}>Voltar ao início</Link>
-            </>
+          {summary || completed ? (
+            <FinishCard
+              summary={summary}
+              grade={grade}
+              isLesson={header.kind === "STUDY"}
+              comfort={comfort}
+              pending={pending}
+              onRetake={() =>
+                start(async () => {
+                  await retakeSessionAction(sessionId);
+                  router.refresh();
+                })
+              }
+            />
           ) : (
             <>
               <p className="font-medium">Tudo pronto?</p>
-              <p className="mt-1 text-sm text-muted">Ao concluir, registramos seu progresso e agendamos as próximas revisões.</p>
-              <Button className="mt-4" disabled={pending} onClick={() => start(async () => {
-                  setComfort(finishMessage(startedAt, header.minutes));
-                  setSummary(await completeSessionAction(sessionId));
-                })}>
-                {pending ? "Salvando..." : "Concluir sessão"}
+              <p className="mt-1 text-sm text-muted">
+                {header.kind === "STUDY" ? "Ao concluir, calculamos a sua nota. Com 75% ou mais, a próxima aula é liberada." : "Ao concluir, registramos seu progresso e agendamos as próximas revisões."}
+              </p>
+              <Button
+                className="mt-4"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    setComfort(finishMessage(startedAt, header.minutes));
+                    const r = await completeSessionAction(sessionId);
+                    if (r) setSummary(r);
+                  })
+                }
+              >
+                {pending ? "Calculando..." : "Concluir e ver a nota"}
               </Button>
             </>
           )}
         </Card>
       )}
+    </div>
+  );
+}
+
+function FinishCard({
+  summary,
+  grade,
+  isLesson,
+  comfort,
+  pending,
+  onRetake,
+}: {
+  summary: { correct: number; total: number; score: number; passed: boolean; best: number; nextPlannedId: string | null } | null;
+  grade: Grade;
+  isLesson: boolean;
+  comfort: string | null;
+  pending: boolean;
+  onRetake: () => void;
+}) {
+  const score = summary?.score ?? grade?.last ?? null;
+  const passed = summary ? summary.passed : !isLesson || !!grade?.passed;
+  const best = summary?.best ?? grade?.best ?? null;
+  const next = summary?.nextPlannedId;
+  return (
+    <div className="space-y-3">
+      {passed ? <PartyPopper className="mx-auto text-primary" size={32} /> : <XCircle className="mx-auto text-danger" size={32} />}
+      {isLesson && score !== null && (
+        <div>
+          <div className={cn("text-5xl font-extrabold", passed ? "text-success" : "text-danger")}>{pct(score)}</div>
+          <p className="text-xs text-muted">nota desta tentativa{best !== null && best > score ? ` · sua melhor nota: ${pct(best)}` : ""} · mínimo para passar: 75%</p>
+        </div>
+      )}
+      <p className="text-lg font-semibold">
+        {!isLesson ? "Sessão concluída!" : passed ? "Aula aprovada! Próxima aula liberada." : "Ainda não foi dessa vez."}
+      </p>
+      {isLesson && !passed && (
+        <p className="mx-auto max-w-md text-sm text-muted">
+          Você precisa de pelo menos 75% para liberar a próxima aula. Releia o texto com calma (ele continua aqui) e refaça as perguntas. Errar faz parte de aprender!
+        </p>
+      )}
+      {summary && summary.total > 0 && <p className="text-sm text-muted">Você acertou {summary.correct} de {summary.total}. Os erros foram para o banco de erros.</p>}
+      {comfort && passed && <p className="mx-auto max-w-md text-sm">{comfort}</p>}
+      <div className="flex flex-wrap justify-center gap-2 pt-1">
+        {isLesson && !passed && (
+          <Button disabled={pending} onClick={onRetake}><RotateCcw size={16} /> Reestudar e refazer a aula</Button>
+        )}
+        {passed && next && <Link href={`/estudar/${next}`} className={buttonClass("primary")}>Próxima aula</Link>}
+        {passed && !next && <Link href="/inicio" className={buttonClass("primary")}>Voltar ao início</Link>}
+        {isLesson && passed && (
+          <Button variant="outline" disabled={pending} onClick={onRetake}><RotateCcw size={16} /> Refazer para melhorar a nota</Button>
+        )}
+      </div>
     </div>
   );
 }

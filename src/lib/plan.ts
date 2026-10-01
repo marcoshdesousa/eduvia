@@ -74,7 +74,15 @@ export async function generatePlan(preparationId: string) {
         : null;
 
   await db.$transaction(async (tx) => {
-    // Sessões pendentes de dias anteriores viram "perdidas"; pendentes de hoje em diante são substituídas.
+    // Aulas atrasadas já começadas (ou reprovadas, abaixo de 75%) vêm para hoje, antes de tudo:
+    // o aluno precisa terminá-las para liberar as próximas. As que nem começaram são replanejadas.
+    const overdue = await tx.plannedSession.findMany({
+      where: { plan: { preparationId }, status: "PENDING", date: { lt: start }, studySession: { isNot: null } },
+      orderBy: [{ date: "asc" }, { order: "asc" }],
+    });
+    for (const [i, o] of overdue.entries()) {
+      await tx.plannedSession.update({ where: { id: o.id }, data: { date: start, order: -1000 + i } });
+    }
     await tx.plannedSession.updateMany({ where: { plan: { preparationId }, status: "PENDING", date: { lt: start } }, data: { status: "MISSED" } });
     await tx.plannedSession.deleteMany({ where: { plan: { preparationId }, status: "PENDING", date: { gte: start }, studySession: null } });
     const plan = await tx.studyPlan.create({

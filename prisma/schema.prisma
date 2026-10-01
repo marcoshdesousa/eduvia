@@ -441,6 +441,13 @@ model StudySession {
   startedAt        DateTime        @default(now())
   completedAt      DateTime?
   minutesSpent     Int?
+  /// Nota da última tentativa e a melhor (0 a 1). A próxima aula só libera com PASS_SCORE.
+  lastScore        Float?
+  bestScore        Float?
+  tries            Int             @default(0)
+  passedAt         DateTime?
+  /// Início da tentativa atual (refazer a aula começa uma nova rodada de respostas).
+  roundStartedAt   DateTime        @default(now())
 
   @@index([userId, startedAt])
 }
