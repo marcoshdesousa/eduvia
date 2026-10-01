@@ -34,24 +34,32 @@ export async function POST(req: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      // se o aluno sair da tela, a resposta continua sendo gerada e fica salva na conversa
+      const send = (t: string) => {
+        try {
+          controller.enqueue(encoder.encode(t));
+        } catch {}
+      };
       try {
         const { text, refs } = await tutorReply({
           userId: user.id,
           threadId,
           content: b.content,
           shortcut: b.shortcut ?? null,
-          onText: (d) => controller.enqueue(encoder.encode(d)),
+          onText: send,
         });
         const used = refs.filter((r) => text.includes(`[${r.label}]`));
         const saved = await db.tutorMessage.create({ data: { threadId, role: "assistant", content: text, sourceRefs: used } });
         await db.tutorThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } });
         // metadados no fim do fluxo (separador improvável no texto)
-        controller.enqueue(encoder.encode(`\u0000${JSON.stringify({ messageId: saved.id, refs: used })}`));
+        send(`\u0000${JSON.stringify({ messageId: saved.id, refs: used })}`);
       } catch (e) {
         console.error("[professor]", e);
-        controller.enqueue(encoder.encode(`\u0000${JSON.stringify({ error: aiErrorMessage(e, "Não consegui responder agora. Tente de novo.") })}`));
+        send(`\u0000${JSON.stringify({ error: aiErrorMessage(e, "Não consegui responder agora. Tente de novo.") })}`);
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {}
       }
     },
   });

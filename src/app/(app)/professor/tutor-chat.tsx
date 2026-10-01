@@ -132,11 +132,7 @@ export function TutorChat({
                     {m.refs.length > 0 && <div className="mt-2 border-t border-border pt-2"><SourceLinks refs={m.refs} /></div>}
                   </div>
                 ) : (
-                  <span className="inline-flex gap-1" aria-label="Digitando">
-                    <span className="size-1.5 animate-bounce rounded-full bg-muted" />
-                    <span className="size-1.5 animate-bounce rounded-full bg-muted [animation-delay:120ms]" />
-                    <span className="size-1.5 animate-bounce rounded-full bg-muted [animation-delay:240ms]" />
-                  </span>
+                  <Thinking />
                 )
               ) : (
                 <p className="whitespace-pre-wrap">{m.content}</p>
@@ -196,5 +192,33 @@ export function TutorChat({
         )}
       </div>
     </Card>
+  );
+}
+
+const THINKING = [
+  "Pensando…",
+  "Lendo o seu material…",
+  "Não saia dessa tela, já estou respondendo.",
+  "Organizando a explicação…",
+  "Quase terminando…",
+];
+
+/** Enquanto a resposta não chega: mensagens que mudam e um cérebro pulsando. */
+function Thinking() {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((x) => Math.min(x + 1, THINKING.length - 1)), 2500);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <span className="inline-flex items-center gap-2 text-muted" role="status" aria-live="polite">
+      <Brain size={16} className="animate-pulse text-primary" />
+      <span key={i} className="thinking-msg">{THINKING[i]}</span>
+      <span className="inline-flex gap-1" aria-hidden>
+        <span className="size-1.5 animate-bounce rounded-full bg-primary/70" />
+        <span className="size-1.5 animate-bounce rounded-full bg-primary/70 [animation-delay:120ms]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-primary/70 [animation-delay:240ms]" />
+      </span>
+    </span>
   );
 }

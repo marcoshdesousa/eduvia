@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ClipboardCheck, FileText, ListChecks, NotebookText } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
-import { getMembership, weeklyXpRanking } from "@/lib/groups";
+import { getMembership, TOURNAMENT_DAYS, tournamentRanking, weeklyXpRanking } from "@/lib/groups";
 import { groupAccessError } from "@/lib/billing";
 import { formatDay } from "@/lib/core/dates";
 import { levelFromXp } from "@/lib/gamification";
@@ -13,11 +13,13 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { GroupCode, InviteForm } from "../forms";
 import { GroupWall } from "./wall";
-import { DangerZone, MemberActions, ShareForm, SharedItemActions } from "./group-client";
+import { DangerZone, EndTournamentButton, MemberActions, ShareForm, SharedItemActions, TournamentForm } from "./group-client";
+
 
 const TABS = [
   { key: "mural", label: "Mural" },
   { key: "compartilhados", label: "Compartilhados" },
+  { key: "torneios", label: "Torneios" },
   { key: "ranking", label: "Ranking" },
   { key: "membros", label: "Membros" },
 ] as const;
@@ -113,6 +115,71 @@ export default async function Page({ params, searchParams }: { params: Promise<{
             );
           })}
         </ul>
+      </div>
+    );
+  }
+
+  if (tab === "torneios") {
+    const now = new Date();
+    const tournaments = await db.tournament.findMany({ where: { groupId: id }, orderBy: { startsAt: "desc" }, take: 10 });
+    const active = tournaments.find((t) => t.endsAt > now) ?? null;
+    const past = tournaments.filter((t) => t !== active);
+    const [ranking, podiums] = await Promise.all([
+      active ? tournamentRanking(active) : Promise.resolve([]),
+      Promise.all(past.slice(0, 5).map(async (t) => ({ t, top: (await tournamentRanking(t)).filter((r) => r.xp > 0).slice(0, 3) }))),
+    ]);
+    const left = active ? active.endsAt.getTime() - now.getTime() : 0;
+    const leftLabel = left > 86_400_000 ? `${Math.ceil(left / 86_400_000)} dias` : left > 3_600_000 ? `${Math.ceil(left / 3_600_000)} h` : `${Math.max(1, Math.ceil(left / 60_000))} min`;
+    return (
+      <div className="space-y-4">
+        {header}
+        {active ? (
+          <Card className="space-y-3 border-primary/50">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">Torneio em andamento</p>
+                <CardTitle>🏆 {active.name}</CardTitle>
+                <p className="text-xs text-muted">Termina em {leftLabel} · quem ganhar mais XP estudando fica em 1º</p>
+              </div>
+              {canManage && <EndTournamentButton tournamentId={active.id} groupId={id} />}
+            </div>
+            <ol className="divide-y divide-border text-sm" aria-label="Classificação do torneio">
+              {ranking.map((r) => (
+                <li key={r.user.id} className={cn("flex items-center gap-3 py-2", r.user.id === user.id && "font-semibold")}>
+                  <span className="w-8 text-center text-base">{r.xp > 0 && r.position <= 3 ? ["🥇", "🥈", "🥉"][r.position - 1] : `${r.position}º`}</span>
+                  <Avatar id={r.user.avatar} name={r.user.name} size={28} />
+                  <Link href={`/u/${r.user.handle}`} className="min-w-0 flex-1 truncate hover:text-primary">{r.user.name} <span className="text-muted">@{r.user.handle}</span></Link>
+                  <span className="w-16 text-right font-bold">{r.xp} XP</span>
+                </li>
+              ))}
+            </ol>
+          </Card>
+        ) : (
+          <Card className="space-y-2 text-sm">
+            <CardTitle>Nenhum torneio agora</CardTitle>
+            <p className="text-muted">{canManage ? "Crie um torneio: todos do grupo competem pelo XP ganho estudando no período." : "Peça para o dono ou um admin do grupo começar um torneio."}</p>
+          </Card>
+        )}
+        {canManage && !active && (
+          <Card className="space-y-3">
+            <CardTitle>Novo torneio</CardTitle>
+            <TournamentForm groupId={id} days={TOURNAMENT_DAYS} />
+            <p className="text-xs text-muted">Vale o XP de sessões, questões, testes rápidos e simulados feitos durante o torneio. Todos do grupo são avisados.</p>
+          </Card>
+        )}
+        {podiums.length > 0 && (
+          <Card>
+            <CardTitle>Torneios anteriores</CardTitle>
+            <ul className="mt-3 divide-y divide-border text-sm">
+              {podiums.map(({ t, top }) => (
+                <li key={t.id} className="py-2">
+                  <div className="flex justify-between gap-2"><span className="font-medium">{t.name}</span><span className="text-xs text-muted">{formatDay(t.endsAt)}</span></div>
+                  <div className="text-xs text-muted">{top.length ? top.map((r, i) => `${["🥇", "🥈", "🥉"][i]} @${r.user.handle} (${r.xp} XP)`).join("  ") : "Ninguém pontuou."}</div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
       </div>
     );
   }

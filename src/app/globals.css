@@ -112,3 +112,7 @@ body {
 }
 .streak-flame { transform-origin: 50% 90%; animation: streak-flicker 1.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .streak-flame { animation: none; } }
+
+/* Professor IA pensando: cada mensagem entra suave */
+@keyframes thinking-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.thinking-msg { animation: thinking-in 0.35s ease-out; }

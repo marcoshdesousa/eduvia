@@ -302,3 +302,49 @@ export async function weeklyXpRanking(groupId: string) {
   const by = new Map(sums.map((s) => [s.userId, s._sum.amount ?? 0]));
   return members.map((m) => ({ user: m.user, role: m.role, weekXp: by.get(m.userId) ?? 0 })).sort((a, b) => b.weekXp - a.weekXp || b.user.xp - a.user.xp);
 }
+
+// ───────────── Torneios ─────────────
+
+/** Durações de torneio (dias). */
+export const TOURNAMENT_DAYS = [1, 3, 7, 14, 30] as const;
+
+/** Torneio de XP no grupo: quem ganhar mais XP no período fica em 1º. Um torneio por vez. */
+export async function createTournament(groupId: string, actorId: string, rawName: string, days: number) {
+  await requireManager(groupId, actorId);
+  if (!(TOURNAMENT_DAYS as readonly number[]).includes(days)) throw new GroupError("Escolha a duração do torneio.");
+  const name = rawName.trim().slice(0, 60) || `Torneio de ${days} dia${days > 1 ? "s" : ""}`;
+  const now = new Date();
+  if (await db.tournament.findFirst({ where: { groupId, endsAt: { gt: now } } })) throw new GroupError("Já existe um torneio em andamento neste grupo.");
+  const t = await db.tournament.create({ data: { groupId, name, startsAt: now, endsAt: new Date(now.getTime() + days * 86_400_000), createdById: actorId } });
+  const [group, members] = await Promise.all([db.group.findUniqueOrThrow({ where: { id: groupId } }), db.groupMember.findMany({ where: { groupId } })]);
+  for (const m of members) {
+    if (m.userId === actorId) continue;
+    await notify(m.userId, { type: "TOURNAMENT", title: `Torneio começou em "${group.name}"!`, body: `${name}: estude para ganhar XP e subir no ranking.`, href: `/grupos/${groupId}?aba=torneios`, dedupeKey: `tournament:${t.id}` }).catch(() => {});
+  }
+  return t;
+}
+
+export async function endTournament(tournamentId: string, actorId: string) {
+  const t = await db.tournament.findUnique({ where: { id: tournamentId } });
+  if (!t) throw new GroupError("Torneio não encontrado.");
+  await requireManager(t.groupId, actorId);
+  if (t.endsAt > new Date()) await db.tournament.update({ where: { id: t.id }, data: { endsAt: new Date() } });
+}
+
+/** Classificação do torneio: XP ganho por cada membro entre o início e o fim (do 1º ao último). */
+export async function tournamentRanking(t: { groupId: string; startsAt: Date; endsAt: Date }) {
+  const members = await db.groupMember.findMany({ where: { groupId: t.groupId }, include: { user: { select: { id: true, name: true, handle: true, avatar: true } } } });
+  const end = t.endsAt < new Date() ? t.endsAt : new Date();
+  const sums = await db.xpEvent.groupBy({
+    by: ["userId"],
+    where: { userId: { in: members.map((m) => m.userId) }, createdAt: { gte: t.startsAt, lt: end } },
+    _sum: { amount: true },
+    _max: { createdAt: true },
+  });
+  const by = new Map(sums.map((s) => [s.userId, { xp: s._sum.amount ?? 0, last: s._max.createdAt?.getTime() ?? Infinity }]));
+  // empate: quem chegou primeiro àquele XP fica na frente
+  return members
+    .map((m) => ({ user: m.user, xp: by.get(m.userId)?.xp ?? 0, last: by.get(m.userId)?.last ?? Infinity }))
+    .sort((a, b) => b.xp - a.xp || a.last - b.last || a.user.name.localeCompare(b.user.name))
+    .map(({ last: _last, ...r }, i) => ({ ...r, position: i + 1 }));
+}

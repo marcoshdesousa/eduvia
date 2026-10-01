@@ -9,6 +9,8 @@ import { enqueue } from "@/lib/queue";
 import {
   cancelInvite,
   createGroup,
+  createTournament,
+  endTournament,
   deleteGroup,
   deleteMessage,
   getMembership,
@@ -155,4 +157,14 @@ export async function importMaterialAction(shareId: string, preparationId: strin
   });
   await enqueue("material.process", { materialId: m.id }, { singletonKey: m.id });
   return { ok: true, message: `Adicionado a "${prep.title}". Os assuntos aparecem em instantes.` };
+}
+
+export async function createTournamentAction(groupId: string, name: string, days: number): Promise<Result> {
+  const user = await requireReadyUser();
+  return run(() => createTournament(groupId, user.id, name, days), `/grupos/${groupId}`);
+}
+
+export async function endTournamentAction(tournamentId: string, groupId: string): Promise<Result> {
+  const user = await requireReadyUser();
+  return run(() => endTournament(tournamentId, user.id), `/grupos/${groupId}`);
 }

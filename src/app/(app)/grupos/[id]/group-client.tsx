@@ -2,7 +2,9 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  createTournamentAction,
   deleteGroupAction,
+  endTournamentAction,
   importMaterialAction,
   leaveGroupAction,
   removeMemberAction,
@@ -133,5 +135,54 @@ export function DangerZone({ groupId, isOwner, groupName }: { groupId: string; i
         <Button variant="outline" disabled={pending} onClick={() => confirm("Sair do grupo?") && start(async () => setError((await leaveGroupAction(groupId))?.error ?? null))}>Sair do grupo</Button>
       )}
     </Card>
+  );
+}
+
+/** Dono/admin cria um torneio de XP com nome e duração. */
+export function TournamentForm({ groupId, days }: { groupId: string; days: readonly number[] }) {
+  const [pending, start] = useTransition();
+  const [name, setName] = useState("");
+  const [d, setD] = useState(7);
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <form
+      className="flex flex-col gap-2 sm:flex-row"
+      onSubmit={(e) => {
+        e.preventDefault();
+        start(async () => {
+          const r = await createTournamentAction(groupId, name, d);
+          setMsg(r.error ?? null);
+          if (!r.error) setName("");
+        });
+      }}
+    >
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Nome do torneio (ex.: Maratona de outubro)"
+        aria-label="Nome do torneio"
+        maxLength={60}
+        className="h-10 flex-1 rounded-lg border border-border bg-surface px-3 text-sm"
+      />
+      <Select value={d} onChange={(e) => setD(Number(e.target.value))} aria-label="Duração" className="h-10 sm:w-36">
+        {days.map((x) => <option key={x} value={x}>{x === 1 ? "1 dia" : `${x} dias`}</option>)}
+      </Select>
+      <Button disabled={pending}>{pending ? "Criando..." : "Começar torneio"}</Button>
+      {msg && <p className="text-sm text-danger sm:basis-full">{msg}</p>}
+    </form>
+  );
+}
+
+export function EndTournamentButton({ tournamentId, groupId }: { tournamentId: string; groupId: string }) {
+  const [pending, start] = useTransition();
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={pending}
+      onClick={() => confirm("Encerrar o torneio agora? O ranking atual vira o resultado final.") && start(async () => void (await endTournamentAction(tournamentId, groupId)))}
+    >
+      Encerrar
+    </Button>
   );
 }

@@ -9,6 +9,7 @@ export type NotificationType =
   | "GROUP_INVITE"
   | "INVITE_ACCEPTED"
   | "GROUP_SHARE"
+  | "TOURNAMENT"
   | "ACHIEVEMENT"
   | "PLAN_EXPIRING"
   | "TRIAL_ENDING"
