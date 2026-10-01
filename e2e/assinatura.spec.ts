@@ -59,11 +59,11 @@ test("plano Grátis → admin libera o Básico; chave do Gemini obrigatória", a
 
   // Grátis: só 1 personagem feminino e 1 masculino por categoria
   await page.goto("/configuracoes");
-  await expect(page.getByRole("radio", { name: "Gatinha", exact: true })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "Pandinha (só para assinantes)" })).toBeVisible();
-  await page.getByRole("tab", { name: "Heróis" }).click();
-  await expect(page.getByRole("radio", { name: "Heroína Raio", exact: true })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "Herói Chama (só para assinantes)" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Teia", exact: true })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Capitão Escudo (só para assinantes)" })).toBeVisible();
+  await page.getByRole("tab", { name: "Princesas" }).click();
+  await expect(page.getByRole("radio", { name: "Princesa do Gelo", exact: true })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Princesa da Torre (só para assinantes)" })).toBeVisible();
 
   // admin confirma o pagamento e libera o Eduvia por 30 dias
   const admin = await (await browser.newContext()).newPage();
@@ -123,13 +123,14 @@ test("plano Grátis → admin libera o Básico; chave do Gemini obrigatória", a
 
   // foto de perfil e nome (o @ não muda)
   await page.goto("/configuracoes");
-  await page.getByRole("radio", { name: "Pandinha" }).click();
+  await page.getByRole("tab", { name: "Halloween" }).click();
+  await page.getByRole("radio", { name: "Lobisomem" }).click();
   await page.getByLabel("Nome", { exact: true }).fill("Aluno Pagante Silva");
   await expect(page.locator("#handle")).toBeDisabled();
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(page.getByText("Dados salvos.")).toBeVisible();
   const saved = await sql<{ avatar: string; name: string; handle: string }>(`SELECT avatar, name, handle FROM "user" WHERE handle = $1`, [handle]);
-  expect(saved[0]).toEqual({ avatar: "panda", name: "Aluno Pagante Silva", handle });
+  expect(saved[0]).toEqual({ avatar: "m-lobisomem", name: "Aluno Pagante Silva", handle });
 
   // aluno passa a ter o plano Básico
   await page.goto("/assinatura");

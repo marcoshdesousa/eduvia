@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 /** Escolha da foto de perfil (campo "avatar" do formulário). No plano Grátis, só 1 feminino + 1 masculino por categoria. */
 export function AvatarPicker({ current, subscriber }: { current: string | null; subscriber: boolean }) {
   const [value, setValue] = useState(current ?? "");
-  const [tab, setTab] = useState<AvatarCategory>(AVATARS.find((a) => a.id === current)?.category ?? "animais");
+  const [tab, setTab] = useState<AvatarCategory>(AVATARS.find((a) => a.id === current)?.category ?? "herois");
   return (
     <fieldset>
       <legend className="mb-2 text-sm font-medium">Foto de perfil</legend>

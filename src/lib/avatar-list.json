@@ -1,0 +1,312 @@
+[
+ {
+  "id": "h-teia",
+  "label": "Teia",
+  "category": "herois",
+  "gender": "M",
+  "free": true
+ },
+ {
+  "id": "h-escudo",
+  "label": "Capitão Escudo",
+  "category": "herois",
+  "gender": "M"
+ },
+ {
+  "id": "h-armadura",
+  "label": "Armadura",
+  "category": "herois",
+  "gender": "M"
+ },
+ {
+  "id": "h-trovao",
+  "label": "Trovão",
+  "category": "herois",
+  "gender": "M"
+ },
+ {
+  "id": "h-garra",
+  "label": "Garra",
+  "category": "herois",
+  "gender": "M"
+ },
+ {
+  "id": "h-teia-f",
+  "label": "Teia Rosa",
+  "category": "herois",
+  "gender": "F",
+  "free": true
+ },
+ {
+  "id": "h-feiticeira",
+  "label": "Feiticeira",
+  "category": "herois",
+  "gender": "F"
+ },
+ {
+  "id": "h-espia",
+  "label": "Espiã",
+  "category": "herois",
+  "gender": "F"
+ },
+ {
+  "id": "h-estelar",
+  "label": "Estelar",
+  "category": "herois",
+  "gender": "F"
+ },
+ {
+  "id": "h-tempestade",
+  "label": "Tempestade",
+  "category": "herois",
+  "gender": "F"
+ },
+ {
+  "id": "s-capa",
+  "label": "Capa Vermelha",
+  "category": "lendarios",
+  "gender": "M",
+  "free": true
+ },
+ {
+  "id": "s-noturno",
+  "label": "Noturno",
+  "category": "lendarios",
+  "gender": "M"
+ },
+ {
+  "id": "s-relampago",
+  "label": "Relâmpago",
+  "category": "lendarios",
+  "gender": "M"
+ },
+ {
+  "id": "s-esmeralda",
+  "label": "Esmeralda",
+  "category": "lendarios",
+  "gender": "M"
+ },
+ {
+  "id": "s-mares",
+  "label": "Rei dos Mares",
+  "category": "lendarios",
+  "gender": "M"
+ },
+ {
+  "id": "s-amazona",
+  "label": "Amazona",
+  "category": "lendarios",
+  "gender": "F",
+  "free": true
+ },
+ {
+  "id": "s-gata",
+  "label": "Gata Noturna",
+  "category": "lendarios",
+  "gender": "F"
+ },
+ {
+  "id": "s-estrela",
+  "label": "Estrela do Norte",
+  "category": "lendarios",
+  "gender": "F"
+ },
+ {
+  "id": "s-aguia",
+  "label": "Águia",
+  "category": "lendarios",
+  "gender": "F"
+ },
+ {
+  "id": "s-arlequina",
+  "label": "Coringa",
+  "category": "lendarios",
+  "gender": "F"
+ },
+ {
+  "id": "m-vampira",
+  "label": "Vampira",
+  "category": "halloween",
+  "gender": "F",
+  "free": true
+ },
+ {
+  "id": "m-bruxa",
+  "label": "Bruxa",
+  "category": "halloween",
+  "gender": "F"
+ },
+ {
+  "id": "m-noiva",
+  "label": "Noiva Cadáver",
+  "category": "halloween",
+  "gender": "F"
+ },
+ {
+  "id": "m-medusa",
+  "label": "Medusa",
+  "category": "halloween",
+  "gender": "F"
+ },
+ {
+  "id": "m-caveira",
+  "label": "Catrina",
+  "category": "halloween",
+  "gender": "F"
+ },
+ {
+  "id": "m-vampiro",
+  "label": "Vampiro",
+  "category": "halloween",
+  "gender": "M",
+  "free": true
+ },
+ {
+  "id": "m-lobisomem",
+  "label": "Lobisomem",
+  "category": "halloween",
+  "gender": "M"
+ },
+ {
+  "id": "m-frank",
+  "label": "Frankenstein",
+  "category": "halloween",
+  "gender": "M"
+ },
+ {
+  "id": "m-mumia",
+  "label": "Múmia",
+  "category": "halloween",
+  "gender": "M"
+ },
+ {
+  "id": "m-ceifador",
+  "label": "Ceifador",
+  "category": "halloween",
+  "gender": "M"
+ },
+ {
+  "id": "g-pro-f",
+  "label": "Pro Gamer",
+  "category": "mvp",
+  "gender": "F",
+  "free": true
+ },
+ {
+  "id": "g-sniper-f",
+  "label": "Atiradora",
+  "category": "mvp",
+  "gender": "F"
+ },
+ {
+  "id": "g-maga",
+  "label": "Maga",
+  "category": "mvp",
+  "gender": "F"
+ },
+ {
+  "id": "g-ninja-f",
+  "label": "Ninja",
+  "category": "mvp",
+  "gender": "F"
+ },
+ {
+  "id": "g-cyber-f",
+  "label": "Cyberpunk",
+  "category": "mvp",
+  "gender": "F"
+ },
+ {
+  "id": "g-pro",
+  "label": "Pro Player",
+  "category": "mvp",
+  "gender": "M",
+  "free": true
+ },
+ {
+  "id": "g-soldado",
+  "label": "Soldado",
+  "category": "mvp",
+  "gender": "M"
+ },
+ {
+  "id": "g-cavaleiro",
+  "label": "Cavaleiro",
+  "category": "mvp",
+  "gender": "M"
+ },
+ {
+  "id": "g-mago",
+  "label": "Mago",
+  "category": "mvp",
+  "gender": "M"
+ },
+ {
+  "id": "g-hacker",
+  "label": "Hacker",
+  "category": "mvp",
+  "gender": "M"
+ },
+ {
+  "id": "p-gelo",
+  "label": "Princesa do Gelo",
+  "category": "princesas",
+  "gender": "F",
+  "free": true
+ },
+ {
+  "id": "p-mar",
+  "label": "Princesa do Mar",
+  "category": "princesas",
+  "gender": "F",
+  "free": true
+ },
+ {
+  "id": "p-rosas",
+  "label": "Princesa das Rosas",
+  "category": "princesas",
+  "gender": "F"
+ },
+ {
+  "id": "p-floresta",
+  "label": "Princesa da Floresta",
+  "category": "princesas",
+  "gender": "F"
+ },
+ {
+  "id": "p-deserto",
+  "label": "Princesa do Deserto",
+  "category": "princesas",
+  "gender": "F"
+ },
+ {
+  "id": "p-guerreira",
+  "label": "Princesa Guerreira",
+  "category": "princesas",
+  "gender": "F"
+ },
+ {
+  "id": "p-torre",
+  "label": "Princesa da Torre",
+  "category": "princesas",
+  "gender": "F"
+ },
+ {
+  "id": "p-sol",
+  "label": "Princesa do Sol",
+  "category": "princesas",
+  "gender": "F"
+ },
+ {
+  "id": "p-ilha",
+  "label": "Princesa da Ilha",
+  "category": "princesas",
+  "gender": "F"
+ },
+ {
+  "id": "p-sonho",
+  "label": "Princesa dos Sonhos",
+  "category": "princesas",
+  "gender": "F"
+ }
+]
