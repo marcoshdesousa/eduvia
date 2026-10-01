@@ -10,7 +10,7 @@ const Sub = z.object({ endpoint: z.url(), keys: z.object({ p256dh: z.string().mi
 export async function POST(req: Request) {
   const { user, error } = await apiUser();
   if (error) return error;
-  if (!pushConfigured()) return jsonError("Notificações push não estão configuradas no servidor.", 503);
+  if (!(await pushConfigured())) return jsonError("Notificações push não estão configuradas no servidor.", 503);
   const parsed = Sub.safeParse(await req.json());
   if (!parsed.success) return jsonError("Inscrição inválida");
   const { endpoint, keys } = parsed.data;

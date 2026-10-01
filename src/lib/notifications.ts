@@ -17,29 +17,54 @@ export type NotificationType =
   | "SUPPORT_REPLY"
   | "SUPPORT_MESSAGE";
 
-let vapidReady: boolean | null = null;
-export function pushConfigured() {
-  if (vapidReady === null) {
-    const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env;
-    vapidReady = !!(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
-    if (vapidReady) {
-      // o "subject" precisa ser https: ou mailto: (localhost em http não serve)
-      const candidates = [process.env.VAPID_SUBJECT, appUrl(), "mailto:suporte@eduvia.app"];
-      const subject = candidates.find((c) => c && /^(https:|mailto:)/.test(c))!;
-      try {
-        webpush.setVapidDetails(subject, VAPID_PUBLIC_KEY!, VAPID_PRIVATE_KEY!);
-      } catch (e) {
-        console.error("[push] chaves VAPID inválidas:", (e as Error).message);
-        vapidReady = false;
-      }
+/**
+ * Chaves do push (VAPID). Usa VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY do ambiente quando as duas existem;
+ * senão gera um par uma única vez e guarda no banco (SiteSetting "vapid"), sem precisar configurar nada.
+ */
+let vapid: Promise<{ publicKey: string } | null> | null = null;
+
+async function loadVapid(): Promise<{ publicKey: string } | null> {
+  let pair: { publicKey: string; privateKey: string } | null = null;
+  const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env;
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) pair = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
+  else {
+    const saved = await db.siteSetting.findUnique({ where: { key: "vapid" } });
+    if (saved) pair = JSON.parse(saved.value);
+    else {
+      const fresh = webpush.generateVAPIDKeys();
+      // se dois processos gerarem ao mesmo tempo, fica o primeiro que gravou
+      await db.siteSetting.create({ data: { key: "vapid", value: JSON.stringify(fresh) } }).catch(() => {});
+      pair = JSON.parse((await db.siteSetting.findUniqueOrThrow({ where: { key: "vapid" } })).value);
     }
   }
-  return vapidReady;
+  // o "subject" precisa ser https: ou mailto: (localhost em http não serve)
+  const candidates = [process.env.VAPID_SUBJECT, appUrl(), "mailto:suporte@eduvia.app"];
+  const subject = candidates.find((c) => c && /^(https:|mailto:)/.test(c))!;
+  try {
+    webpush.setVapidDetails(subject, pair!.publicKey, pair!.privateKey);
+    return { publicKey: pair!.publicKey };
+  } catch (e) {
+    console.error("[push] chaves VAPID inválidas:", (e as Error).message);
+    return null;
+  }
 }
 
-/** Chave pública para o navegador; só existe quando o push está configurado de verdade (pública + privada). */
-export function vapidPublicKey() {
-  return pushConfigured() ? (process.env.VAPID_PUBLIC_KEY ?? null) : null;
+function ensureVapid() {
+  vapid ??= loadVapid().catch((e) => {
+    console.error("[push] não foi possível preparar as chaves:", e);
+    vapid = null; // tenta de novo na próxima vez
+    return null;
+  });
+  return vapid;
+}
+
+export async function pushConfigured() {
+  return !!(await ensureVapid());
+}
+
+/** Chave pública para o navegador inscrever o aparelho. */
+export async function vapidPublicKey() {
+  return (await ensureVapid())?.publicKey ?? null;
 }
 
 /** Cria a notificação (ignorando repetidas pelo dedupeKey) e envia push para os aparelhos do aluno. */
@@ -60,7 +85,7 @@ export async function notify(
 }
 
 export async function sendPush(userId: string, payload: { title: string; body: string; href: string }) {
-  if (!pushConfigured()) return 0;
+  if (!(await pushConfigured())) return 0;
   const subs = await db.pushSubscription.findMany({ where: { userId } });
   let sent = 0;
   await Promise.all(

@@ -40,7 +40,7 @@ export default async function Page() {
         <p className="text-sm text-muted">
           Receba no celular ou no computador o lembrete no horário de estudo, convites de grupo e conquistas.
         </p>
-        <PushSettings vapidKey={vapidPublicKey()} remindersEnabled={user.remindersEnabled} />
+        <PushSettings vapidKey={await vapidPublicKey()} remindersEnabled={user.remindersEnabled} />
       </Card>
       <Card className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle>Aparência</CardTitle>

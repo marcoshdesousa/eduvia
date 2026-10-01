@@ -44,11 +44,12 @@ services:
       - key: BILLING_ENFORCED
         value: "true" # sem assinatura, a conta fica no plano Grátis (limitado)
       # IA: Google Gemini com a chave de cada aluno (informada no cadastro). Nada a configurar aqui.
-      # notificações push: gere com `npx web-push generate-vapid-keys`
+      # notificações push: as chaves são geradas sozinhas e guardadas no banco na primeira vez.
+      # (Opcional) para usar chaves próprias, preencha VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY juntas.
       - key: VAPID_PUBLIC_KEY
         value: BAHR0NyTSbKzMlU5z66DwDtMNfv9ZFZaIN5ps1bBecDlsDDACe4LAR9Bu0zk4N2ZSIlm0_V8yYn87uphNOr9vYQ # pública (pode ficar no código)
       - key: VAPID_PRIVATE_KEY
-        sync: false # secreta: preencha no painel
+        sync: false # opcional (ver acima)
       - key: VAPID_SUBJECT
         value: mailto:suporte@eduvia.app
 

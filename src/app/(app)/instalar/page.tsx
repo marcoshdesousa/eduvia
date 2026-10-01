@@ -22,7 +22,7 @@ export default async function Page() {
       <Card className="space-y-3">
         <CardTitle className="flex items-center gap-2"><Bell size={18} className="text-primary" /> 2. Ative as notificações</CardTitle>
         <p className="text-sm text-muted">Assim você recebe o lembrete na hora de estudar, as respostas do suporte, convites de grupo e conquistas. No iPhone, ative depois de abrir o app pelo ícone.</p>
-        <PushSettings vapidKey={vapidPublicKey()} remindersEnabled={user.remindersEnabled} />
+        <PushSettings vapidKey={await vapidPublicKey()} remindersEnabled={user.remindersEnabled} />
       </Card>
     </div>
   );
