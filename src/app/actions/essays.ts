@@ -8,7 +8,8 @@ import { featureLimitError } from "@/lib/billing";
 import { checkAchievementsSafe } from "@/lib/achievements";
 import { evaluateEssay, suggestEssayTheme } from "@/lib/ai/tasks";
 import { profileVoice } from "@/lib/core/profiles";
-import { normalizeScores, placeAnnotations, RUBRICS, wordCount, type RubricKey } from "@/lib/core/essay";
+import { applyCopyPenalty, ESSAY_TIMES, normalizeScores, placeAnnotations, RUBRICS, wordCount, type Annotation, type RubricKey } from "@/lib/core/essay";
+import { copiedPassages, motivatingTexts } from "@/lib/core/essay-themes";
 import type { FormState } from "./account";
 
 const MIN_WORDS = 50;
@@ -49,6 +50,7 @@ export async function submitEssayAction(_: FormState, f: FormData): Promise<Form
       instructions: z.string().max(3000).optional(),
       text: z.string().trim(),
       preparationId: z.string().optional(),
+      timeLimit: z.coerce.number().optional(),
     })
     .safeParse(Object.fromEntries(f));
   if (!input.success) return { error: input.error.issues[0].message };
@@ -66,11 +68,15 @@ export async function submitEssayAction(_: FormState, f: FormData): Promise<Form
       theme: input.data.theme,
       instructions: input.data.instructions?.trim() || null,
       text: input.data.text,
+      timeLimitMin: (ESSAY_TIMES as readonly number[]).includes(input.data.timeLimit ?? 0) ? input.data.timeLimit : null,
       status: "EVALUATING",
     },
   });
+  const texts = input.data.rubric === "ENEM" ? motivatingTexts(essay.theme) : [];
+  const copied = copiedPassages(essay.text, texts);
   try {
     const ev = await evaluateEssay({
+      motivatingTexts: texts,
       userId: user.id,
       voice,
       rubricLabel: rubric.label,
@@ -80,8 +86,14 @@ export async function submitEssayAction(_: FormState, f: FormData): Promise<Form
       instructions: essay.instructions,
       text: essay.text,
     });
-    const scores = normalizeScores(input.data.rubric, ev.criteria);
-    const { placed, unplaced } = placeAnnotations(essay.text, ev.annotations);
+    const { scores, penalty } = applyCopyPenalty(input.data.rubric, normalizeScores(input.data.rubric, ev.criteria), copied, words);
+    const copyNotes: Annotation[] = copied.map((quote) => ({
+      quote,
+      category: "COPIA",
+      message: "Este trecho foi copiado dos textos motivadores. Use-os só como inspiração e escreva com as suas palavras.",
+      suggestion: "",
+    }));
+    const { placed, unplaced } = placeAnnotations(essay.text, [...copyNotes, ...ev.annotations]);
     await db.essay.update({
       where: { id: essay.id },
       data: {
@@ -89,7 +101,7 @@ export async function submitEssayAction(_: FormState, f: FormData): Promise<Form
         score: scores.total,
         maxScore: scores.max,
         evaluatedAt: new Date(),
-        evaluation: { criteria: scores.criteria, annotations: placed, unplaced, strengths: ev.strengths, tips: ev.tips, summary: ev.summary },
+        evaluation: { criteria: scores.criteria, annotations: placed, unplaced, strengths: ev.strengths, tips: ev.tips, summary: ev.summary, copyPenalty: penalty, motivatingTexts: texts },
       },
     });
   } catch (e) {

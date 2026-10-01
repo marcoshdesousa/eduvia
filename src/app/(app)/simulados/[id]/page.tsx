@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, Clock, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Printer, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { masteryStatus } from "@/lib/core/spaced";
@@ -106,6 +106,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <div className="flex flex-wrap gap-2">
         <form action={startAttemptAction.bind(null, exam.id)}><Button variant="outline">Refazer este simulado</Button></form>
         <Link href="/simulados/novo" className={buttonClass("primary")}>Novo simulado</Link>
+        <a href={`/api/exams/attempts/${result.id}/pdf`} target="_blank" rel="noreferrer" className={buttonClass("outline")}><Printer size={16} /> PDF para imprimir</a>
         {result.correct! < result.total! && <Link href="/revisoes?filtro=erros" className={buttonClass("ghost")}>Treinar os erros</Link>}
       </div>
 

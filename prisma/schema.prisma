@@ -824,6 +824,8 @@ model Essay {
   theme         String
   instructions  String?
   text          String
+  /// Tempo escolhido pelo aluno para escrever (10, 30, 60 ou 180 min).
+  timeLimitMin  Int?
   status        EssayStatus  @default(DRAFT)
   score         Float?
   maxScore      Float?

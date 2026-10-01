@@ -296,6 +296,7 @@ export async function evaluateEssay(input: {
   theme: string;
   instructions: string | null;
   text: string;
+  motivatingTexts?: string[];
 }): Promise<EssayEvaluation> {
   if (isMockAi()) return mock.evaluateEssay(input);
   return callStructured({
@@ -312,10 +313,11 @@ Anotações:
 - "quote" deve ser um trecho copiado EXATAMENTE do texto do aluno, curto, para podermos destacá-lo. Um problema por anotação.
 - "suggestion" mostra o trecho reescrito corretamente.
 - Até 25 anotações, priorizando as mais importantes.
-Também: 2 a 4 pontos fortes, 3 a 5 dicas práticas de melhoria e um resumo geral (2 a 3 frases). Fale diretamente com o aluno, em tom encorajador.`,
+Também: 2 a 4 pontos fortes, 3 a 5 dicas práticas de melhoria e um resumo geral (2 a 3 frases). Fale diretamente com o aluno, em tom encorajador.
+Se houver textos motivadores: o aluno pode se inspirar neles, mas copiar trechos tira pontos (não premie repertório copiado; nós já descontamos a cópia literal automaticamente, então não desconte de novo por isso).`,
     content: `Perfil do aluno: ${input.voice}
 Tema: ${input.theme}
-${input.instructions ? `Instruções da proposta: ${input.instructions}\n` : ""}
+${input.instructions ? `Instruções da proposta: ${input.instructions}\n` : ""}${input.motivatingTexts?.length ? `Textos motivadores:\n${input.motivatingTexts.map((t, i) => `Texto ${i + 1}: ${t}`).join("\n")}\n` : ""}
 <redacao>
 ${input.text}
 </redacao>`,

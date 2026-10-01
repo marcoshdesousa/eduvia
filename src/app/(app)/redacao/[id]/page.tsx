@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Printer } from "lucide-react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
@@ -21,6 +22,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     strengths: string[];
     tips: string[];
     summary: string;
+    copyPenalty?: number;
+    motivatingTexts?: string[];
   } | null;
 
   return (
@@ -44,6 +47,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
               <div className="mt-1 text-5xl font-extrabold text-primary">{essay.score?.toLocaleString("pt-BR")}</div>
               <div className="text-sm text-muted">de {essay.maxScore}</div>
               <p className="mt-3 text-sm">{ev.summary}</p>
+              {!!ev.copyPenalty && <p className="mt-2 rounded-lg bg-danger/10 p-2 text-xs text-danger">−{ev.copyPenalty} pontos por copiar trechos dos textos motivadores.</p>}
             </Card>
             <Card>
               <CardTitle>Critérios</CardTitle>
@@ -77,7 +81,10 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{ev.tips.map((s, i) => <li key={i}>{s}</li>)}</ul>
             </Card>
           </div>
-          <Link href="/redacao/nova" className={buttonClass("primary")}>Escrever outra</Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/redacao/nova" className={buttonClass("primary")}>Escrever outra</Link>
+            <a href={`/api/essays/${essay.id}/pdf`} target="_blank" rel="noreferrer" className={buttonClass("outline")}><Printer size={16} /> PDF para imprimir</a>
+          </div>
         </>
       )}
     </div>

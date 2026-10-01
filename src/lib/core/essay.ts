@@ -47,7 +47,7 @@ export function defaultRubric(type: StudentType | null): RubricKey {
   return "GERAL";
 }
 
-export const ANNOTATION_CATEGORIES = ["ORTOGRAFIA", "PONTUACAO", "CONCORDANCIA", "COESAO", "COERENCIA", "ESTRUTURA", "TEMA", "ESTILO"] as const;
+export const ANNOTATION_CATEGORIES = ["ORTOGRAFIA", "PONTUACAO", "CONCORDANCIA", "COESAO", "COERENCIA", "ESTRUTURA", "TEMA", "ESTILO", "COPIA"] as const;
 export type AnnotationCategory = (typeof ANNOTATION_CATEGORIES)[number];
 export const CATEGORY_LABEL: Record<AnnotationCategory, string> = {
   ORTOGRAFIA: "Ortografia",
@@ -58,7 +58,30 @@ export const CATEGORY_LABEL: Record<AnnotationCategory, string> = {
   ESTRUTURA: "Estrutura",
   TEMA: "Tema",
   ESTILO: "Estilo",
+  COPIA: "Cópia dos textos motivadores",
 };
+
+/** Tempos para escrever a redação (minutos). */
+export const ESSAY_TIMES = [10, 30, 60, 180] as const;
+
+type Scores = ReturnType<typeof normalizeScores>;
+
+/**
+ * Copiar os textos motivadores tira pontos (como no ENEM): cada trecho copiado desconta 40 da
+ * Competência 3 e, se a cópia passar de 30% do texto, mais 80 da Competência 2.
+ */
+export function applyCopyPenalty(rubric: RubricKey, scores: Scores, copied: string[], totalWords: number): { scores: Scores; penalty: number } {
+  if (!copied.length || rubric !== "ENEM") return { scores, penalty: 0 };
+  const copiedWords = copied.reduce((s, c) => s + c.split(/\s+/).length, 0);
+  const cut: Record<string, number> = { C3: 40 * copied.length, C2: copiedWords / Math.max(1, totalWords) > 0.3 ? 80 : 0 };
+  let penalty = 0;
+  const criteria = scores.criteria.map((c) => {
+    const d = Math.min(c.score, cut[c.key] ?? 0);
+    penalty += d;
+    return d ? { ...c, score: c.score - d, comment: `${c.comment} (−${d} por copiar trechos dos textos motivadores.)`.trim() } : c;
+  });
+  return { scores: { ...scores, criteria, total: Math.round(criteria.reduce((s, c) => s + c.score, 0) * 10) / 10 }, penalty };
+}
 
 /** Ajusta a nota de cada critério ao máximo (e ao passo, no ENEM) e recalcula o total. */
 export function normalizeScores(rubric: RubricKey, raw: { key: string; score: number; comment: string }[]) {

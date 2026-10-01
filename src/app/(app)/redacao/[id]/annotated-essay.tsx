@@ -15,6 +15,7 @@ const TONE: Record<AnnotationCategory, "danger" | "warning" | "primary"> = {
   ESTRUTURA: "warning",
   TEMA: "primary",
   ESTILO: "primary",
+  COPIA: "danger",
 };
 const MARK: Record<"danger" | "warning" | "primary", string> = {
   danger: "bg-danger/20 decoration-danger",
