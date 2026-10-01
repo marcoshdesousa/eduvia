@@ -1,19 +1,7 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-type PdfDoc = { numPages: number; getPage(n: number): Promise<PdfPage>; destroy(): Promise<void> };
-type PdfPage = {
-  getViewport(o: { scale: number }): { width: number; height: number; transform: number[] };
-  render(o: { canvas: HTMLCanvasElement; canvasContext: CanvasRenderingContext2D; viewport: unknown; transform?: number[] }): { promise: Promise<void> };
-  getTextContent(): Promise<{ items: { str?: string; transform?: number[]; width?: number; height?: number }[] }>;
-};
-type PdfJs = {
-  getDocument(src: Record<string, unknown>): { promise: Promise<PdfDoc> };
-  GlobalWorkerOptions: { workerSrc: string };
-  Util: { transform(a: number[], b: number[]): number[] };
-};
 
 /** Manda o erro do leitor para o log do servidor (para descobrir o motivo em aparelhos específicos). */
 function reportViewerError(e: unknown) {
@@ -21,16 +9,6 @@ function reportViewerError(e: unknown) {
     const body = JSON.stringify({ where: "pdf-viewer", message: String((e as Error)?.message ?? e).slice(0, 500), ua: navigator.userAgent.slice(0, 200) });
     navigator.sendBeacon?.("/api/client-error", body) || fetch("/api/client-error", { method: "POST", body, keepalive: true }).catch(() => {});
   } catch {}
-}
-
-let pdfjsPromise: Promise<PdfJs> | null = null;
-function loadPdfJs() {
-  pdfjsPromise ??= import("pdfjs-dist/legacy/build/pdf.mjs").then((m) => {
-    const lib = m as unknown as PdfJs;
-    lib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-    return lib;
-  });
-  return pdfjsPromise;
 }
 
 const norm = (s: string) =>
@@ -71,96 +49,50 @@ export function findQuoteItems(items: string[], quote: string): number[] {
   return [];
 }
 
-/** Uma página do PDF desenhada no app, com o trecho grifado em amarelo. */
+type PageItem = { s: string; x: number; y: number; w: number; h: number };
+type PageInfo = { total: number; width: number; height: number; items: PageItem[] };
+
+/** Linhas de pontinhos de sumário ("Capítulo ........ 12") viram reticências: não estouram a tela. */
+const tidy = (t: string) => t.replace(/[.·…_]{4,}/g, " … ");
+
+/**
+ * Uma página do PDF no app, com o trecho grifado em amarelo. A página vem pronta do servidor como
+ * imagem (abre em qualquer celular, inclusive iPhone); se não der, mostra o texto da página.
+ */
 export function PdfPageViewer({ materialId, page: initialPage, quote }: { materialId: string; page: number; quote?: string | null }) {
-  const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [page, setPage] = useState(initialPage);
+  const [info, setInfo] = useState<PageInfo | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [rendering, setRendering] = useState(true);
-  const [marks, setMarks] = useState<{ x: number; y: number; w: number; h: number }[]>([]);
   const [textPage, setTextPage] = useState<{ text: string; total: number } | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
   const markRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let alive = true;
-    let loaded: PdfDoc | null = null;
-    loadPdfJs()
-      .then(
-        (lib) =>
-          lib.getDocument({
-            url: `/api/materials/${materialId}/pdf`,
-            withCredentials: true,
-            // compatibilidade com o Safari do iPhone: baixa o PDF inteiro e desenha sem recursos novos do navegador
-            disableRange: true,
-            disableStream: true,
-            disableAutoFetch: true,
-            isOffscreenCanvasSupported: false,
-            isImageDecoderSupported: false,
-            useSystemFonts: true,
-          }).promise,
-      )
-      .then((d) => {
-        loaded = d;
-        if (alive) setDoc(d);
-        else d.destroy();
-      })
-      // sem PDF (DOCX, texto) ou o aparelho não abriu: mostra o texto da página
+    setInfo(null);
+    setLoaded(false);
+    fetch(`/api/materials/${materialId}/view?p=${page}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`view ${r.status}`))))
+      .then((j: PageInfo) => alive && setInfo(j))
       .catch((e) => {
-        reportViewerError(e);
-        if (alive) setError("texto");
+        if (!alive) return;
+        if (!/view 404/.test(String(e))) reportViewerError(e); // 404 = não é PDF (DOCX, texto): mostra o texto
+        setError("texto");
       });
     return () => {
       alive = false;
-      loaded?.destroy().catch(() => {});
     };
-  }, [materialId]);
+  }, [materialId, page]);
 
-  const draw = useCallback(async () => {
-    if (!doc || !canvasRef.current || !boxRef.current) return;
-    setRendering(true);
-    const lib = await loadPdfJs();
-    const p = await doc.getPage(Math.min(Math.max(1, page), doc.numPages));
-    const base = p.getViewport({ scale: 1 });
-    const scale = Math.min(2.5, boxRef.current.clientWidth / base.width);
-    const viewport = p.getViewport({ scale });
-    // nitidez sem estourar o limite de memória do canvas no celular
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const canvas = canvasRef.current;
-    canvas.width = Math.floor(viewport.width * ratio);
-    canvas.height = Math.floor(viewport.height * ratio);
-    canvas.style.width = `${viewport.width}px`;
-    canvas.style.height = `${viewport.height}px`;
-    const ctx = canvas.getContext("2d")!;
-    await p.render({ canvas, canvasContext: ctx, viewport, transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : undefined }).promise;
-    // grifo: só na página citada
-    if (quote && page === initialPage) {
-      const { items } = await p.getTextContent();
-      const hit = new Set(findQuoteItems(items.map((it) => it.str ?? ""), quote));
-      setMarks(
-        items.flatMap((it, i) => {
-          if (!hit.has(i) || !it.transform) return [];
-          const t = lib.Util.transform(viewport.transform, it.transform);
-          const h = Math.hypot(t[2], t[3]);
-          return [{ x: t[4], y: t[5] - h, w: (it.width ?? 0) * scale, h: h * 1.15 }];
-        }),
-      );
-    } else setMarks([]);
-    setRendering(false);
-  }, [doc, page, quote, initialPage]);
+  const marks = useMemo(() => {
+    if (!info || !quote || page !== initialPage) return [];
+    const hit = new Set(findQuoteItems(info.items.map((it) => it.s), quote));
+    return info.items.filter((_, i) => hit.has(i));
+  }, [info, quote, page, initialPage]);
 
   useEffect(() => {
-    draw().catch((e) => {
-      console.error("[pdf]", e);
-      reportViewerError(e);
-      setError("texto"); // não deu para desenhar o PDF neste aparelho: mostra o texto da página, com o trecho grifado
-    });
-  }, [draw]);
-
-  useEffect(() => {
-    if (marks.length) markRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [marks]);
+    if (loaded && marks.length) markRef.current?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  }, [loaded, marks]);
 
   useEffect(() => {
     if (error !== "texto") return;
@@ -170,44 +102,58 @@ export function PdfPageViewer({ materialId, page: initialPage, quote }: { materi
       .catch(() => setError("Não foi possível abrir o material agora. Tente de novo em instantes."));
   }, [error, materialId, page]);
 
+  const total = info?.total ?? textPage?.total;
+  const nav = (
+    <div className="flex items-center justify-center gap-2 text-sm">
+      <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((n) => n - 1)} aria-label="Página anterior"><ChevronLeft size={16} /></Button>
+      <span className="tabular-nums">Página {page}{total ? ` de ${total}` : ""}</span>
+      <Button size="sm" variant="outline" disabled={!total || page >= total} onClick={() => setPage((n) => n + 1)} aria-label="Próxima página"><ChevronRight size={16} /></Button>
+    </div>
+  );
+
   if (error === "texto") {
     return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-center gap-2 text-sm">
-          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((n) => n - 1)} aria-label="Página anterior"><ChevronLeft size={16} /></Button>
-          <span className="tabular-nums">Página {page}{textPage ? ` de ${textPage.total}` : ""}</span>
-          <Button size="sm" variant="outline" disabled={!textPage || page >= textPage.total} onClick={() => setPage((n) => n + 1)} aria-label="Próxima página"><ChevronRight size={16} /></Button>
-        </div>
-        <div className="mx-auto max-w-3xl whitespace-pre-wrap rounded-lg bg-surface p-4 text-sm leading-relaxed">
-          {!textPage ? <Loader2 className="mx-auto animate-spin text-primary" /> : <HighlightedText text={textPage.text} quote={page === initialPage ? quote : null} />}
+      <div className="min-w-0 space-y-3">
+        {nav}
+        <div className="mx-auto max-w-3xl whitespace-pre-wrap break-words rounded-lg bg-surface p-4 text-sm leading-relaxed [overflow-wrap:anywhere]">
+          {!textPage ? <Loader2 className="mx-auto animate-spin text-primary" /> : <HighlightedText text={tidy(textPage.text)} quote={page === initialPage ? quote : null} />}
         </div>
       </div>
     );
   }
   if (error) return <p className="p-6 text-center text-sm text-danger">{error}</p>;
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-center gap-2 text-sm">
-        <Button size="sm" variant="outline" disabled={!doc || page <= 1} onClick={() => setPage((n) => n - 1)} aria-label="Página anterior"><ChevronLeft size={16} /></Button>
-        <span className="tabular-nums">Página {page}{doc ? ` de ${doc.numPages}` : ""}</span>
-        <Button size="sm" variant="outline" disabled={!doc || page >= doc.numPages} onClick={() => setPage((n) => n + 1)} aria-label="Próxima página"><ChevronRight size={16} /></Button>
-      </div>
-      {quote && page === initialPage && !rendering && (
+    <div className="min-w-0 space-y-3">
+      {nav}
+      {quote && page === initialPage && loaded && (
         <p className="text-center text-xs text-muted">{marks.length ? "O trecho usado na sua aula está grifado em amarelo." : "Esta é a página usada na sua aula."}</p>
       )}
-      <div ref={boxRef} className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow">
-        {(!doc || rendering) && (
+      <div
+        className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow"
+        style={{ aspectRatio: info ? `${info.width} / ${info.height}` : "3 / 4" }}
+      >
+        {(!info || !loaded) && (
           <div className="absolute inset-0 z-10 grid place-items-center bg-white/70"><Loader2 className="animate-spin text-primary" /></div>
         )}
-        <canvas ref={canvasRef} className="block" />
-        {marks.map((m, i) => (
-          <div
-            key={i}
-            ref={i === 0 ? markRef : undefined}
-            className="pointer-events-none absolute rounded-sm bg-yellow-300/50 mix-blend-multiply"
-            style={{ left: m.x, top: m.y, width: m.w, height: m.h }}
+        {info && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/materials/${materialId}/view?p=${page}&img=1`}
+            alt={`Página ${page} do material`}
+            className="block h-auto w-full"
+            onLoad={() => setLoaded(true)}
+            onError={() => setError("texto")}
           />
-        ))}
+        )}
+        {loaded &&
+          marks.map((m, i) => (
+            <div
+              key={i}
+              ref={i === 0 ? markRef : undefined}
+              className="pointer-events-none absolute rounded-sm bg-yellow-300/50 mix-blend-multiply"
+              style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%`, width: `${m.w * 100}%`, height: `${m.h * 100}%` }}
+            />
+          ))}
       </div>
     </div>
   );
@@ -256,7 +202,7 @@ export function PdfViewerHost() {
         <p className="truncate text-sm font-semibold">{open.title}</p>
         <Button size="sm" variant="ghost" onClick={() => setOpen(null)} aria-label="Fechar"><X size={18} /> Fechar</Button>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+      <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6">
         <PdfPageViewer key={`${open.materialId}:${open.page}:${open.quote}`} materialId={open.materialId} page={open.page} quote={open.quote} />
       </div>
     </div>
