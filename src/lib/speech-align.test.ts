@@ -77,3 +77,34 @@ describe("marcação não se adianta nem se atrasa com voz irregular", () => {
     }
   });
 });
+
+describe("palavra por palavra dentro da frase", () => {
+  it("acha o começo das palavras pelas sílabas (picos de volume), mesmo sem pausa entre elas", () => {
+    let seed = 11;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const text = "Na América do Sul o primeiro Clube teve início na cidade de Lima. No segundo ano o clube já contava com conversões por meio de classes bíblicas.";
+    const rate = 24000;
+    const parts: Buffer[] = [Buffer.alloc(rate * 0.1 * 2)];
+    const truth: number[] = [];
+    let t = 0.1;
+    for (const m of text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)) {
+      truth.push(t);
+      for (let k = 0; k < syllables(m[0]); k++) {
+        const len = Math.round(rate * (0.12 + rnd() * 0.12)); // cada sílaba com duração diferente
+        const amp = 3000 + rnd() * 4000;
+        const b = Buffer.alloc(len * 2);
+        for (let i = 0; i < len; i++) b.writeInt16LE(Math.round(amp * Math.sin((Math.PI * i) / len) ** 2 * Math.sin(i / 3)), i * 2);
+        parts.push(b);
+        t += len / rate;
+      }
+      if (/[.]/.test(text.slice(m.index! + m[0].length, m.index! + m[0].length + 1))) {
+        parts.push(Buffer.alloc(Math.round(rate * 0.5) * 2));
+        t += Math.round(rate * 0.5) / rate;
+      }
+    }
+    const got = alignWords(Buffer.concat(parts), rate, text)!;
+    const errs = got.map((x, i) => Math.abs(x - truth[i]));
+    expect(errs.reduce((a, b) => a + b, 0) / errs.length).toBeLessThan(0.06);
+    expect(Math.max(...errs)).toBeLessThan(0.2);
+  });
+});

@@ -21,8 +21,8 @@ export function syllables(word: string) {
 
 /** Pausa depois da palavra: 2 = fim de frase, 1 = vírgula/dois-pontos, 0 = nenhuma. */
 const pauseAfter = (text: string, end: number) => {
-  const after = text.slice(end, end + 2);
-  return /[.!?]/.test(after) ? 2 : /[,;:]/.test(after) ? 1 : 0;
+  const after = text.slice(end, end + 3);
+  return /^\s*\n/.test(after) || /[.!?]/.test(after.slice(0, 2)) ? 2 : /[,;:]/.test(after.slice(0, 2)) ? 1 : 0;
 };
 
 /**
@@ -155,6 +155,47 @@ export function alignLevels(level: number[], text: string): number[] | null {
   }
   if (anchors.length < 2) anchors.splice(0, anchors.length, { i: -1, c: -1 }, { i: K, c: M });
 
+  // Dentro do trecho: cada sílaba falada é um "pico" de volume. Conta os picos e põe o começo de cada
+  // palavra no "vale" (queda de volume) antes da primeira sílaba dela. Se a contagem não bater, fica a divisão simples.
+  const env = level.map((_, f) => {
+    let sum = 0;
+    let cnt = 0;
+    for (let g = Math.max(0, f - 2); g <= Math.min(frames - 1, f + 2); g++, cnt++) sum += level[g];
+    return sum / cnt;
+  });
+  const refineBySyllables = (w0: number, w1: number, t0: number, t1: number) => {
+    if (w1 <= w0) return;
+    const F0 = Math.max(1, Math.round(t0 * 100));
+    const F1 = Math.min(frames - 1, Math.round(t1 * 100));
+    let peaks: number[] = [];
+    for (let f = F0; f < F1; f++) if (env[f] > thr * 1.5 && env[f] >= env[f - 1] && env[f] > env[f + 1]) peaks.push(f);
+    // junta picos muito perto ou sem queda de volume entre eles (é a mesma sílaba)
+    const merged: number[] = [];
+    for (const f of peaks) {
+      const last = merged.at(-1);
+      if (last !== undefined) {
+        let valley = Infinity;
+        for (let g = last; g <= f; g++) valley = Math.min(valley, env[g]);
+        if (f - last < 8 || valley > 0.8 * Math.min(env[last], env[f])) {
+          if (env[f] > env[last]) merged[merged.length - 1] = f;
+          continue;
+        }
+      }
+      merged.push(f);
+    }
+    peaks = merged;
+    const S = cum[w1 + 1] - cum[w0];
+    const n = peaks.length;
+    if (n < 2 || n / S < 0.6 || n / S > 1.6) return;
+    for (let w = w0 + 1; w <= w1; w++) {
+      const k = Math.min(n - 1, Math.max(1, Math.round(((cum[w] - cum[w0]) * n) / S)));
+      let at = peaks[k - 1];
+      for (let g = peaks[k - 1]; g <= peaks[k]; g++) if (env[g] < env[at]) at = g;
+      while (at < peaks[k] && level[at] <= thr) at++; // depois de um silêncio, começa quando a voz volta
+      starts[w] = at / 100;
+    }
+  };
+
   // entre duas âncoras, divide a fala pelas sílabas; pausas não usadas no meio são puladas no tempo
   const starts: number[] = new Array(words.length);
   for (let n = 1; n < anchors.length; n++) {
@@ -171,6 +212,7 @@ export function alignLevels(level: number[], text: string): number[] | null {
       for (const p of inner) if (t >= p.a - 0.001) t += p.b - p.a; // silêncio não usado: a fala continua depois dele
       starts[w] = t;
     }
+    refineBySyllables(w0, w1, t0, pa(B.i).a);
   }
   for (let w = 1; w < starts.length; w++) starts[w] = Math.max(starts[w], starts[w - 1]);
   return starts.map((s) => Math.round(s * 100) / 100);

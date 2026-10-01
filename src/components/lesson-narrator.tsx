@@ -38,7 +38,7 @@ export function toBlocks(parts: string[], max = 2400): { text: string; from: num
       cur = "";
       from = i;
     }
-    cur = cur ? `${cur} ${p}` : p;
+    cur = cur ? `${cur}\n${p}` : p; // uma frase por linha: a voz faz uma pausa clara entre as frases
   });
   if (cur) blocks.push({ text: cur, from, to: parts.length - 1 });
   return blocks;
@@ -288,6 +288,8 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
   const [rate, setRate] = useState(1);
   const [state, setState] = useState<State>("idle");
   const [progress, setProgress] = useState(0);
+  // porcentagem mostrada: sobe de 1 em 1 (rápido no começo, mais devagar perto do próximo trecho pronto)
+  const [shown, setShown] = useState(0);
   const [sentence, setSentence] = useState(-1);
   const [mode, setMode] = useState<"natural" | "device">("natural");
   const [note, setNote] = useState<string | null>(null);
@@ -319,6 +321,23 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     if (audio.current) audio.current.playbackRate = rate;
   }, [rate]);
 
+  useEffect(() => {
+    if (state !== "loading") return;
+    let ticks = 0;
+    const id = setInterval(() => {
+      ticks++;
+      setShown((s) => {
+        if (s < progress) return s + 1; // trecho pronto: alcança logo, contando de 1 em 1
+        const cap = progress >= 100 ? 100 : Math.min(99, progress + Math.floor((100 / Math.max(1, blocks.length)) * 0.9));
+        if (s >= cap) return s;
+        const near = (s - progress) / Math.max(1, cap - progress); // 0 = acabou de chegar, 1 = no limite
+        const every = 1 + Math.floor(near * near * 25);
+        return ticks % every === 0 ? s + 1 : s;
+      });
+    }, 70);
+    return () => clearInterval(id);
+  }, [state, progress, blocks.length]);
+
   /** Marca a palavra k (lista de todas as palavras) e mostra em qual frase está. */
   const markWord = (k: number, sentenceIndex: number) => {
     current.current = k;
@@ -348,6 +367,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     let done = 0;
     let next = 0;
     setProgress(0);
+    setShown(0);
     const worker = async () => {
       while (next < blocks.length) {
         const i = next++;
@@ -517,10 +537,10 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
         <div className="min-w-0">
           <p className="text-sm font-semibold">Ouvir a aula</p>
           {state === "loading" ? (
-            <div className="w-44 max-w-full" role="progressbar" aria-label="Preparando o áudio" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
-              <p className="text-xs text-muted">Preparando o áudio… {progress}%</p>
+            <div className="w-44 max-w-full" role="progressbar" aria-label="Preparando o áudio" aria-valuemin={0} aria-valuemax={100} aria-valuenow={shown}>
+              <p className="text-xs text-muted tabular-nums">Preparando o áudio… {shown}%</p>
               <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
-                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+                <div className="h-full rounded-full bg-primary transition-[width] duration-100" style={{ width: `${shown}%` }} />
               </div>
             </div>
           ) : (

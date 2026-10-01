@@ -98,10 +98,10 @@ export function SessionView({
       {current === "texto" && text && (
         <div className="space-y-4">
           {text.content && <LessonNarrator text={text.content} labels={text.refs.map((r) => r.label)} targetRef={articleRef} />}
-          {text.content && (
+          {text.content && /\]\(\/fonte\//.test(linkSources(text.content, text.refs)) && (
             <p className="-mt-2 px-1 text-xs text-muted">
-              ℹ️ As marcações pequenas como <span className="source-mark !align-baseline !text-xs">p.3</span> mostram de qual página do seu PDF veio cada informação
-              (a IA usa os trechos T1, T2… do seu material). Toque nelas para abrir a página com o trecho grifado. O robô não lê essas marcações.
+              ℹ️ As marcações pequenas como <span className="source-mark !align-baseline !text-xs">p.3</span> mostram de qual página do seu PDF veio cada
+              informação. Toque nelas para abrir a página com o trecho grifado. O robô não lê essas marcações.
             </p>
           )}
           {text.content && (
