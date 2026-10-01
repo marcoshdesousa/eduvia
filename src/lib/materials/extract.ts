@@ -6,6 +6,7 @@ import { ocrImage, ocrPdfPages } from "@/lib/ai/tasks";
 import type { MaterialKind } from "@/generated/prisma/enums";
 
 export type ExtractedPage = { page: number; text: string; ocr: boolean };
+export type OcrCache = { load(): Promise<Map<number, string>>; save(pages: { page: number; text: string }[]): Promise<void> };
 
 const OCR_MIN_CHARS = 40;
 const OCR_BATCH = 10;
@@ -18,10 +19,12 @@ export async function extractPages(
   onProgress: (msg: string) => Promise<void>,
   /** Chamado antes do OCR com o nº de páginas escaneadas (pode lançar erro de limite). */
   beforeOcr: (pages: number) => Promise<void> = async () => {},
+  /** Páginas já lidas por OCR numa tentativa anterior (a cota acabou no meio): não lê de novo. */
+  ocrCache?: OcrCache,
 ): Promise<ExtractedPage[]> {
   switch (kind) {
     case "PDF":
-      return extractPdf(data, userId, onProgress, beforeOcr);
+      return extractPdf(data, userId, onProgress, beforeOcr, ocrCache);
     case "DOCX": {
       const { value } = await mammoth.extractRawText({ buffer: data });
       return pseudoPages(value);
@@ -57,14 +60,31 @@ export async function countPages(kind: MaterialKind, data: Buffer): Promise<numb
   }
 }
 
-async function extractPdf(data: Buffer, userId: string, onProgress: (msg: string) => Promise<void>, beforeOcr: (pages: number) => Promise<void>) {
+async function extractPdf(
+  data: Buffer,
+  userId: string,
+  onProgress: (msg: string) => Promise<void>,
+  beforeOcr: (pages: number) => Promise<void>,
+  ocrCache?: OcrCache,
+) {
   const pdf = await getDocumentProxy(new Uint8Array(data));
-  const { text } = await extractText(pdf, { mergePages: false });
+  let text: string[];
+  try {
+    text = (await extractText(pdf, { mergePages: false })).text;
+  } finally {
+    await (pdf as unknown as { destroy?: () => Promise<void> }).destroy?.().catch(() => {}); // libera a memória do leitor antes do OCR
+  }
   const pages: ExtractedPage[] = text.map((t, i) => ({ page: i + 1, text: cleanText(t), ocr: false }));
 
-  const scanned = pages.filter((p) => p.text.length < OCR_MIN_CHARS).map((p) => p.page);
+  const needOcr = pages.filter((p) => p.text.length < OCR_MIN_CHARS).map((p) => p.page);
+  if (needOcr.length) await beforeOcr(needOcr.length);
+  const done = needOcr.length && ocrCache ? await ocrCache.load() : new Map<number, string>();
+  for (const [n, t] of done) {
+    const page = pages[n - 1];
+    if (page && t.trim()) Object.assign(page, { text: cleanText(t), ocr: true });
+  }
+  const scanned = needOcr.filter((n) => !done.has(n));
   if (scanned.length) {
-    await beforeOcr(scanned.length);
     const source = await PDFDocument.load(data, { ignoreEncryption: true });
     for (let i = 0; i < scanned.length; i += OCR_BATCH) {
       const batch = scanned.slice(i, i + OCR_BATCH);
@@ -81,6 +101,7 @@ async function extractPdf(data: Buffer, userId: string, onProgress: (msg: string
           page.ocr = true;
         }
       }
+      await ocrCache?.save(batch.map((n) => ({ page: n, text: pages[n - 1]?.ocr ? pages[n - 1].text : "" }))).catch(() => {});
     }
   }
   return pages;

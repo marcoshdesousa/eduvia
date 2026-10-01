@@ -4,7 +4,14 @@ import { PrismaClient } from "@/generated/prisma/client";
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function createClient() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+  // conexões limitadas e com tempo de espera: o banco do plano básico aceita poucas conexões
+  const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL!,
+    max: Number(process.env.DB_POOL_MAX || 8),
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 15_000,
+    keepAlive: true,
+  });
   return new PrismaClient({ adapter });
 }
 

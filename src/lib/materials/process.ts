@@ -47,10 +47,30 @@ export async function processMaterial(materialId: string) {
       } else {
         if (!existing) await db.materialBlob.update({ where: { id: blob.id }, data: { sha256 } });
         await step("Extraindo texto");
-        const pages = await extractPages(material.kind, data, blob.mimeType, material.uploaderId, step, async (scanned) => {
-          const quota = await scannedQuotaError(material.uploaderId, materialId, scanned);
-          if (quota) throw new UserFacingError(quota);
-        });
+        const blobId = blob.id;
+        const pages = await extractPages(
+          material.kind,
+          data,
+          blob.mimeType,
+          material.uploaderId,
+          step,
+          async (scanned) => {
+            const quota = await scannedQuotaError(material.uploaderId, materialId, scanned);
+            if (quota) throw new UserFacingError(quota);
+          },
+          {
+            load: async () => new Map((await db.materialPage.findMany({ where: { blobId, ocr: true } })).map((p) => [p.pageNumber, p.text])),
+            save: async (done) => {
+              for (const p of done) {
+                await db.materialPage.upsert({
+                  where: { blobId_pageNumber: { blobId, pageNumber: p.page } },
+                  create: { blobId, pageNumber: p.page, text: p.text, ocr: true },
+                  update: { text: p.text, ocr: true },
+                });
+              }
+            },
+          },
+        );
         if (!pages.some((p) => p.text.trim().length > 30)) {
           throw new UserFacingError(
             "Não encontramos texto neste arquivo. Se for escaneado, confira se a IA está configurada (OCR) ou envie uma versão com melhor qualidade.",
