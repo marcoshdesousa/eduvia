@@ -2,6 +2,7 @@
 import { db } from "@/lib/db";
 import { buildPlan, splitParts, type PlanReview, type PlanTopic } from "@/lib/core/planner";
 import { addDays, today, keyFromDay } from "@/lib/core/dates";
+import { formatMinutes } from "@/lib/utils";
 
 export async function generatePlan(preparationId: string) {
   const prep = await db.preparation.findUnique({
@@ -37,7 +38,7 @@ export async function generatePlan(preparationId: string) {
         id: t.id,
         subjectId: s.id,
         subjectWeight: s.weight,
-        order: s.order * 10_000 + t.order,
+        order: t.order, // sequência do material
         estimatedMinutes: t.estimatedMinutes,
         weight: t.weight,
         difficulty: t.difficulty,
@@ -67,11 +68,12 @@ export async function generatePlan(preparationId: string) {
   });
 
   const last = await db.studyPlan.findFirst({ where: { preparationId }, orderBy: { version: "desc" } });
+  // todo o conteúdo do material entra no plano; se a prova está perto, cada dia fica com mais estudo
   const notes =
-    result.feasibility === "INSUFICIENTE"
-      ? `Faltam cerca de ${Math.ceil(result.missingMinutes / 60)}h de conteúdo até a prova. O plano prioriza os assuntos de maior peso; para cobrir tudo, aumente o tempo diário ou os dias de estudo.`
+    result.maxDailyMinutes > prep.dailyMinutes
+      ? `Para passar todo o conteúdo até a prova, alguns dias vão ter cerca de ${formatMinutes(result.maxDailyMinutes)} de estudo (mais que os ${formatMinutes(prep.dailyMinutes)} que você escolheu). Se puder, aumente o tempo diário ou os dias de estudo.`
       : result.feasibility === "APERTADO"
-        ? "O plano cabe até a prova, mas com pouca folga. Evite faltar às sessões."
+        ? "O plano cabe até a prova, mas com pouca folga. Evite faltar às aulas."
         : null;
 
   await db.$transaction(async (tx) => {

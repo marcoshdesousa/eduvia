@@ -57,8 +57,10 @@ export type PlanResult = {
   totalMinutes: number;
   /** Minutos disponíveis até a prova (ou no horizonte). */
   capacityMinutes: number;
-  /** Minutos de conteúdo que não couberam até a prova. */
+  /** Minutos de conteúdo que não couberam até a prova (sempre 0: todo o conteúdo é distribuído). */
   missingMinutes: number;
+  /** Maior tempo de estudo planejado num dia (fica acima do escolhido quando a prova está perto). */
+  maxDailyMinutes: number;
   unscheduledTopicIds: string[];
   lastStudyDate: Date | null;
 };
@@ -125,18 +127,22 @@ export function orderTopics(topics: PlanTopic[]): PlanTopic[] {
   return result;
 }
 
+/**
+ * Monta o plano com TODO o conteúdo, na ordem do material (não escolhe assuntos "de maior peso").
+ * Com data de prova: se o tempo diário escolhido não der, aumenta o estudo de cada dia para que tudo
+ * caiba até a prova. Sem data: segue o tempo diário normalmente até acabar o conteúdo.
+ */
 export function buildPlan(input: PlanInput): PlanResult {
   const daily = input.dailyMinutes;
-  const studyDays = new Set(input.studyDays);
   const reviewLen = Math.min(REVIEW_MINUTES, daily);
   const horizon = input.maxHorizonDays ?? 365;
   const endExclusive = input.examDate ?? addDays(input.start, horizon);
 
-  // Fila de partes de estudo, na ordem de prioridade.
+  // Fila de partes de estudo, na ordem do material.
   type Part = { topicId: string; part: number; partCount: number; duration: number; isLast: boolean };
   const queue: Part[] = [];
   let totalMinutes = 0;
-  for (const t of orderTopics(input.topics)) {
+  for (const t of [...input.topics].sort((a, b) => a.order - b.order)) {
     const parts = splitParts(t.estimatedMinutes, daily);
     for (let i = t.completedParts; i < parts.length; i++) {
       queue.push({ topicId: t.id, part: i + 1, partCount: parts.length, duration: parts[i], isLast: i === parts.length - 1 });
@@ -144,22 +150,46 @@ export function buildPlan(input: PlanInput): PlanResult {
     }
   }
 
+  // Dias de estudo até a prova. Se nenhum dia escolhido cair antes dela, usa todos os dias até lá;
+  // se a prova for hoje (ou já passou), tudo vai para hoje.
+  let studyDays = new Set(input.studyDays);
+  if (input.examDate) {
+    let any = false;
+    for (let d = input.start; d < input.examDate; d = addDays(d, 1)) if (studyDays.has(weekday(d))) any = true;
+    if (!any) studyDays = new Set([0, 1, 2, 3, 4, 5, 6]);
+  }
+  const lastDay = input.examDate && input.examDate > input.start ? addDays(input.examDate, -1) : input.start;
+  const remainingStudyDays = (from: Date) => {
+    let n = 0;
+    for (let d = from; d <= lastDay; d = addDays(d, 1)) if (studyDays.has(weekday(d))) n++;
+    return n;
+  };
+
   const pendingReviews: PlanReview[] = [...input.reviews].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
   const sessions: PlannedItem[] = [];
   let capacityMinutes = 0;
+  let maxDailyMinutes = 0;
   let lastStudyDate: Date | null = null;
   let reviewTail: Date | null = null; // sem prova: continua só com revisões até a última R
+  const examToday = !!input.examDate && input.examDate <= input.start;
 
-  for (let day = input.start; day < endExclusive; day = addDays(day, 1)) {
+  for (let day = input.start; day < endExclusive || (examToday && day <= input.start); day = addDays(day, 1)) {
     if (queue.length === 0 && !input.examDate) {
       if (pendingReviews.length === 0) break;
       reviewTail ??= addDays(day, Math.max(...input.reviewIntervals, 0) + 1);
       if (day > reviewTail) break;
     }
-    if (!studyDays.has(weekday(day))) continue;
+    if (!studyDays.has(weekday(day)) && !examToday) continue;
 
     const isFirstDay = diffDays(day, input.start) === 0;
-    let budget = daily - (isFirstDay ? input.usedMinutesToday ?? 0 : 0);
+    const usedToday = isFirstDay ? input.usedMinutesToday ?? 0 : 0;
+    // com prova: o conteúdo restante é dividido pelos dias que sobram (nunca menos que o tempo escolhido)
+    const left = queue.reduce((s, p) => s + p.duration, 0);
+    const daysLeft = input.examDate ? Math.max(1, remainingStudyDays(day)) : 1;
+    const needed = input.examDate ? Math.ceil(left / daysLeft) : 0;
+    const isLastDay = !!input.examDate && (examToday || diffDays(day, lastDay) >= 0);
+    let budget = (isLastDay ? Number.POSITIVE_INFINITY : Math.max(daily, needed)) - usedToday;
+    const dayStart = budget;
     capacityMinutes += daily;
     let order = 0;
 
@@ -175,6 +205,8 @@ export function buildPlan(input: PlanInput): PlanResult {
       reviewUsed += reviewLen;
       pendingReviews.splice(i, 1);
     }
+    // revisões não tiram espaço do conteúdo novo quando a prova está perto
+    if (input.examDate && needed > daily) budget += reviewUsed;
 
     // 2) Conteúdo novo: blocos inteiros que cabem no que sobrou do dia.
     while (queue.length && queue[0].duration <= budget) {
@@ -189,15 +221,18 @@ export function buildPlan(input: PlanInput): PlanResult {
         });
       }
     }
+    if (Number.isFinite(dayStart)) maxDailyMinutes = Math.max(maxDailyMinutes, dayStart - budget + usedToday);
+    else maxDailyMinutes = Math.max(maxDailyMinutes, sessions.filter((x) => x.date === day).reduce((s, x) => s + x.durationMin, 0));
   }
 
   const missingMinutes = queue.reduce((s, p) => s + p.duration, 0);
   const unscheduledTopicIds = [...new Set(queue.map((p) => p.topicId))];
   let feasibility: PlanResult["feasibility"] = "OK";
   if (missingMinutes > 0) feasibility = "INSUFICIENTE";
+  else if (maxDailyMinutes > daily) feasibility = "APERTADO";
   else if (input.examDate && capacityMinutes > 0 && totalMinutes > capacityMinutes * 0.75) feasibility = "APERTADO";
 
-  return { sessions, feasibility, totalMinutes, capacityMinutes, missingMinutes, unscheduledTopicIds, lastStudyDate };
+  return { sessions, feasibility, totalMinutes, capacityMinutes, missingMinutes, maxDailyMinutes, unscheduledTopicIds, lastStudyDate };
 }
 
 function insertSorted(list: PlanReview[], item: PlanReview) {

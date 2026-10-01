@@ -42,17 +42,40 @@ describe("buildPlan", () => {
     expect(reviews.map((r) => r.date.toISOString().slice(0, 10))).toEqual(["2026-10-06", "2026-10-12", "2026-10-20", "2026-11-04"]);
   });
 
-  it("avisa quando o tempo até a prova não é suficiente e prioriza o que tem mais peso", () => {
+  it("com a prova perto, passa TODO o conteúdo (na ordem do material) aumentando o estudo por dia", () => {
     const plan = buildPlan({
       start: MON, examDate: addDays(MON, 3), studyDays: ALL_DAYS, dailyMinutes: 15, reviewIntervals: [1],
-      topics: [topic("leve", "s1", 30, { weight: 1 }), topic("pesado", "s2", 30, { weight: 3, subjectWeight: 3 })],
+      topics: [topic("primeiro", "s1", 30, { weight: 1, order: 1 }), topic("segundo", "s2", 30, { weight: 3, subjectWeight: 3, order: 2 })],
       reviews: [],
     });
-    expect(plan.feasibility).toBe("INSUFICIENTE");
-    expect(plan.missingMinutes).toBeGreaterThan(0);
-    expect(plan.sessions[0].topicId).toBe("pesado");
-    expect(plan.unscheduledTopicIds).toContain("leve");
+    expect(plan.missingMinutes).toBe(0);
+    expect(plan.unscheduledTopicIds).toEqual([]);
+    const study = plan.sessions.filter((s) => s.kind === "STUDY");
+    expect(study.reduce((sum, s) => sum + s.durationMin, 0)).toBe(60);
+    expect(study[0].topicId).toBe("primeiro"); // ordem do material, não "peso"
+    expect(plan.maxDailyMinutes).toBeGreaterThan(15);
+    expect(plan.feasibility).toBe("APERTADO");
     for (const s of plan.sessions) expect(s.date < addDays(MON, 3)).toBe(true);
+  });
+
+  it("prova amanhã: todo o conteúdo vai para hoje", () => {
+    const plan = buildPlan({
+      start: MON, examDate: addDays(MON, 1), studyDays: [3], dailyMinutes: 30, reviewIntervals: [],
+      topics: [topic("a", "s1", 120, { order: 1 }), topic("b", "s1", 90, { order: 2 })], reviews: [],
+    });
+    expect(plan.missingMinutes).toBe(0);
+    const study = plan.sessions.filter((s) => s.kind === "STUDY");
+    expect(study.reduce((sum, s) => sum + s.durationMin, 0)).toBe(210);
+    for (const s of study) expect(s.date.getTime()).toBe(MON.getTime());
+  });
+
+  it("sem data de prova, segue o tempo diário escolhido", () => {
+    const plan = buildPlan({
+      start: MON, studyDays: ALL_DAYS, dailyMinutes: 30, reviewIntervals: [],
+      topics: [topic("a", "s1", 300, { order: 1 })], reviews: [],
+    });
+    expect(plan.maxDailyMinutes).toBeLessThanOrEqual(30);
+    expect(plan.missingMinutes).toBe(0);
   });
 
   it("continua de onde parou e desconta o que já foi estudado hoje", () => {
