@@ -24,7 +24,10 @@ export function getBoss(): Promise<PgBoss> {
     await boss.start();
     for (const name of Object.values(QUEUES)) await boss.createQueue(name);
     return boss;
-  })();
+  })().catch((e) => {
+    globalForBoss.boss = undefined; // permite tentar de novo depois
+    throw e;
+  });
   return globalForBoss.boss;
 }
 

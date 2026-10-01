@@ -9,7 +9,8 @@ import { estimateMinutes } from "@/lib/core/planner";
 import { cosine, loadChunkEmbeddings } from "@/lib/rag";
 import { chunkPages, countPages, extractPages } from "./extract";
 import { pageQuotaError, scannedQuotaError } from "@/lib/billing";
-import { AiUserError } from "@/lib/ai/client";
+import { AiQuotaError, AiUnavailableError, AiUserError } from "@/lib/ai/client";
+import { enqueue } from "@/lib/queue";
 import { generatePlan } from "@/lib/plan";
 
 export async function processMaterial(materialId: string) {
@@ -81,14 +82,39 @@ export async function processMaterial(materialId: string) {
     // O plano é refeito antes de o material aparecer como pronto (o aluno já encontra as sessões novas).
     await step("Montando o plano");
     await generatePlan(material.preparationId);
-    await db.material.update({ where: { id: materialId }, data: { status: "READY", progressStep: null, errorMessage: null } });
+    await db.material.update({ where: { id: materialId }, data: { status: "READY", progressStep: null, errorMessage: null, autoRetries: 0 } });
   } catch (err) {
     console.error(`[material ${materialId}]`, err);
+    // Cota da chave acabou ou o Google oscilou: o arquivo volta para a fila sozinho, sem mostrar erro.
+    const retry = retryPlan(err, material.autoRetries);
+    if (retry) {
+      await db.material.update({
+        where: { id: materialId },
+        data: { status: "QUEUED", errorMessage: null, progressStep: retry.message, autoRetries: { increment: 1 } },
+      });
+      await enqueue("material.process", { materialId }, { startAfter: retry.afterSeconds, singletonKey: `material:${materialId}:${material.autoRetries + 1}` });
+      return;
+    }
     const userFacing = err instanceof UserFacingError || err instanceof AiUserError;
-    const message = userFacing ? err.message : "Não foi possível processar este arquivo. Tente novamente.";
-    await db.material.update({ where: { id: materialId }, data: { status: "ERROR", errorMessage: message, progressStep: null } });
-    if (!userFacing) throw err; // deixa a fila tentar de novo
+    const message = userFacing ? err.message : "Não foi possível processar este arquivo. Toque em tentar de novo.";
+    await db.material.update({ where: { id: materialId }, data: { status: "ERROR", errorMessage: message, progressStep: null, autoRetries: 0 } });
   }
+}
+
+/** Tentativas automáticas: cota (espera a cota voltar), Google fora do ar e falhas inesperadas (espera crescente). */
+const MAX_QUOTA_RETRIES = 12;
+const MAX_TRANSIENT_RETRIES = 5;
+
+export function retryPlan(err: unknown, tries: number): { afterSeconds: number; message: string } | null {
+  if (err instanceof AiQuotaError) {
+    if (tries >= MAX_QUOTA_RETRIES) return null;
+    const wait = Math.max(60, Math.ceil((err.retryAt.getTime() - Date.now()) / 1000) + 30);
+    const at = new Date(Date.now() + wait * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+    return { afterSeconds: wait, message: `Na fila: a IA do Google pediu uma pausa. Continuamos sozinhos por volta das ${at}; pode sair da tela.` };
+  }
+  const userFacing = (err instanceof UserFacingError || err instanceof AiUserError) && !(err instanceof AiUnavailableError);
+  if (userFacing || tries >= MAX_TRANSIENT_RETRIES) return null;
+  return { afterSeconds: 60 * 2 ** tries, message: "Na fila: tentando de novo em instantes. Pode sair da tela." };
 }
 
 export class UserFacingError extends Error {}

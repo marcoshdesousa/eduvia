@@ -310,6 +310,8 @@ model Material {
   status        MaterialStatus @default(UPLOADING)
   progressStep  String?
   errorMessage  String?
+  /// Tentativas automáticas (cota da IA, instabilidade): o aluno não vê erro enquanto tentamos de novo.
+  autoRetries   Int      @default(0)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
