@@ -2,7 +2,7 @@ export type SourceRef = { label: string; materialId: string; title: string; page
 
 /** Link para abrir a fonte dentro do app: o PDF na página certa, com o trecho grifado. */
 export function sourceHref(r: { materialId: string; pageStart: number; quote?: string | null }) {
-  const q = r.quote ? `&q=${encodeURIComponent(r.quote.replace(/\s+/g, " ").trim().slice(0, 180))}` : "";
+  const q = r.quote ? `&q=${encodeURIComponent(r.quote.replace(/\s+/g, " ").trim().slice(0, 180)).replace(/[()!'*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}` : "";
   return `/fonte/${r.materialId}?p=${r.pageStart}${q}`;
 }
 

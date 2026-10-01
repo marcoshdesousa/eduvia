@@ -174,19 +174,28 @@ export function mapWords(flat: string, parts: string[]): ({ start: number; end: 
   return out;
 }
 
-/** Marca em laranja a palavra falada no texto da aula (CSS Custom Highlight; sem efeito em navegadores antigos). */
+/**
+ * Marca em laranja a palavra falada no texto da aula.
+ * Usa uma caixinha por cima da página (e não o CSS Custom Highlight, que no iPhone deixava
+ * restos de marcação em várias palavras ao mesmo tempo): só existe uma marcação, sempre.
+ */
 function makeHighlighter(root: HTMLElement | null, parts: string[]) {
-  type H = { highlights?: Map<string, unknown> };
-  const css = (globalThis as unknown as { CSS?: H }).CSS;
-  const HighlightCtor = (globalThis as unknown as { Highlight?: new (r: Range) => unknown }).Highlight;
-  if (!root || !css?.highlights || !HighlightCtor) return { show: () => {}, clear: () => {} };
-  // estilo da marcação (injetado aqui: o processador de CSS do build não reconhece ::highlight)
-  if (!document.getElementById("eduvia-leitura-style")) {
-    const style = document.createElement("style");
-    style.id = "eduvia-leitura-style";
-    style.textContent = "::highlight(eduvia-leitura){background-color:rgb(249 115 22 / 0.55);color:inherit}";
-    document.head.appendChild(style);
-  }
+  if (!root || typeof document === "undefined") return { show: (_k: number) => {}, clear: () => {}, destroy: () => {} };
+  const layer = document.createElement("div");
+  layer.setAttribute("aria-hidden", "true");
+  layer.dataset.leitura = "";
+  layer.style.cssText = "position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:5";
+  document.body.appendChild(layer);
+  const paint = (range: Range | null) => {
+    layer.replaceChildren();
+    if (!range) return;
+    for (const r of Array.from(range.getClientRects())) {
+      if (r.width < 1 || r.height < 1) continue;
+      const box = document.createElement("div");
+      box.style.cssText = `position:absolute;left:${r.left + window.scrollX - 2}px;top:${r.top + window.scrollY}px;width:${r.width + 4}px;height:${r.height}px;background:rgb(249 115 22 / 0.45);border-radius:4px`;
+      layer.appendChild(box);
+    }
+  };
   // texto da aula, sem as marcações de fonte ("p.3"), que o robô não lê
   const nodes: { node: Text; start: number }[] = [];
   let flat = "";
@@ -213,12 +222,15 @@ function makeHighlighter(root: HTMLElement | null, parts: string[]) {
       const [en, eo] = at(spot.end);
       range.setStart(sn, so);
       range.setEnd(en, eo);
-      css.highlights!.set("eduvia-leitura", new HighlightCtor(range));
+      paint(range);
       const rect = range.getBoundingClientRect();
       if (rect.top < 140 || rect.bottom > window.innerHeight - 140) window.scrollBy({ top: rect.top - window.innerHeight / 3, behavior: "smooth" });
     },
     clear() {
-      css.highlights!.delete("eduvia-leitura");
+      paint(null);
+    },
+    destroy() {
+      layer.remove();
     },
   };
 }
@@ -284,7 +296,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
       stopped.current = true;
       cancelAnimationFrame(raf.current);
       audio.current?.pause();
-      highlighter.current?.clear();
+      highlighter.current?.destroy();
       if ("speechSynthesis" in window) speechSynthesis.cancel();
       for (const p of cache.values()) URL.revokeObjectURL(p.url);
     };
@@ -305,7 +317,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
 
   const finish = () => {
     cancelAnimationFrame(raf.current);
-    highlighter.current?.clear();
+    highlighter.current?.destroy();
     highlighter.current = null;
     current.current = -1;
     setSentence(-1);

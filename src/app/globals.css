@@ -63,6 +63,7 @@ body {
 /* Texto de estudo (markdown) */
 .prose-study h2 { font-size: 1.25rem; font-weight: 700; margin: 1.5rem 0 0.5rem; }
 .prose-study h3 { font-size: 1.05rem; font-weight: 600; margin: 1.25rem 0 0.4rem; }
+.prose-study { overflow-wrap: break-word; max-width: 100%; }
 .prose-study p { margin: 0.6rem 0; line-height: 1.75; }
 .prose-study ul, .prose-study ol { margin: 0.6rem 0 0.6rem 1.25rem; line-height: 1.7; }
 .prose-study ul { list-style: disc; }

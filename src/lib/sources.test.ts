@@ -19,4 +19,10 @@ describe("marcações de fonte", () => {
     expect(stripSources("Calvin [T1, T2] e água (T2) e T13.", ["T1", "T2", "T13"])).toBe("Calvin e água e.");
     expect(stripSources("linfócitos T4 atuam", ["T1"])).toBe("linfócitos T4 atuam");
   });
+  it("o link não quebra quando o trecho tem parênteses", () => {
+    const md = linkSources("Bolívia [T1].", [{ label: "T1", materialId: "m", title: "x", pageStart: 12, pageEnd: 12, quote: "Prof. George (então diretor) e Monroe" }]);
+    const url = md.match(/\]\((\S+)\)\.$/)![1];
+    expect(url).not.toMatch(/[()]/);
+    expect(new URLSearchParams(url.split("?")[1]).get("q")).toBe("Prof. George (então diretor) e Monroe");
+  });
 });
