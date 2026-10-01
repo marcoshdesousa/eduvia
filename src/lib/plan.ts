@@ -15,9 +15,10 @@ export async function generatePlan(preparationId: string) {
 
   const [mastery, doneStudy, pendingReviews, doneToday] = await Promise.all([
     db.topicMastery.findMany({ where: { userId: prep.userId, topicId: { in: topicIds } } }),
+    // aulas feitas e aulas atrasadas (ficam no dia delas): as duas já "ocupam" a parte do assunto
     db.plannedSession.findMany({
-      where: { topicId: { in: topicIds }, kind: "STUDY", status: "DONE" },
-      orderBy: [{ date: "desc" }, { part: "desc" }],
+      where: { topicId: { in: topicIds }, kind: "STUDY", OR: [{ status: "DONE" }, { status: "PENDING", date: { lt: start } }] },
+      orderBy: [{ part: "desc" }, { date: "desc" }],
     }),
     db.topicReview.findMany({ where: { userId: prep.userId, topicId: { in: topicIds }, doneAt: null } }),
     db.plannedSession.findMany({ where: { plan: { preparationId }, date: start, status: "DONE" } }),
@@ -74,16 +75,9 @@ export async function generatePlan(preparationId: string) {
         : null;
 
   await db.$transaction(async (tx) => {
-    // Aulas atrasadas já começadas (ou reprovadas, abaixo de 75%) vêm para hoje, antes de tudo:
-    // o aluno precisa terminá-las para liberar as próximas. As que nem começaram são replanejadas.
-    const overdue = await tx.plannedSession.findMany({
-      where: { plan: { preparationId }, status: "PENDING", date: { lt: start }, studySession: { isNot: null } },
-      orderBy: [{ date: "asc" }, { order: "asc" }],
-    });
-    for (const [i, o] of overdue.entries()) {
-      await tx.plannedSession.update({ where: { id: o.id }, data: { date: start, order: -1000 + i } });
-    }
-    await tx.plannedSession.updateMany({ where: { plan: { preparationId }, status: "PENDING", date: { lt: start } }, data: { status: "MISSED" } });
+    // Aulas atrasadas continuam no dia delas, pendentes: o aluno faz primeiro as perdidas (com 75% ou mais)
+    // e só então libera as de hoje. Revisões atrasadas não iniciadas são reagendadas (voltam como revisão de hoje).
+    await tx.plannedSession.deleteMany({ where: { plan: { preparationId }, kind: "REVIEW", status: "PENDING", date: { lt: start }, studySession: null } });
     await tx.plannedSession.deleteMany({ where: { plan: { preparationId }, status: "PENDING", date: { gte: start }, studySession: null } });
     const plan = await tx.studyPlan.create({
       data: {

@@ -120,7 +120,7 @@ e2e/                   testes de ponta a ponta (Playwright)
 
 - Cada aula (sessão de estudo) termina com a nota das perguntas dela. **Só com 75% ou mais** a aula conta como feita e a próxima é liberada (`PASS_SCORE` em `src/lib/study.ts`). Abaixo disso, o aluno relê o texto e refaz; a melhor nota fica guardada e dá para refazer só para melhorar.
 - Na mesma preparação, as aulas seguintes (inclusive as de amanhã) ficam com cadeado até a anterior ser aprovada. Revisões não bloqueiam.
-- Aula atrasada que já foi começada ou reprovada vem para hoje, antes das outras. As que nem começaram são replanejadas (o assunto não é deixado de lado).
+- Aula perdida continua no dia dela (aparece como "Atrasada" no Início) e precisa ser feita, com 75% ou mais, antes das de hoje. O plano não remarca nem pula o assunto.
 - Os testes rápidos e simulados não mudam a nota da aula.
 - **Fontes:** tocar numa referência abre o PDF dentro do app (pdf.js), na página certa e com o trecho grifado. DOCX/texto mostram o texto da página.
 - **Redação no plano:** ao criar o guia de estudo, a opção "Incluir redação no plano" coloca uma redação por semana em "O que fazer hoje".

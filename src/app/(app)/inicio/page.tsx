@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { InstallAppBanner } from "@/components/install-app";
 import { requireReadyUser } from "@/lib/session";
 import { ensurePlanFresh } from "@/lib/plan";
-import { addDays, keyFromDay, today, weekday } from "@/lib/core/dates";
+import { addDays, formatDay, keyFromDay, today, weekday } from "@/lib/core/dates";
 import { levelFromXp, liveStreak } from "@/lib/gamification";
 import { StreakCard } from "@/components/streak-card";
 import { weeklyEssays } from "@/lib/essay-plan";
@@ -23,11 +23,17 @@ export default async function Page() {
 
   // semana de domingo a sábado
   const weekStart = addDays(day, -weekday(day));
-  const [todaySessions, dueQuestions, errorBank, weekDays, critical, topicStats, lastDays] = await Promise.all([
+  const [todayOnly, overdue, dueQuestions, errorBank, weekDays, critical, topicStats, lastDays] = await Promise.all([
     db.plannedSession.findMany({
       where: { plan: { preparation: { userId: user.id, status: "ACTIVE" } }, date: day, status: { in: ["PENDING", "DONE"] } },
       include: { topic: { include: { subject: { include: { preparation: true } } } }, studySession: { select: { bestScore: true, tries: true, passedAt: true } } },
       orderBy: [{ status: "asc" }, { order: "asc" }],
+    }),
+    // aulas perdidas: continuam no dia delas e precisam ser feitas antes das de hoje
+    db.plannedSession.findMany({
+      where: { plan: { preparation: { userId: user.id, status: "ACTIVE" } }, date: { lt: day }, status: "PENDING", kind: "STUDY" },
+      include: { topic: { include: { subject: { include: { preparation: true } } } }, studySession: { select: { bestScore: true, tries: true, passedAt: true } } },
+      orderBy: [{ date: "asc" }, { order: "asc" }],
     }),
     db.reviewItem.count({ where: { userId: user.id, dueAt: { lte: day }, question: { topic: { subject: { preparation: { status: "ACTIVE" } } } } } }),
     db.reviewItem.count({ where: { userId: user.id, inErrorBank: true } }),
@@ -48,10 +54,11 @@ export default async function Page() {
   const streak = liveStreak(user, preps.flatMap((p) => p.studyDays), day);
   const studied = new Set(lastDays.map((d) => keyFromDay(d.date)));
 
+  const todaySessions = [...overdue, ...todayOnly];
   const pending = todaySessions.filter((s) => s.status === "PENDING");
   // só a primeira aula pendente de cada preparação fica liberada (as outras esperam 75% na anterior)
   const unlocked = new Set<string>();
-  for (const s of [...pending].sort((a, b) => a.order - b.order)) {
+  for (const s of [...pending].sort((a, b) => a.date.getTime() - b.date.getTime() || a.order - b.order)) {
     if (s.kind !== "STUDY") {
       unlocked.add(s.id);
       continue;
@@ -71,7 +78,9 @@ export default async function Page() {
       <div>
         <h1 className="text-2xl font-bold">Olá, {user.name.split(" ")[0]}!</h1>
         <p className="text-sm text-muted">
-          {pending.length ? `Você tem ${formatMinutes(pending.reduce((s, x) => s + x.durationMin, 0))} de estudo para hoje.` : doneToday.length ? "Estudo de hoje concluído. Mandou bem!" : "Nada agendado para hoje."}
+          {pending.length ? overdue.length
+            ? `Você tem ${overdue.length} aula(s) atrasada(s). Faça elas primeiro para liberar as de hoje.`
+            : `Você tem ${formatMinutes(pending.reduce((s, x) => s + x.durationMin, 0))} de estudo para hoje.` : doneToday.length ? "Estudo de hoje concluído. Mandou bem!" : "Nada agendado para hoje."}
         </p>
       </div>
 
@@ -97,6 +106,7 @@ export default async function Page() {
                 <div className="min-w-0 flex-1">
                   <div className={cn("truncate text-sm font-medium", s.status === "DONE" && "text-muted line-through")}>{s.topic.title}</div>
                   <div className="truncate text-xs text-muted">
+                    {s.date < day && <span className="font-semibold text-warning">Atrasada ({formatDay(s.date, { day: "2-digit", month: "short" })}) · </span>}
                     {s.topic.subject.preparation.title} · {s.kind === "REVIEW" ? (s.reviewNumber ? `Revisão R${s.reviewNumber}` : "Reforço") : s.partCount > 1 ? `Parte ${s.part}/${s.partCount}` : "Estudo"} · {formatMinutes(s.durationMin)}
                   </div>
                 </div>

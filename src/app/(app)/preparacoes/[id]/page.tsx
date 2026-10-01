@@ -160,7 +160,14 @@ export default async function Page({ params, searchParams }: { params: Promise<{
 
 async function PlanTab({ preparationId, day, hasTopics }: { preparationId: string; day: Date; hasTopics: boolean }) {
   const sessions = await db.plannedSession.findMany({
-    where: { plan: { preparationId }, date: { gte: addDays(day, -1), lt: addDays(day, 21) }, status: { in: ["PENDING", "DONE", "MISSED"] } },
+    // dias anteriores: as aulas perdidas continuam no dia delas (e as feitas de ontem); depois, as próximas 3 semanas
+    where: {
+      plan: { preparationId },
+      OR: [
+        { date: { gte: addDays(day, -1), lt: addDays(day, 21) }, status: { in: ["PENDING", "DONE"] } },
+        { date: { lt: addDays(day, -1) }, status: "PENDING", kind: "STUDY" },
+      ],
+    },
     include: { topic: { include: { subject: true } }, studySession: { select: { bestScore: true, tries: true } } },
     orderBy: [{ date: "asc" }, { order: "asc" }],
   });
@@ -218,8 +225,6 @@ async function PlanTab({ preparationId, day, hasTopics }: { preparationId: strin
                       <Link href={`/estudar/${s.id}`} className="text-xs text-primary hover:underline">Refazer</Link>
                       <Badge tone="success">Feito</Badge>
                     </span>
-                  ) : s.status === "MISSED" ? (
-                    <Badge tone="neutral">Remarcada</Badge>
                   ) : s.kind === "REVIEW" ? (
                     isToday ? <Link href={`/estudar/${s.id}`} className={buttonClass("outline", "sm")}>Revisar</Link> : null
                   ) : s.id === firstOpen ? (

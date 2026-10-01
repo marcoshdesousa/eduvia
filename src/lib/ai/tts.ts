@@ -8,7 +8,8 @@ export type TtsVoice = "f" | "m";
 /** Vozes do Gemini: Kore (feminina, firme e clara) e Charon (masculina, calma e informativa). */
 export const TTS_VOICES: Record<TtsVoice, string> = { f: "Kore", m: "Charon" };
 export const TTS_MAX_CHARS = 1800;
-const STYLE = "Leia em português do Brasil, como um professor gentil: voz calma, natural e pausada, sem pressa.";
+// versão do áudio guardado (mudou: sem instrução lida em voz alta e sem chiado)
+const CACHE_VERSION = "v2";
 
 const found = new Map<string, { models: string[]; at: number }>();
 
@@ -37,6 +38,39 @@ async function ttsModels(key: string): Promise<string[]> {
   return models;
 }
 
+/**
+ * Limpa o áudio: corta o chiado/silêncio do começo e do fim (trechos bem baixos) e suaviza a entrada
+ * e a saída (fade de 25 ms) para não dar estalo entre um trecho e outro.
+ */
+export function cleanPcm(pcm: Buffer, rate = 24000): Buffer {
+  const n = Math.floor(pcm.length / 2);
+  if (!n) return pcm;
+  const win = Math.max(1, Math.floor(rate * 0.02)); // janelas de 20 ms
+  const loud = (start: number) => {
+    let sum = 0;
+    const end = Math.min(n, start + win);
+    for (let i = start; i < end; i++) sum += Math.abs(pcm.readInt16LE(i * 2));
+    return sum / Math.max(1, end - start) > 600; // ~2% do volume máximo
+  };
+  let first = 0;
+  while (first < n && !loud(first)) first += win;
+  let last = n;
+  while (last > first && !loud(Math.max(first, last - win))) last -= win;
+  if (last <= first) return pcm;
+  first = Math.max(0, first - win * 2); // mantém um respiro
+  last = Math.min(n, last + win * 3);
+  const out = Buffer.from(pcm.subarray(first * 2, last * 2));
+  const len = out.length / 2;
+  const fade = Math.min(Math.floor(rate * 0.025), Math.floor(len / 2));
+  for (let i = 0; i < fade; i++) {
+    const g = i / fade;
+    out.writeInt16LE(Math.round(out.readInt16LE(i * 2) * g), i * 2);
+    const j = len - 1 - i;
+    out.writeInt16LE(Math.round(out.readInt16LE(j * 2) * g), j * 2);
+  }
+  return out;
+}
+
 /** PCM 16 bits mono (o que o Gemini devolve) → WAV, que qualquer navegador toca. */
 export function pcmToWav(pcm: Buffer, rate = 24000) {
   const h = Buffer.alloc(44);
@@ -59,7 +93,7 @@ export function pcmToWav(pcm: Buffer, rate = 24000) {
 /** Gera (ou reaproveita) o áudio WAV de um trecho. */
 export async function speak(userId: string, text: string, voice: TtsVoice): Promise<Buffer> {
   const clean = text.trim().slice(0, TTS_MAX_CHARS);
-  const cacheKey = `tts/${createHash("sha256").update(`${voice}:${clean}`).digest("hex")}.wav`;
+  const cacheKey = `tts/${createHash("sha256").update(`${CACHE_VERSION}:${voice}:${clean}`).digest("hex")}.wav`;
   try {
     return await readObject(cacheKey);
   } catch {}
@@ -74,7 +108,7 @@ export async function speak(userId: string, text: string, voice: TtsVoice): Prom
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: `${STYLE}\n\n${clean}` }] }],
+        contents: [{ parts: [{ text: clean }] }],
         generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: TTS_VOICES[voice] } } } },
       }),
       signal: AbortSignal.timeout(90_000),
@@ -84,7 +118,7 @@ export async function speak(userId: string, text: string, voice: TtsVoice): Prom
       const part = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;
       if (part?.data) {
         const rate = Number(part.mimeType?.match(/rate=(\d+)/)?.[1]) || 24000;
-        const wav = pcmToWav(Buffer.from(part.data, "base64"), rate);
+        const wav = pcmToWav(cleanPcm(Buffer.from(part.data, "base64"), rate), rate);
         await writeObject(cacheKey, wav, "audio/wav").catch(() => {});
         return wav;
       }

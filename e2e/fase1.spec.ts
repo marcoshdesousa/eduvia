@@ -85,6 +85,25 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
   const errs = await sql<{ n: number }>(`SELECT count(*)::int AS n FROM "Attempt" a JOIN "user" u ON u.id = a."userId" WHERE u.handle = $1 AND a."isCorrect" = false`, [handle]);
   expect(errs[0].n).toBeGreaterThan(0);
 
+  // aula perdida ontem: continua no dia dela ("Atrasada"), não some nem vira "Remarcada", e vem antes das de hoje
+  await sql(
+    `UPDATE "PlannedSession" SET date = (now() AT TIME ZONE 'America/Sao_Paulo')::date - 1 WHERE id = (
+       SELECT ps.id FROM "PlannedSession" ps JOIN "StudyPlan" sp ON sp.id = ps."planId" JOIN "Preparation" p ON p.id = sp."preparationId" JOIN "user" u ON u.id = p."userId"
+       WHERE u.handle = $1 AND ps.status = 'PENDING' AND ps.kind = 'STUDY' ORDER BY ps.date, ps."order" LIMIT 1)`,
+    [handle],
+  );
+  await sql(`UPDATE "Preparation" SET "lastReplanDate" = NULL WHERE "userId" = (SELECT id FROM "user" WHERE handle = $1)`, [handle]);
+  await page.goto("/inicio");
+  await expect(page.getByText(/aula\(s\) atrasada\(s\)/)).toBeVisible();
+  await expect(page.getByText(/Atrasada \(/).first()).toBeVisible();
+  await expect(page.getByText("Remarcada")).toHaveCount(0);
+  const late = await sql<{ n: number }>(
+    `SELECT count(*)::int AS n FROM "PlannedSession" ps JOIN "StudyPlan" sp ON sp.id = ps."planId" JOIN "Preparation" p ON p.id = sp."preparationId" JOIN "user" u ON u.id = p."userId"
+     WHERE u.handle = $1 AND ps.status = 'MISSED'`,
+    [handle],
+  );
+  expect(late[0].n).toBe(0);
+
   // exportação de dados (LGPD)
   const res = await page.request.get("/api/account/export");
   expect(res.ok()).toBeTruthy();

@@ -27,12 +27,16 @@ export function toSpeech(markdown: string): string[] {
   return parts.filter(Boolean);
 }
 
-/** Junta frases em blocos maiores para a voz natural (menos pedidos, fala mais fluida). */
-export function toBlocks(parts: string[], max = 1500): string[] {
+/**
+ * Junta frases em blocos para a voz natural. O primeiro bloco é curto (começa a falar rápido);
+ * os seguintes são maiores (menos pedidos, fala mais fluida).
+ */
+export function toBlocks(parts: string[], max = 1200, firstMax = 260): string[] {
   const blocks: string[] = [];
   let cur = "";
   for (const p of parts) {
-    if (cur && cur.length + p.length + 1 > max) {
+    const limit = blocks.length === 0 ? firstMax : max;
+    if (cur && cur.length + p.length + 1 > limit) {
       blocks.push(cur);
       cur = "";
     }
@@ -121,7 +125,8 @@ export function LessonNarrator({ text }: { text: string }) {
     try {
       const url = await fetchBlock(i);
       if (stopped.current) return;
-      if (i + 1 < blocks.length) fetchBlock(i + 1).catch(() => {}); // já prepara o próximo
+      // já prepara os próximos para não ter pausa entre um trecho e outro
+      for (const k of [i + 1, i + 2]) if (k < blocks.length) fetchBlock(k).catch(() => {});
       const a = audio.current ?? (audio.current = new Audio());
       a.src = url;
       a.playbackRate = rateRef.current;
@@ -198,11 +203,18 @@ export function LessonNarrator({ text }: { text: string }) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center">
       <div className="flex items-center gap-3">
-        <Robot speaking={state === "playing"} />
+        <button
+          type="button"
+          onClick={state === "playing" ? pause : play}
+          aria-label={state === "playing" ? "Pausar a leitura" : "Ouvir a aula"}
+          className="rounded-full transition hover:scale-105 active:scale-95"
+        >
+          <Robot speaking={state === "playing"} />
+        </button>
         <div className="min-w-0">
           <p className="text-sm font-semibold">Ouvir a aula</p>
           <p className="text-xs text-muted">
-            {state === "idle" ? "Uma voz natural lê o texto para você." : state === "loading" ? "Preparando a voz…" : `Lendo ${index + 1} de ${total}…`}
+            {state === "idle" ? "Toque no robô: uma voz natural lê o texto para você." : state === "loading" ? "Preparando a voz…" : `Lendo ${index + 1} de ${total}…`}
           </p>
           {note && <p className="text-xs text-warning">{note}</p>}
         </div>
