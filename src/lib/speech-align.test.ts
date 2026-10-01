@@ -44,3 +44,36 @@ describe("marcação acompanha a voz", () => {
     expect(decodeTimes(encodeTimes(t))).toEqual(t);
   });
 });
+
+describe("marcação não se adianta nem se atrasa com voz irregular", () => {
+  it("ritmo variando, vírgulas sem pausa e respiros fora da pontuação: erro médio pequeno e sem desvio", () => {
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const base =
+      "Na América do Sul, o primeiro Clube teve início na cidade de Lima, Peru, em 4 de abril de 1955, na Igreja de Miraflores, sob a liderança do casal Nercida e Armando Ruiz, com o apoio do Pr. Donald J. Von Pohle. No segundo ano, o clube já contava com conversões por meio de classes bíblicas, iniciando uma forte parceria evangelística. No final da década de 50, o Pr. Jairo Tavares de Araújo preparou um manual para organizar novos clubes na Divisão Sul-Americana. A expansão seguiu por outros países: Chile, Argentina e Brasil. Filosofia dos Desbravadores A filosofia é o ramo dos estudos que discute o que as pessoas são, o que é o mundo e como aprender e ensinar. ";
+    const text = base.repeat(4).slice(0, 2400);
+    for (let run = 0; run < 3; run++) {
+      const rate = 24000;
+      const pcmParts: Buffer[] = [Buffer.alloc(rate * 0.1 * 2)];
+      const truth: number[] = [];
+      let t = 0.1;
+      for (const m of text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)) {
+        truth.push(t);
+        const len = Math.round(rate * syllables(m[0]) * 0.16 * (0.6 + rnd() * 0.8));
+        const b = Buffer.alloc(len * 2);
+        for (let i = 0; i < len; i++) b.writeInt16LE(Math.round((2000 + 5000 * rnd()) * Math.sin(i / 3)), i * 2);
+        const after = text.slice(m.index! + m[0].length, m.index! + m[0].length + 2);
+        const gap = /[.!?]/.test(after) ? 0.3 + rnd() * 0.4 : /[,;:]/.test(after) ? (rnd() < 0.35 ? 0.03 : 0.13 + rnd() * 0.15) : rnd() < 0.03 ? 0.2 : 0.02;
+        const g = Math.round(rate * gap);
+        pcmParts.push(b, Buffer.alloc(g * 2));
+        t += (len + g) / rate;
+      }
+      const got = alignWords(Buffer.concat(pcmParts), rate, text)!;
+      const errs = got.map((x, i) => x - truth[i]);
+      const mean = errs.reduce((a, b) => a + Math.abs(b), 0) / errs.length;
+      const bias = errs.reduce((a, b) => a + b, 0) / errs.length;
+      expect(mean).toBeLessThan(0.2);
+      expect(Math.abs(bias)).toBeLessThan(0.08); // não fica adiantada nem atrasada no geral
+    }
+  });
+});

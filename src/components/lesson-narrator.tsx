@@ -260,6 +260,9 @@ function rankVoice(v: SpeechSynthesisVoice, gender: "f" | "m") {
   return score;
 }
 
+/** Atraso entre o tempo do tocador e o som que se ouve (codificação do MP3 + saída de áudio do celular). */
+const SOUND_LAG = 0.12;
+
 type Prepared = { url: string; words: { s: number; t: number }[] };
 type State = "idle" | "loading" | "playing" | "paused";
 
@@ -382,7 +385,8 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
   const follow = (p: Prepared, a: HTMLAudioElement, myRun: number) => {
     const tick = () => {
       if (run.current !== myRun || stopped.current) return;
-      const t = a.currentTime;
+      // o som sai do alto-falante um pouquinho depois do tempo do tocador: a marcação espera esse instante
+      const t = a.currentTime - SOUND_LAG;
       // palavra falada agora (busca binária na lista de palavras)
       let lo = 0;
       let hi = p.words.length - 1;

@@ -4,16 +4,16 @@ import { createHash } from "node:crypto";
 import { GEMINI_API, AiQuotaError, AiUnavailableError, isMockAi, parseQuota, userGeminiKey } from "@/lib/ai/client";
 import { readObject, writeObject } from "@/lib/storage";
 import { Mp3Encoder } from "@breezystack/lamejs";
-import { alignWords } from "@/lib/speech-align";
+import { alignLevels, frameLevels, packLevels, unpackLevels } from "@/lib/speech-align";
 
 export type TtsVoice = "f" | "m";
 /** Vozes do Gemini: Kore (feminina, firme e clara) e Charon (masculina, calma e informativa). */
 export const TTS_VOICES: Record<TtsVoice, string> = { f: "Kore", m: "Charon" };
 export const TTS_MAX_CHARS = 2600;
-// versão do áudio guardado (v4: guarda junto o tempo de cada palavra, medido no próprio áudio)
-const CACHE_VERSION = "v4-mp3";
-// áudio da versão anterior (sem os tempos): usado só se a voz estiver sem cota agora
-const OLD_CACHE_VERSION = "v3-mp3";
+// versão do áudio guardado (v5: guarda junto o volume a cada 10 ms, de onde saem os tempos das palavras)
+const CACHE_VERSION = "v5-mp3";
+// áudios de versões anteriores (sem esse volume): usados só se a voz estiver sem cota agora
+const OLD_CACHE_VERSIONS = ["v4-mp3", "v3-mp3"];
 
 const found = new Map<string, { models: string[]; at: number }>();
 
@@ -139,33 +139,38 @@ export async function speak(userId: string, text: string, voice: TtsVoice): Prom
   const clean = text.trim().slice(0, TTS_MAX_CHARS);
   const hash = (v: string) => createHash("sha256").update(`${v}:${voice}:${clean}`).digest("hex");
   const cacheKey = `tts/${hash(CACHE_VERSION)}.mp3`;
+  const timesFrom = (levels: number[]) => {
+    try {
+      return alignLevels(levels, clean);
+    } catch (e) {
+      console.error("[voz] tempos das palavras", e);
+      return null;
+    }
+  };
   try {
     const mp3 = await readObject(cacheKey);
-    const times = await readObject(`tts/${hash(CACHE_VERSION)}.json`)
-      .then((b) => JSON.parse(b.toString()) as number[] | null)
+    const meta = await readObject(`tts/${hash(CACHE_VERSION)}.json`)
+      .then((b) => JSON.parse(b.toString()) as { levels?: string })
       .catch(() => null);
-    return { mp3, times };
+    return { mp3, times: meta?.levels ? timesFrom(unpackLevels(meta.levels)) : null };
   } catch {}
   const finish = async (pcm: Buffer, rate: number): Promise<Spoken> => {
     const cleaned = cleanPcm(pcm, rate);
     const mp3 = toMp3WithPause(cleaned, rate);
-    let times: number[] | null = null;
-    try {
-      times = alignWords(cleaned, rate, clean);
-    } catch (e) {
-      console.error("[voz] tempos das palavras", e);
-    }
+    const levels = frameLevels(cleaned, rate);
     await writeObject(cacheKey, mp3, "audio/mpeg").catch(() => {});
-    await writeObject(`tts/${hash(CACHE_VERSION)}.json`, Buffer.from(JSON.stringify(times)), "application/json").catch(() => {});
-    return { mp3, times };
+    await writeObject(`tts/${hash(CACHE_VERSION)}.json`, Buffer.from(JSON.stringify({ levels: packLevels(levels) })), "application/json").catch(() => {});
+    return { mp3, times: timesFrom(levels) };
   };
   if (isMockAi()) return finish(mockSpeech(clean, 24000), 24000);
   try {
     return await generate(userId, clean, voice, finish);
   } catch (e) {
     // sem cota agora: usa o áudio antigo desta aula (se já foi ouvido antes), sem os tempos das palavras
-    const old = await readObject(`tts/${hash(OLD_CACHE_VERSION)}.mp3`).catch(() => null);
-    if (old) return { mp3: old, times: null };
+    for (const v of OLD_CACHE_VERSIONS) {
+      const old = await readObject(`tts/${hash(v)}.mp3`).catch(() => null);
+      if (old) return { mp3: old, times: null };
+    }
     throw e;
   }
 }
