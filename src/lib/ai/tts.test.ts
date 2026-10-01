@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 import { cleanPcm, pcmToWav, rankTtsModels } from "./tts";
-import { mapSentences, sentenceTimeline, toBlocks, toSpeech } from "@/components/lesson-narrator";
+import { mapSentences, mapWords, sentenceTimeline, splitWords, toBlocks, toSpeech, wordTimeline } from "@/components/lesson-narrator";
 
 describe("voz natural", () => {
   it("prefere modelos de voz flash e mais novos", () => {
@@ -56,5 +56,22 @@ describe("voz natural", () => {
     for (let i = 1; i < spots.length; i++) expect(spots[i]!.start).toBeGreaterThanOrEqual(spots[i - 1]!.end - 1);
     expect(flat.slice(spots[2]!.start, spots[2]!.end)).toBe("Ela ocorre nos cloroplastos, organelas das folhas.");
     expect(flat.slice(spots[1]!.start, spots[1]!.end).startsWith("Capítulo 1 — A fotossíntese é")).toBe(true); // a 2ª ocorrência, não a 1ª
+  });
+  it("marca palavra por palavra, em ordem, ignorando as marcações de página", () => {
+    const flat = "Introdução e Origem Histórica O Clube de Desbravadores é um movimento mundial p.8 . Oficializado em 1950.";
+    const parts = ["Introdução e Origem Histórica", "O Clube de Desbravadores é um movimento mundial.", "Oficializado em 1950."];
+    const spots = mapWords(flat, parts);
+    const words = parts.flatMap((p) => splitWords(p).map((w) => w.word));
+    expect(spots).toHaveLength(words.length);
+    spots.forEach((sp, k) => expect(flat.slice(sp!.start, sp!.end)).toBe(words[k]));
+    for (let k = 1; k < spots.length; k++) expect(spots[k]!.start).toBeGreaterThan(spots[k - 1]!.start);
+  });
+  it("cada palavra começa num momento do áudio, em ordem, dentro da frase", () => {
+    const parts = ["Olá mundo.", "Segunda frase aqui."];
+    const w = wordTimeline(parts, [0, 2], 5);
+    expect(w.map((x) => x.s)).toEqual([0, 0, 1, 1, 1]);
+    for (let k = 1; k < w.length; k++) expect(w[k].t).toBeGreaterThan(w[k - 1].t);
+    expect(w[2].t).toBe(2);
+    expect(w[4].t).toBeLessThan(5);
   });
 });

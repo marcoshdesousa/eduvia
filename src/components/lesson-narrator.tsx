@@ -111,7 +111,70 @@ export function mapSentences(flat: string, parts: string[]): ({ start: number; e
   });
 }
 
-/** Marca em laranja a frase lida no texto da aula (CSS Custom Highlight; sem efeito em navegadores antigos). */
+/** Palavras de uma frase, com a posição na frase e o "peso" de fala (letras + pausa da pontuação logo depois). */
+export function splitWords(part: string): { word: string; at: number; weight: number }[] {
+  const out: { word: string; at: number; weight: number }[] = [];
+  for (const m of part.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)) {
+    const after = part.slice(m.index! + m[0].length, m.index! + m[0].length + 2);
+    const pause = /[.!?]/.test(after) ? 7 : /[,;:]/.test(after) ? 4 : 0;
+    out.push({ word: m[0], at: m.index!, weight: m[0].length + 1 + pause });
+  }
+  return out;
+}
+
+/**
+ * Momento em que cada palavra começa no áudio: o tempo de cada frase dividido pelo peso das palavras.
+ * Devolve a lista de palavras de todas as frases, em ordem, com a frase de cada uma.
+ */
+export function wordTimeline(parts: string[], sentenceStarts: number[], totalSeconds: number) {
+  const words: { s: number; t: number }[] = [];
+  parts.forEach((p, i) => {
+    const ws = splitWords(p);
+    const start = sentenceStarts[i] ?? 0;
+    const end = sentenceStarts[i + 1] ?? totalSeconds;
+    // a pausa do fim da frase não é fala: tira ~0,3 s (ou 15%) antes de dividir entre as palavras
+    const dur = Math.max(0.2, end - start - Math.min(0.3, (end - start) * 0.15));
+    const total = ws.reduce((x, w) => x + w.weight, 0) || 1;
+    let acc = 0;
+    for (const w of ws) {
+      words.push({ s: i, t: start + (acc / total) * dur });
+      acc += w.weight;
+    }
+  });
+  return words;
+}
+
+/**
+ * Acha cada palavra no texto da aula, EM ORDEM e sempre para a frente (nunca volta):
+ * compara só letras e números; se uma palavra não aparece logo adiante, ela fica sem marcação (não pula).
+ */
+export function mapWords(flat: string, parts: string[]): ({ start: number; end: number } | null)[] {
+  let norm = "";
+  const back: number[] = [];
+  for (let i = 0; i < flat.length; i++) {
+    for (const ch of plainChar(flat[i])) {
+      norm += ch;
+      back.push(i);
+    }
+  }
+  let cursor = 0;
+  const out: ({ start: number; end: number } | null)[] = [];
+  for (const p of parts) {
+    for (const w of splitWords(p)) {
+      const target = [...w.word].map(plainChar).join("");
+      const at = target ? norm.indexOf(target, cursor) : -1;
+      if (at === -1 || at - cursor > 80) {
+        out.push(null);
+        continue;
+      }
+      cursor = at + target.length;
+      out.push({ start: back[at], end: back[at + target.length - 1] + 1 });
+    }
+  }
+  return out;
+}
+
+/** Marca em laranja a palavra falada no texto da aula (CSS Custom Highlight; sem efeito em navegadores antigos). */
 function makeHighlighter(root: HTMLElement | null, parts: string[]) {
   type H = { highlights?: Map<string, unknown> };
   const css = (globalThis as unknown as { CSS?: H }).CSS;
@@ -121,29 +184,30 @@ function makeHighlighter(root: HTMLElement | null, parts: string[]) {
   if (!document.getElementById("eduvia-leitura-style")) {
     const style = document.createElement("style");
     style.id = "eduvia-leitura-style";
-    style.textContent = "::highlight(eduvia-leitura){background-color:rgb(249 115 22 / 0.35);color:inherit}";
+    style.textContent = "::highlight(eduvia-leitura){background-color:rgb(249 115 22 / 0.55);color:inherit}";
     document.head.appendChild(style);
   }
   // texto da aula, sem as marcações de fonte ("p.3"), que o robô não lê
   const nodes: { node: Text; start: number }[] = [];
   let flat = "";
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => ((n.parentElement?.closest(".source-mark") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT)),
+    acceptNode: (n) => (n.parentElement?.closest(".source-mark") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
   });
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     nodes.push({ node: n as Text, start: flat.length });
     flat += (n as Text).data + " ";
   }
-  const spots = mapSentences(flat, parts);
+  const spots = mapWords(flat, parts);
   const at = (offset: number): [Text, number] => {
     let i = nodes.length - 1;
     while (i > 0 && nodes[i].start > offset) i--;
     return [nodes[i].node, Math.max(0, Math.min(offset - nodes[i].start, nodes[i].node.data.length))];
   };
   return {
-    show(i: number) {
-      const spot = spots[i];
-      if (!spot || !nodes.length) return; // não achou esta frase: mantém a marcação anterior (nunca pula)
+    /** Marca a palavra k (na ordem de todas as palavras da aula). */
+    show(k: number) {
+      const spot = spots[k];
+      if (!spot || !nodes.length) return; // palavra não achada: mantém a marcação anterior (nunca pula)
       const range = document.createRange();
       const [sn, so] = at(spot.start);
       const [en, eo] = at(spot.end);
@@ -174,7 +238,7 @@ function rankVoice(v: SpeechSynthesisVoice, gender: "f" | "m") {
   return score;
 }
 
-type Prepared = { url: string; starts: number[] };
+type Prepared = { url: string; starts: number[]; words: { s: number; t: number }[] };
 type State = "idle" | "loading" | "playing" | "paused";
 
 /**
@@ -185,6 +249,16 @@ type State = "idle" | "loading" | "playing" | "paused";
 export function LessonNarrator({ text, labels = [], targetRef }: { text: string; labels?: string[]; targetRef?: RefObject<HTMLElement | null> }) {
   const parts = useMemo(() => toSpeech(text, labels), [text, labels]);
   const blocks = useMemo(() => toBlocks(parts), [parts]);
+  // onde começam as palavras de cada frase na lista de todas as palavras da aula
+  const wordOffset = useMemo(() => {
+    const off: number[] = [];
+    let n = 0;
+    for (const p of parts) {
+      off.push(n);
+      n += splitWords(p).length;
+    }
+    return off;
+  }, [parts]);
   const [gender, setGender] = useState<"f" | "m">("f");
   const [rate, setRate] = useState(1);
   const [state, setState] = useState<State>("idle");
@@ -220,11 +294,12 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     if (audio.current) audio.current.playbackRate = rate;
   }, [rate]);
 
-  const mark = (i: number) => {
-    current.current = i;
-    setSentence(i);
+  /** Marca a palavra k (lista de todas as palavras) e mostra em qual frase está. */
+  const markWord = (k: number, sentenceIndex: number) => {
+    current.current = k;
+    setSentence(sentenceIndex);
     if (!highlighter.current) highlighter.current = makeHighlighter(targetRef?.current ?? null, parts);
-    if (i >= 0 && parts[i]) highlighter.current.show(i);
+    if (k >= 0) highlighter.current.show(k);
     else highlighter.current.clear();
   };
 
@@ -273,7 +348,8 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     };
     await Promise.all([worker(), worker()]);
     const url = URL.createObjectURL(new Blob(chunks, { type: "audio/mpeg" }));
-    const p = { url, starts: sentenceTimeline(parts, blocks, seconds) };
+    const starts = sentenceTimeline(parts, blocks, seconds);
+    const p = { url, starts, words: wordTimeline(parts, starts, seconds.reduce((x, y) => x + y, 0)) };
     prepared.current.set(key, p);
     return p;
   };
@@ -282,12 +358,15 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     const tick = () => {
       if (run.current !== myRun || stopped.current) return;
       const t = a.currentTime;
-      let i = 0;
-      while (i + 1 < p.starts.length && p.starts[i + 1] <= t) i++;
-      if (current.current !== i) {
-        current.current = i;
-        mark(i);
+      // palavra falada agora (busca binária na lista de palavras)
+      let lo = 0;
+      let hi = p.words.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (p.words[mid].t <= t) lo = mid;
+        else hi = mid - 1;
       }
+      if (p.words.length && current.current !== lo) markWord(lo, p.words[lo].s);
       raf.current = requestAnimationFrame(tick);
     };
     cancelAnimationFrame(raf.current);
@@ -334,7 +413,15 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     if (voices[0]) u.voice = voices[0];
     u.rate = rate * 0.95;
     u.pitch = gender === "m" ? 0.9 : 1.05;
-    u.onstart = () => mark(i);
+    u.onstart = () => markWord(wordOffset[i], i);
+    // voz do aparelho: o navegador avisa o começo de cada palavra
+    u.onboundary = (e) => {
+      if (e.name && e.name !== "word") return;
+      const ws = splitWords(parts[i]);
+      let j = 0;
+      while (j + 1 < ws.length && ws[j + 1].at <= e.charIndex) j++;
+      markWord(wordOffset[i] + j, i);
+    };
     u.onend = () => {
       if (stopped.current) return;
       playDevice(i + 1);
