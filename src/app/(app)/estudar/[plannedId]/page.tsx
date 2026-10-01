@@ -76,6 +76,7 @@ export default async function Page({ params }: { params: Promise<{ plannedId: st
     <SessionView
       header={header}
       sessionId={session.id}
+      startedAt={session.startedAt.toISOString()}
       completed={!!session.completedAt}
       text={
         text

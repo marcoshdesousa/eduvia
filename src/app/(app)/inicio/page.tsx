@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Flame, Play, RotateCcw, Target, Zap } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Play, RotateCcw, Target, Zap } from "lucide-react";
 import { db } from "@/lib/db";
 import { InstallAppBanner } from "@/components/install-app";
 import { requireReadyUser } from "@/lib/session";
 import { ensurePlanFresh } from "@/lib/plan";
-import { addDays, today, weekday } from "@/lib/core/dates";
-import { levelFromXp } from "@/lib/gamification";
+import { addDays, keyFromDay, today, weekday } from "@/lib/core/dates";
+import { levelFromXp, liveStreak } from "@/lib/gamification";
+import { StreakCard } from "@/components/streak-card";
 import { MasteryBadge, Progress } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle, Stat } from "@/components/ui/card";
@@ -21,7 +22,7 @@ export default async function Page() {
 
   // semana de domingo a sábado
   const weekStart = addDays(day, -weekday(day));
-  const [todaySessions, dueQuestions, errorBank, weekDays, critical, topicStats] = await Promise.all([
+  const [todaySessions, dueQuestions, errorBank, weekDays, critical, topicStats, lastDays] = await Promise.all([
     db.plannedSession.findMany({
       where: { plan: { preparation: { userId: user.id, status: "ACTIVE" } }, date: day, status: { in: ["PENDING", "DONE"] } },
       include: { topic: { include: { subject: { include: { preparation: true } } } } },
@@ -40,7 +41,10 @@ export default async function Page() {
       where: { subject: { preparation: { userId: user.id, status: "ACTIVE" } } },
       select: { id: true, subject: { select: { preparationId: true } }, mastery: { where: { userId: user.id }, select: { studyDone: true } } },
     }),
+    db.studyDay.findMany({ where: { userId: user.id, date: { gte: addDays(day, -6) }, minutes: { gt: 0 } }, select: { date: true } }),
   ]);
+  const streak = liveStreak(user, preps.flatMap((p) => p.studyDays), day);
+  const studied = new Set(lastDays.map((d) => keyFromDay(d.date)));
 
   const pending = todaySessions.filter((s) => s.status === "PENDING");
   const doneToday = todaySessions.filter((s) => s.status === "DONE");
@@ -59,6 +63,7 @@ export default async function Page() {
         </p>
       </div>
 
+      <StreakCard streak={streak} best={user.longestStreak} day={day} studied={studied} href={pending[0] ? `/estudar/${pending[0].id}` : preps.length ? "/revisoes" : "/preparacoes/nova"} />
 
       {!preps.length ? (
         <Card className="text-center">
@@ -97,8 +102,7 @@ export default async function Page() {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Sequência" value={<span className="inline-flex items-center gap-1"><Flame size={20} className="text-warning" />{user.currentStreak}</span>} hint={`Recorde: ${user.longestStreak} dia(s)`} />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Stat label="Nível" value={<span className="inline-flex items-center gap-1"><Zap size={20} className="text-primary" />{level}</span>} hint={<Progress value={progress} className="mt-1" />} />
         <Stat label="Meta da semana" value={formatMinutes(weekMinutes)} hint={weekGoal ? <Progress value={weekMinutes / weekGoal} className="mt-1" tone="success" /> : "Sem meta"} />
         <Stat label="Banco de erros" value={errorBank} hint={<Link href="/revisoes" className="text-primary">Refazer questões</Link>} />

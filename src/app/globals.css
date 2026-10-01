@@ -104,3 +104,11 @@ body {
 .robot-talk { animation: robot-bob 0.6s ease-in-out infinite; }
 .robot-blink { animation: robot-blink 0.8s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .robot-mouth-talk, .robot-talk, .robot-blink { animation: none; } }
+
+/* foguinho da sequência */
+@keyframes streak-flicker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.06, 0.97) rotate(-2deg); }
+}
+.streak-flame { transform-origin: 50% 90%; animation: streak-flicker 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .streak-flame { animation: none; } }

@@ -64,3 +64,13 @@ export async function registerStudy(userId: string, minutes: number) {
     data: { currentStreak: streak, longestStreak: Math.max(streak, user.longestStreak), lastStudyDate: day },
   });
 }
+
+/** Sequência que vale hoje: se o aluno faltou num dia de estudo depois do último dia estudado, ela já zerou. */
+export function liveStreak(user: { currentStreak: number; lastStudyDate: Date | null }, studyDays: number[], day: Date) {
+  if (!user.lastStudyDate) return 0;
+  const scheduled = new Set(studyDays);
+  for (let d = addDays(user.lastStudyDate, 1); d < day; d = addDays(d, 1)) {
+    if (scheduled.size === 0 || scheduled.has(weekday(d))) return 0;
+  }
+  return user.currentStreak;
+}

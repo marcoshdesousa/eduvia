@@ -24,7 +24,12 @@ export function SessionLoader({ plannedId, header, minutes }: { plannedId: strin
       setError(res.error);
       setUpgrade(!!res.upgrade);
     }
-    else router.refresh();
+    else {
+      try {
+        sessionStorage.setItem("eduvia:session-fresh", "1");
+      } catch {}
+      router.refresh();
+    }
   };
 
   useEffect(() => {

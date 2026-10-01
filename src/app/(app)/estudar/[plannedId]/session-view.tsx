@@ -3,6 +3,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { LessonNarrator } from "@/components/lesson-narrator";
+import { ContentReadyToast, finishMessage, StudyTimer } from "./study-timer";
 import { BookOpen, Brain, CheckCircle2, Lightbulb, PartyPopper } from "lucide-react";
 import { completeSessionAction } from "@/app/actions/study";
 import { QuestionCard, SourceLinks, type QuestionData, type SourceRef } from "@/components/question-card";
@@ -17,7 +18,7 @@ export type SessionQuestion = QuestionData;
 type Header = { topic: string; subject: string; preparation: string; preparationId: string; kind: string; label: string; minutes: number };
 type Text = { content: string | null; highlights: string[]; keyPoints: { term: string; explanation: string }[]; refs: SourceRef[] } | null;
 
-export function SessionView({ header, sessionId, completed, text, questions }: { header: Header; sessionId: string; completed: boolean; text: Text; questions: SessionQuestion[] }) {
+export function SessionView({ header, sessionId, startedAt, completed, text, questions }: { header: Header; sessionId: string; startedAt: string; completed: boolean; text: Text; questions: SessionQuestion[] }) {
   const recall = questions.filter((q) => q.type === "OPEN_RECALL");
   const objective = questions.filter((q) => q.type !== "OPEN_RECALL");
   const steps = useMemo(
@@ -32,6 +33,7 @@ export function SessionView({ header, sessionId, completed, text, questions }: {
   const [step, setStep] = useState(completed ? steps.length - 1 : 0);
   const [answeredIds, setAnsweredIds] = useState(() => new Set(questions.filter((q) => q.answered).map((q) => q.id)));
   const [summary, setSummary] = useState<{ correct: number; total: number } | null>(null);
+  const [comfort, setComfort] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const current = steps[step].key;
   const markAnswered = (id: string) => setAnsweredIds((s) => new Set(s).add(id));
@@ -43,6 +45,8 @@ export function SessionView({ header, sessionId, completed, text, questions }: {
         <p className="mt-2 text-sm text-muted">{header.subject} · {header.label} · {formatMinutes(header.minutes)}</p>
         <h1 className="text-2xl font-bold">{header.topic}</h1>
       </div>
+      {!completed && !summary && <StudyTimer startedAt={startedAt} minutes={header.minutes} />}
+      <ContentReadyToast />
 
       <ol className="grid gap-2" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
         {steps.map((s, i) => (
@@ -120,13 +124,17 @@ export function SessionView({ header, sessionId, completed, text, questions }: {
               <PartyPopper className="mx-auto text-primary" size={32} />
               <p className="mt-3 text-lg font-semibold">Sessão concluída!</p>
               {summary && summary.total > 0 && <p className="mt-1 text-sm text-muted">Você acertou {summary.correct} de {summary.total}. Os erros foram para o banco de erros.</p>}
+              {comfort && <p className="mx-auto mt-2 max-w-md text-sm">{comfort}</p>}
               <Link href="/inicio" className={buttonClass("primary", "md", "mt-4")}>Voltar ao início</Link>
             </>
           ) : (
             <>
               <p className="font-medium">Tudo pronto?</p>
               <p className="mt-1 text-sm text-muted">Ao concluir, registramos seu progresso e agendamos as próximas revisões.</p>
-              <Button className="mt-4" disabled={pending} onClick={() => start(async () => setSummary(await completeSessionAction(sessionId)))}>
+              <Button className="mt-4" disabled={pending} onClick={() => start(async () => {
+                  setComfort(finishMessage(startedAt, header.minutes));
+                  setSummary(await completeSessionAction(sessionId));
+                })}>
                 {pending ? "Salvando..." : "Concluir sessão"}
               </Button>
             </>
