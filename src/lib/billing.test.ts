@@ -32,7 +32,7 @@ describe("assinatura", () => {
     const eduvia = DEFAULT_PLANS.find((p) => p.slug === "eduvia")!;
     const link = whatsappLink(subscribeMessage(eduvia, "MONTH", { name: "Ana", handle: "ana.silva" }));
     expect(link).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
-    expect(decodeURIComponent(link.split("text=")[1])).toContain("plano Básico mensal (30 dias)");
+    expect(decodeURIComponent(link.split("text=")[1])).toContain("plano Pro mensal (30 dias)");
     expect(decodeURIComponent(link.split("text=")[1])).toContain("15,00");
     expect(decodeURIComponent(link.split("text=")[1])).toContain("@ana.silva");
   });

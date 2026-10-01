@@ -1,5 +1,5 @@
 // Assinatura manual: o aluno paga pelo WhatsApp e um admin libera o plano em /admin.
-// Planos pagos por guias de estudo no mês (Básico 7 ou 30 dias; os outros mensais) e o plano Grátis para testar.
+// Planos pagos por guias de estudo no mês (Pro, Avançado e Ilimitado, por 7, 15 ou 30 dias) e o plano Grátis para testar.
 // PDFs e páginas não têm limite em nenhum plano.
 import { db } from "@/lib/db";
 import { addDays, today } from "@/lib/core/dates";

@@ -59,7 +59,7 @@ const FAQ = [
   },
   {
     q: "Quanto custa?",
-    a: "Você começa grátis, com limites pequenos para testar. São três planos: Básico (R$ 15 por 30 dias), Avançado (R$ 30) e Ilimitado (R$ 50), cada um também por 7 ou 15 dias. Todos têm PDFs e páginas sem limite; o que muda é quantos guias de estudo você cria por mês. O pagamento é combinado pelo WhatsApp (Pix) e não há renovação automática.",
+    a: "Você começa grátis, com limites pequenos para testar. São três planos: Pro (R$ 15 por 30 dias), Avançado (R$ 30) e Ilimitado (R$ 50), cada um também por 7 ou 15 dias. Todos têm PDFs e páginas sem limite; o que muda é quantos guias de estudo você cria por mês. O pagamento é combinado pelo WhatsApp (Pix) e não há renovação automática.",
   },
   {
     q: "Meus materiais e dados ficam seguros?",

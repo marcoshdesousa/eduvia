@@ -50,7 +50,7 @@ e2e/                   testes de ponta a ponta (Playwright)
   - Se o Google recusar por cota (erro 429), a IA do aluno fica "em pausa" até a hora indicada (1 minuto, ou a meia-noite do Pacífico ≈ 4h/5h de Brasília para a cota diária) e o app mostra a tela **Descanse**.
 - **Planos** (padrões em `src/lib/plans.ts` e na migração `10_planos_torneios`; os valores reais ficam no banco e são editados em **/admin → Planos**, onde -1 = ilimitado). **PDFs e páginas não têm limite em nenhum plano** (só contam arquivos que deram certo). O que muda é a quantidade de **guias de estudo (preparações) criados por mês**: apagar ou editar um guia não devolve a vaga.
 
-  | | Grátis | Básico | Avançado | Ilimitado |
+  | | Grátis | Pro | Avançado | Ilimitado |
   |---|---|---|---|---|
   | Preço 7 / 15 / 30 dias | — | R$ 7 / 10 / 15 | R$ 12 / 19 / 30 | R$ 18 / 30 / 50 |
   | PDFs | 1 PDF de até 100 páginas | sem limite | sem limite | sem limite |
@@ -67,7 +67,7 @@ e2e/                   testes de ponta a ponta (Playwright)
 - Sem assinatura, a conta fica no plano **Grátis** (aviso no topo com o botão "Assinar").
 - **Descanse:** antes de uma sessão nova, se o aluno já estudou 3 h no dia (`restAfterMinutes`) ou fez 3 sessões seguidas sem pausa, aparece o convite para descansar (com "Continuar mesmo assim"). Limites do dia e pausas da IA também levam a `/descanse`. Sugestões que não gastam IA: ler o próprio PDF na página do assunto, livros recomendados da matéria (gerados junto com o índice do material, sem chamada extra) e revisões.
 - **Duração da sessão:** o aluno escolhe 5, 10, 15, 20, 30 ou 45 minutos ao começar; o texto e o nº de questões seguem o tempo.
-- **Assinar:** em `/assinatura`, o aluno escolhe o plano (o Básico também tem opção semanal); o botão abre o WhatsApp (`WHATSAPP_NUMBER`) com a mensagem pronta (plano, período, preço, nome e @). Não há cobrança automática.
+- **Assinar:** em `/assinatura`, o aluno escolhe o plano (7, 15 ou 30 dias); o botão abre o WhatsApp (`WHATSAPP_NUMBER`) com a mensagem pronta (plano, período, preço, nome e @). Não há cobrança automática.
 - **Liberar o plano (admin):**
   1. A **primeira conta criada** num banco vazio vira admin sozinha. Para outras: `npm run admin -- @usuario` (no Render: aba *Shell* do serviço web).
   2. Abra `/admin` → **Alunos**, busque o aluno por @, nome, CPF ou telefone, escolha o plano e o período (7 dias só para planos com preço semanal) e clique em **Liberar**. Se o aluno ainda tem dias pagos, o novo período é somado ao final. **Encerrar** corta o acesso na hora.

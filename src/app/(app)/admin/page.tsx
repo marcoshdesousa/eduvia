@@ -230,7 +230,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
   });
   const paidPlans = plans
     .filter((p) => p.slug !== "gratis")
-    .map((p) => ({ slug: p.slug, name: p.active ? p.name : `${p.name} (fora da vitrine)`, prices: INTERVALS.flatMap((i) => (priceFor(p, i.key) > 0 ? [{ key: i.key, label: `${i.label} (${formatBRL(priceFor(p, i.key))})` }] : [])) }));
+    .map((p) => ({ slug: p.slug, name: p.name, prices: INTERVALS.flatMap((i) => (priceFor(p, i.key) > 0 ? [{ key: i.key, label: `${i.label} (${formatBRL(priceFor(p, i.key))})` }] : [])) }));
 
   return (
     <div className="space-y-6">

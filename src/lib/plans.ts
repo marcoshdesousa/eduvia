@@ -32,7 +32,7 @@ export type PlanDef = { slug: PlanSlug; name: string; order: number; priceWeekCe
 
 const PAID_BASE = { activePreparations: -1, materials: -1, pagesPerDay: -1, pagesPerPdf: -1, scannedPagesPerDay: -1, gamesPerDay: -1, groups: true, groupsOwned: 5, restAfterMinutes: 180 };
 
-/** Três planos pagos (Básico, Avançado e Ilimitado), cada um com preço de 7, 15 e 30 dias. PDFs e páginas sem limite nos pagos. */
+/** Três planos pagos (Pro, Avançado e Ilimitado), cada um com preço de 7, 15 e 30 dias. PDFs e páginas sem limite nos pagos. */
 export const DEFAULT_PLANS: PlanDef[] = [
   {
     slug: "gratis",
@@ -45,7 +45,7 @@ export const DEFAULT_PLANS: PlanDef[] = [
   },
   {
     slug: "eduvia",
-    name: "Básico",
+    name: "Pro",
     order: 1,
     priceWeekCents: 700,
     priceFortnightCents: 1000,
