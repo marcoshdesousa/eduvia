@@ -9,9 +9,9 @@ export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingEle
   return <h2 className={cn("text-base font-semibold", className)} {...props} />;
 }
 
-export function Stat({ label, value, hint }: { label: string; value: React.ReactNode; hint?: React.ReactNode }) {
+export function Stat({ label, value, hint, className }: { label: string; value: React.ReactNode; hint?: React.ReactNode; className?: string }) {
   return (
-    <Card className="p-4">
+    <Card className={className ? `p-4 ${className}` : "p-4"}>
       <div className="text-xs font-medium uppercase tracking-wide text-muted">{label}</div>
       <div className="mt-1 text-2xl font-bold">{value}</div>
       {hint && <div className="mt-1 text-xs text-muted">{hint}</div>}

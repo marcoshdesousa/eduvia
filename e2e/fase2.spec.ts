@@ -66,19 +66,32 @@ test("fase 2: teste rápido, banco de erros, simulado, redação, professor e de
   await expect(page.getByText("Gabarito comentado")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Desempenho por disciplina")).toBeVisible();
   await expect(page.getByText("Nota", { exact: true })).toBeVisible();
+  // PDF do simulado com as respostas marcadas
+  const examPdf = await page.request.get((await page.getByRole("link", { name: /PDF para imprimir/ }).getAttribute("href"))!);
+  expect(examPdf.headers()["content-type"]).toContain("application/pdf");
 
   // ── Redação
   await page.goto("/redacao/nova");
   await expect(page.getByText("Tema sorteado")).toBeVisible();
   await expect(page.getByText(/Recomendamos que você não use inteligência artificial/)).toBeVisible();
   await page.getByRole("button", { name: "Sortear outro" }).click();
+  await expect(page.getByText("Textos motivadores", { exact: true })).toBeVisible();
+  const motivador = (await page.locator("blockquote").first().innerText()).replace(/^Texto I\.\s*/, "");
+  await page.getByRole("radio", { name: "10 min" }).click();
+  await page.getByRole("button", { name: /Começar a escrever/ }).click();
+  await expect(page.getByRole("timer")).toBeVisible();
   const texto =
     "A educação é essencial para o desenvolvimento do país , e a gente vamos discutir isso. " +
     "haviam muitas escolas sem internet no interior, o que prejudica os alunos. ".repeat(3) +
     "Por isso, o governo deve investir em conectividade e formação de professores, pra que todos aprendam. ".repeat(3);
-  await page.getByLabel("Seu texto").fill(texto);
+  await page.getByLabel("Seu texto").fill(`${texto} ${motivador}`);
   await page.getByRole("button", { name: "Enviar para correção" }).click();
   await expect(page.getByText("Critérios")).toBeVisible({ timeout: 60_000 });
+  // copiar o texto motivador tira pontos
+  await expect(page.getByText(/pontos por copiar trechos dos textos motivadores/)).toBeVisible();
+  await expect(page.getByText(/Cópia dos textos motivadores/).first()).toBeVisible();
+  const essayPdf = await page.request.get((await page.getByRole("link", { name: /PDF para imprimir/ }).getAttribute("href"))!);
+  expect(essayPdf.headers()["content-type"]).toContain("application/pdf");
   await expect(page.locator("mark").first()).toBeVisible();
   await page.locator("mark").first().click();
   await expect(page.getByText("Pontos fortes")).toBeVisible();
@@ -88,6 +101,7 @@ test("fase 2: teste rápido, banco de erros, simulado, redação, professor e de
   await page.getByLabel("Mensagem").fill("O que é a fotossíntese?");
   await page.getByRole("button", { name: "Enviar" }).click();
   await expect(page.getByText(/Modo de demonstração|fotoss/i).last()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Pensando…")).toHaveCount(0);
   await expect(page).toHaveURL(/\/professor\?t=/);
   await page.reload();
   await expect(page.locator("p:visible", { hasText: "O que é a fotossíntese?" }).first()).toBeVisible();
@@ -105,6 +119,7 @@ test("fase 2: teste rápido, banco de erros, simulado, redação, professor e de
   await expect(page.getByText(/Simulados não fazem parte do plano Grátis/)).toBeVisible();
   await page.goto("/redacao/nova?tipo=portugues");
   await expect(page.getByText("Proposta sorteada")).toBeVisible();
+  await page.getByRole("button", { name: /Começar a escrever/ }).click();
   await page.getByLabel("Seu texto").fill(texto);
   await page.getByRole("button", { name: "Enviar para correção" }).click();
   await expect(page.getByText(/limite de hoje: 1 redação/)).toBeVisible();

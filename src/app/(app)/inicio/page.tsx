@@ -105,7 +105,7 @@ export default async function Page() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Stat label="Nível" value={<span className="inline-flex items-center gap-1"><Zap size={20} className="text-primary" />{level}</span>} hint={<Progress value={progress} className="mt-1" />} />
         <Stat label="Meta da semana" value={formatMinutes(weekMinutes)} hint={weekGoal ? <Progress value={weekMinutes / weekGoal} className="mt-1" tone="success" /> : "Sem meta"} />
-        <Stat label="Banco de erros" value={errorBank} hint={<Link href="/revisoes" className="text-primary">Refazer questões</Link>} />
+        <Stat className="col-span-2 lg:col-span-1" label="Banco de erros" value={errorBank} hint={<Link href="/revisoes" className="text-primary">Refazer questões</Link>} />
       </div>
 
       {critical.length > 0 && (

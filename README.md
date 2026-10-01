@@ -48,28 +48,27 @@ e2e/                   testes de ponta a ponta (Playwright)
 - **IA com a chave do aluno:** o cadastro pede a chave da API do **Google Gemini** do próprio aluno (grátis em aistudio.google.com/apikey). A plataforma não paga IA. A chave é testada na hora, guardada criptografada (AES-256-GCM com `AI_KEY_SECRET` ou `BETTER_AUTH_SECRET`) e pode ser trocada em **Minha IA**. Contas sem chave são levadas para `/conectar-ia`.
   - Modelos tentados em ordem (`GEMINI_MODELS`, padrão `gemini-2.5-flash,gemini-2.5-flash-lite`): a cota grátis do Google é por modelo, então quando um esgota o próximo assume.
   - Se o Google recusar por cota (erro 429), a IA do aluno fica "em pausa" até a hora indicada (1 minuto, ou a meia-noite do Pacífico ≈ 4h/5h de Brasília para a cota diária) e o app mostra a tela **Descanse**.
-- **Planos** (padrões em `src/lib/plans.ts`; os valores reais ficam no banco e são editados em **/admin → Planos**, onde -1 = ilimitado). Limites **por dia**, pensados para caber na cota grátis do Gemini:
+- **Planos** (padrões em `src/lib/plans.ts` e na migração `10_planos_torneios`; os valores reais ficam no banco e são editados em **/admin → Planos**, onde -1 = ilimitado). **PDFs e páginas não têm limite em nenhum plano** (só contam arquivos que deram certo). O que muda é a quantidade de **guias de estudo (preparações) criados por mês**: apagar ou editar um guia não devolve a vaga.
 
-  | | Grátis (teste) | Eduvia |
-  |---|---|---|
-  | Preço | — | R$ 7 por 7 dias · R$ 15 por 30 dias |
-  | Preparações ativas / PDFs guardados | 1 / 1 | à vontade |
-  | Páginas enviadas por dia (escaneadas) | 30 (5) | 700 (150) |
-  | Sessões novas por dia (revisões ilimitadas) | 1 | 6 |
-  | Testes rápidos por dia | 3 | à vontade |
-  | Simulados por mês | 0 | 8 |
-  | Redações corrigidas por dia | 1 | 3 |
-  | Professor IA (mensagens por dia) | 5 | 40 |
-  | Grupos | não | cria até 5, entra em quantos quiser |
-  | Sugerir descanso após | 3 h de estudo no dia | 3 h de estudo no dia |
+  | | Grátis | Básico | Plus | Pro | Avançado | Ilimitado |
+  |---|---|---|---|---|---|---|
+  | Preço | — | R$ 7/7 dias ou R$ 15/30 dias | R$ 20/mês | R$ 25/mês | R$ 30/mês | R$ 80/mês |
+  | Guias de estudo por mês | 1 | 6 | 8 | 12 | 15 | 35 |
+  | Simulados por mês | 0 | 15 | 20 | 30 | 40 | à vontade |
+  | Redações corrigidas por dia | 1 | 3 | 4 | 5 | 6 | à vontade |
+  | Professor IA (mensagens por dia) | 5 | 40 | 60 | 80 | 100 | à vontade |
+  | Sessões novas por dia | 1 | 6 | 6 | 8 | 10 | à vontade |
+  | Testes rápidos | 3/dia | à vontade | à vontade | à vontade | à vontade | à vontade |
+  | Grupos e torneios (até 30 pessoas por grupo) | não | sim | sim | sim | sim | sim |
 
+- **Login único:** entrar em um aparelho desconecta os outros (`databaseHooks` em `src/lib/auth.ts`).
 - Sem assinatura, a conta fica no plano **Grátis** (aviso no topo com o botão "Assinar").
 - **Descanse:** antes de uma sessão nova, se o aluno já estudou 3 h no dia (`restAfterMinutes`) ou fez 3 sessões seguidas sem pausa, aparece o convite para descansar (com "Continuar mesmo assim"). Limites do dia e pausas da IA também levam a `/descanse`. Sugestões que não gastam IA: ler o próprio PDF na página do assunto, livros recomendados da matéria (gerados junto com o índice do material, sem chamada extra) e revisões.
 - **Duração da sessão:** o aluno escolhe 5, 10, 15, 20, 30 ou 45 minutos ao começar; o texto e o nº de questões seguem o tempo.
-- **Assinar:** em `/assinatura`, o aluno escolhe semanal (7 dias) ou mensal (30 dias); o botão abre o WhatsApp (`WHATSAPP_NUMBER`) com a mensagem pronta (plano, período, preço, nome e @). Não há cobrança automática.
+- **Assinar:** em `/assinatura`, o aluno escolhe o plano (o Básico também tem opção semanal); o botão abre o WhatsApp (`WHATSAPP_NUMBER`) com a mensagem pronta (plano, período, preço, nome e @). Não há cobrança automática.
 - **Liberar o plano (admin):**
   1. A **primeira conta criada** num banco vazio vira admin sozinha. Para outras: `npm run admin -- @usuario` (no Render: aba *Shell* do serviço web).
-  2. Abra `/admin` → **Alunos**, busque o aluno por @, nome, CPF ou telefone, escolha o período (7 ou 30 dias) e clique em **Liberar**. Se o aluno ainda tem dias pagos, o novo período é somado ao final. **Encerrar** corta o acesso na hora.
+  2. Abra `/admin` → **Alunos**, busque o aluno por @, nome, CPF ou telefone, escolha o plano e o período (7 dias só para planos com preço semanal) e clique em **Liberar**. Se o aluno ainda tem dias pagos, o novo período é somado ao final. **Encerrar** corta o acesso na hora.
   3. **Planos:** edite nome, preços e limites. **Uso de IA:** usos do dia por tarefa e por aluno (a IA não custa nada para a plataforma). A lista de alunos mostra quem está com a IA conectada.
 
 ## Marca, site e atendimento
@@ -114,6 +113,17 @@ e2e/                   testes de ponta a ponta (Playwright)
   - Em Ajustes: **ativar notificações neste aparelho** (push via PWA) e ligar/desligar o **lembrete no horário de estudo**, que chega uma vez por dia se houver sessão pendente.
   - Avisos de convite, entrada no grupo, simulado compartilhado, conquista e plano vencendo.
   - No iPhone, o push funciona com o Eduvia **adicionado à tela de início** (iOS 16.4+).
+
+## Estabilidade e novidades
+
+- **Fila que não dá erro à toa:** se a cota do Gemini acabar ou o Google oscilar, o material volta sozinho para a fila ("Na fila: … continuamos sozinhos") em vez de virar erro. Materiais parados (ex.: o servidor reiniciou) são retomados a cada 5 minutos. O processo registra erros soltos em vez de cair, e as telas têm páginas de erro amigáveis com "Tentar de novo".
+- **Início estilo Duolingo:** foguinho da sequência (aceso quando já estudou hoje), últimos 7 dias e botão para estudar.
+- **Sessão de estudo:** cronômetro do tempo escolhido (some quando acaba, sem tirar o aluno da tela), aviso de conteúdo pronto e mensagem de conforto ao concluir.
+- **Voz natural da aula:** Gemini TTS com a chave do aluno (feminina "Kore" ou masculina "Charon"), áudio guardado em `tts/` no armazenamento; se não houver cota, usa a voz do aparelho, mais devagar.
+- **Professor IA:** mensagens de "pensando" enquanto responde; a resposta é salva mesmo se o aluno sair da tela.
+- **Redação:** tempo de 10 min, 30 min, 1 h ou 3 h (envio automático ao acabar); temas ENEM com textos motivadores; copiar trechos deles tira pontos (−40 na C3 por trecho, −80 na C2 se passar de 30% do texto); PDF para imprimir com marca d'água, avaliador IA, data/hora, quadro de nota, tema, texto e erros.
+- **Simulado:** PDF com as respostas marcadas pelo aluno (sem certo/errado).
+- **Torneios nos grupos:** dono/admin cria um torneio (1 a 30 dias); a classificação é o XP ganho no período, do 1º ao último.
 
 ## Rodar localmente
 

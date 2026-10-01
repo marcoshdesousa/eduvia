@@ -136,6 +136,20 @@ test("fase 3: grupo com convite, mural, compartilhamento, simulado com ranking, 
   await expect(a.getByText("XP da semana")).toBeVisible();
   await expect(a.locator("ol").getByText(`@${hb}`)).toBeVisible();
 
+  // torneio de XP: Ana cria; Beto ganha XP durante o torneio e fica em 1º
+  await a.goto(`${groupUrl}?aba=torneios`);
+  await a.getByLabel("Nome do torneio").fill("Maratona de teste");
+  await a.getByLabel("Duração").selectOption("7");
+  await a.getByRole("button", { name: "Começar torneio" }).click();
+  await expect(a.getByText("🏆 Maratona de teste")).toBeVisible();
+  await sql(`INSERT INTO "XpEvent" (id, "userId", amount, reason, "createdAt") SELECT 'xp_' || md5(random()::text), id, 50, 'teste', now() FROM "user" WHERE handle = $1`, [hb]);
+  await b.goto(`${groupUrl}?aba=torneios`);
+  const leader = b.getByRole("list", { name: "Classificação do torneio" }).getByRole("listitem").first();
+  await expect(leader).toContainText(`@${hb}`);
+  await expect(leader).toContainText("50 XP");
+  await expect(leader).toContainText("🥇");
+  await expect(b.getByRole("button", { name: "Encerrar" })).toHaveCount(0); // só dono/admin encerra
+
   // perfil privado
   await b.goto("/configuracoes");
   await b.getByLabel("Perfil", { exact: true }).selectOption("PRIVATE");

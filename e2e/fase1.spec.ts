@@ -48,6 +48,9 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
   // sessão: texto → recuperação ativa → questões → concluir
   await expect(page.getByRole("button", { name: /Já li|Continuar/ })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("Destaques")).toBeVisible();
+  // cronômetro do tempo escolhido e aviso de conteúdo pronto
+  await expect(page.getByText(/Sei que pode parecer muito ou pouco tempo/)).toBeVisible();
+  await expect(page.getByText(/A IA terminou de criar o seu conteúdo/)).toBeVisible();
   await page.getByRole("button", { name: /Já li|Continuar/ }).click();
   const recall = page.getByPlaceholder("Escreva com suas palavras o que você lembra...");
   while (await recall.count()) {
@@ -69,11 +72,17 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Concluir sessão" }).click();
   await expect(page.getByText("Sessão concluída!")).toBeVisible();
+  await expect(page.getByText(/Você escolheu 10 min e terminou em|Você focou por/)).toBeVisible();
+  await expect(page.getByText(/Sei que pode parecer muito ou pouco tempo/)).toHaveCount(0);
 
   // início mostra progresso e sequência
   await page.goto("/inicio");
   await expect(page.getByText("O que fazer hoje")).toBeVisible();
   await expect(page.getByText(/1\/\d+ sessões/)).toBeVisible();
+  // sequência estilo Duolingo: foguinho aceso depois de estudar hoje
+  await expect(page.getByRole("region", { name: "Sequência de estudo" })).toContainText("1dia seguido");
+  await expect(page.getByText("dia seguido")).toBeVisible();
+  await expect(page.getByText(/Foguinho aceso!/)).toBeVisible();
 
   // banco de erros tem as questões erradas
   await page.goto("/revisoes?filtro=erros");

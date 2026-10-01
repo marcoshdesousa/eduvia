@@ -67,4 +67,15 @@ test("login por CPF ou @ e nova senha pelo CPF + telefone", async ({ page, brows
   await page.getByLabel("Senha").fill("nova-senha-456");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/inicio/);
+
+  // login único: entrar em outro aparelho desconecta este
+  const device2 = await (await browser.newContext()).newPage();
+  await device2.goto("/entrar");
+  await device2.getByLabel("CPF ou @").fill(`@${handle}`);
+  await device2.getByLabel("Senha").fill("nova-senha-456");
+  await device2.getByRole("button", { name: "Entrar" }).click();
+  await expect(device2).toHaveURL(/\/inicio/);
+  await page.goto("/inicio");
+  await expect(page).toHaveURL(/\/entrar/);
+  await device2.close();
 });

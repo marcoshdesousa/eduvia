@@ -5,7 +5,7 @@ import { GEMINI_KEY, signUp, sql } from "./helpers";
 const uid = Date.now().toString(36);
 
 // Requer BILLING_ENFORCED diferente de "false" e AI_MODE=mock no servidor.
-test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", async ({ page, browser }) => {
+test("plano Grátis → admin libera o Básico; chave do Gemini obrigatória", async ({ page, browser }) => {
   const handle = `aluno.pago.${uid}`;
   await signUp(page, { name: "Aluno Pagante", handle, plan: "gratis" });
 
@@ -13,14 +13,19 @@ test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", as
   await expect(page.getByText(/Plano Grátis \(teste\)/)).toBeVisible();
   await page.getByRole("link", { name: "Assinar", exact: true }).click();
   await expect(page).toHaveURL(/\/assinatura/);
-  const week = decodeURIComponent((await page.getByRole("link", { name: /Assinar semanal pelo WhatsApp/ }).getAttribute("href"))!);
-  const month = decodeURIComponent((await page.getByRole("link", { name: /Assinar mensal pelo WhatsApp/ }).getAttribute("href"))!);
+  const week = decodeURIComponent((await page.getByRole("link", { name: /Assinar Básico semanal pelo WhatsApp/ }).getAttribute("href"))!);
+  const month = decodeURIComponent((await page.getByRole("link", { name: /Assinar Básico mensal pelo WhatsApp/ }).getAttribute("href"))!);
   expect(week).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
-  expect(week).toContain("plano Eduvia semanal (7 dias)");
+  expect(week).toContain("plano Básico semanal (7 dias)");
   expect(week).toContain("7,00");
-  expect(month).toContain("plano Eduvia mensal (30 dias)");
+  expect(month).toContain("plano Básico mensal (30 dias)");
   expect(month).toContain("15,00");
   expect(month).toContain(`@${handle}`);
+  // faixas de planos: o Ilimitado (R$ 80) aparece com tudo à vontade; os outros planos só têm opção mensal
+  await expect(page.getByRole("link", { name: /Assinar Ilimitado mensal pelo WhatsApp/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Assinar Ilimitado semanal/ })).toHaveCount(0);
+  await expect(page.getByText("35 guias de estudo por mês")).toBeVisible();
+  await expect(page.getByText("PDFs e páginas sem limite").first()).toBeVisible();
 
   // Minha IA: chave conectada (só o final aparece)
   await page.goto("/minha-ia");
@@ -50,7 +55,7 @@ test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", as
   await page.getByLabel("Nome da preparação").fill("Segunda");
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Criar e enviar materiais" }).click();
-  await expect(page.getByText(/O plano Grátis permite 1 preparação/)).toBeVisible();
+  await expect(page.getByText(/Você já criou 1 de 1 guia de estudo este mês/)).toBeVisible();
 
   // Grátis: só 1 personagem feminino e 1 masculino por categoria
   await page.goto("/configuracoes");
@@ -69,7 +74,7 @@ test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", as
   admin.on("dialog", (d) => d.accept());
   await admin.getByLabel("Período").selectOption("MONTH");
   await admin.getByRole("button", { name: "Liberar" }).click();
-  await expect(admin.getByText(/Eduvia mensal até/)).toBeVisible();
+  await expect(admin.getByText(/Básico mensal até/)).toBeVisible();
   await admin.goto("/admin?aba=planos");
   await expect(admin.getByRole("button", { name: "Salvar" }).first()).toBeVisible();
   await admin.goto("/admin?aba=ia");
@@ -126,9 +131,9 @@ test("plano Grátis → admin libera o Eduvia; chave do Gemini obrigatória", as
   const saved = await sql<{ avatar: string; name: string; handle: string }>(`SELECT avatar, name, handle FROM "user" WHERE handle = $1`, [handle]);
   expect(saved[0]).toEqual({ avatar: "panda", name: "Aluno Pagante Silva", handle });
 
-  // aluno passa a ter o plano Eduvia
+  // aluno passa a ter o plano Básico
   await page.goto("/assinatura");
-  await expect(page.getByText("Seu plano: Eduvia")).toBeVisible();
+  await expect(page.getByText("Seu plano: Básico")).toBeVisible();
   await expect(page.getByText(/Plano Grátis \(teste\)/)).toHaveCount(0);
   const prep = await sql<{ id: string }>(`SELECT p.id FROM "Preparation" p JOIN "user" u ON u.id = p."userId" WHERE u.handle = $1`, [handle]);
   await page.goto(`/preparacoes/${prep[0].id}?aba=materiais`);
