@@ -225,6 +225,38 @@ export function MaterialsPanel({
   );
 }
 
+/**
+ * Porcentagem do processamento: conta de 1 em 1 até a etapa atual e continua andando devagar
+ * (cada vez mais devagar) até a próxima, sem ficar parada e sem chegar a 100% antes de terminar.
+ */
+function MaterialProgress({ target }: { target: number }) {
+  const [shown, setShown] = useState(0);
+  const next = target >= 88 ? 99 : target >= 48 ? 87 : target >= 40 ? 47 : target >= 36 ? 39 : target >= 8 ? 35 : 7;
+  useEffect(() => {
+    let ticks = 0;
+    const id = setInterval(() => {
+      ticks++;
+      setShown((s) => {
+        if (s < target) return s + 1; // etapa concluída: alcança rápido, de 1 em 1
+        if (s >= 98) return s;
+        const near = Math.min(1, (s - target) / Math.max(1, next - target));
+        // vai desacelerando perto do fim da etapa; passou dela, continua bem devagar (nunca fica parada)
+        const every = s >= next ? 50 : 1 + Math.floor(near * near * 40);
+        return ticks % every === 0 ? s + 1 : s;
+      });
+    }, 120);
+    return () => clearInterval(id);
+  }, [target, next]);
+  return (
+    <div className="mt-1 flex items-center gap-2" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={shown}>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+        <div className="h-full rounded-full bg-primary transition-[width] duration-150" style={{ width: `${shown}%` }} />
+      </div>
+      <span className="w-9 text-right text-xs tabular-nums text-muted">{shown}%</span>
+    </div>
+  );
+}
+
 function MaterialList({ materials, onRemove, onRetry }: { materials: MaterialRow[]; onRemove: (id: string, title: string) => void; onRetry: (id: string) => void }) {
   return (
     <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
@@ -242,8 +274,15 @@ function MaterialList({ materials, onRemove, onRetry }: { materials: MaterialRow
                 <Badge tone={s.tone}>{s.label}</Badge>
               </div>
               <div className="truncate text-xs text-muted">
-                {m.status === "ERROR" ? m.errorMessage : m.status === "READY" ? [m.subjectName, m.pageCount && `${m.pageCount} pág.`].filter(Boolean).join(" · ") || m.kind : m.progressStep ?? "Aguardando"}
+                {m.status === "ERROR"
+                  ? m.errorMessage
+                  : m.status === "READY"
+                    ? [m.subjectName, m.pageCount && `${m.pageCount} pág.`].filter(Boolean).join(" · ") || m.kind
+                    : m.status === "QUEUED" && !m.progressStep && m.ahead
+                      ? `Na fila: ${m.ahead} arquivo${m.ahead > 1 ? "s" : ""} na frente. Pode sair da tela.`
+                      : m.progressStep ?? "Aguardando"}
               </div>
+              {m.status === "PROCESSING" && <MaterialProgress target={m.progress} />}
             </div>
             <div className="flex shrink-0 gap-1">
               {m.status === "ERROR" && <Button size="sm" variant="ghost" onClick={() => onRetry(m.id)} aria-label="Tentar de novo"><RotateCw size={15} /></Button>}

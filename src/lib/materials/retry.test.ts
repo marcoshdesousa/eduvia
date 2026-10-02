@@ -11,9 +11,10 @@ describe("tentativas automáticas do material", () => {
     expect(r?.message).toMatch(/Na fila/);
   });
   it("Google instável ou falha inesperada: tenta de novo com espera crescente, até 5 vezes", () => {
-    expect(retryPlan(new AiUnavailableError("x", "d"), 0)?.afterSeconds).toBe(60);
-    expect(retryPlan(new Error("boom"), 2)?.afterSeconds).toBe(240);
-    expect(retryPlan(new Error("boom"), 5)).toBeNull();
+    expect(retryPlan(new AiUnavailableError("x", "d"), 0)?.afterSeconds).toBe(20);
+    expect(retryPlan(new Error("boom"), 2)?.afterSeconds).toBe(80);
+    expect(retryPlan(new Error("boom"), 7)?.afterSeconds).toBe(600);
+    expect(retryPlan(new Error("boom"), 8)).toBeNull();
   });
   it("erros que o aluno precisa resolver não ficam em loop", () => {
     expect(retryPlan(new AiKeyError("chave"), 0)).toBeNull();

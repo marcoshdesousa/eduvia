@@ -311,6 +311,8 @@ model Material {
   role          MaterialRole   @default(CONTENT)
   status        MaterialStatus @default(UPLOADING)
   progressStep  String?
+  /// Andamento do processamento (0 a 100).
+  progress      Int            @default(0)
   errorMessage  String?
   /// Tentativas automáticas (cota da IA, instabilidade): o aluno não vê erro enquanto tentamos de novo.
   autoRetries   Int      @default(0)

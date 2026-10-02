@@ -52,7 +52,7 @@ export async function startWorker({ handleSignals }: { handleSignals: boolean })
     `[worker] iniciado. IA: ${isMockAi() ? "SIMULADA (AI_MODE=mock)" : "Gemini (chave de cada aluno)"}; embeddings: ${usingLocalEmbeddings() ? "locais" : "Voyage AI"}; push: ${(await pushConfigured()) ? "ativo" : "desligado"}`,
   );
 
-  await boss.work<JobPayloads["material.process"]>(QUEUES.processMaterial, { localConcurrency: 1 }, async (jobs) => {
+  await boss.work<JobPayloads["material.process"]>(QUEUES.processMaterial, { localConcurrency: 2 }, async (jobs) => {
     for (const job of jobs) await processMaterial(job.data.materialId);
   });
 

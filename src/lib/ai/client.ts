@@ -227,6 +227,7 @@ async function generate(req: Request): Promise<string> {
   for (const model of chain) {
     let useSchema = !!req.schema;
     let simple = false; // 2ª tentativa: sem esquema e sem configuração de raciocínio
+    let busyRetries = 0;
     for (let attempt = 0; attempt < 2; attempt++) {
       // folga para o "pensamento" dos modelos 2.5+ (que conta no limite de saída)
       const generationConfig: Record<string, unknown> = { maxOutputTokens: Math.min(65_536, req.maxTokens * 2) };
@@ -278,6 +279,13 @@ async function generate(req: Request): Promise<string> {
         }
         errors.push(`${model}: ${res.status} ${body.error?.message ?? ""}`);
         lastError = new Error(`Gemini ${model} respondeu ${res.status}: ${body.error?.message ?? ""}`);
+        if (res.status >= 500 && busyRetries < 2) {
+          // Google sobrecarregado (500/503): espera um pouco e tenta o mesmo modelo de novo
+          busyRetries++;
+          attempt--;
+          await new Promise((r) => setTimeout(r, busyRetries * 4000));
+          continue;
+        }
         break;
       }
 

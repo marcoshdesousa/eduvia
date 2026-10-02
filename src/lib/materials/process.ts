@@ -20,8 +20,14 @@ export async function processMaterial(materialId: string) {
     include: { blob: true, preparation: true, subject: true },
   });
   if (!material?.blob) return;
-  const step = (progressStep: string) =>
-    db.material.update({ where: { id: materialId }, data: { status: "PROCESSING", progressStep } }).then(() => undefined);
+  // etapa + porcentagem (a tela conta de 1 em 1 até ela); a leitura de páginas escaneadas vai de 8% a 35%
+  const step = (progressStep: string, pct?: number) => {
+    const ocr = progressStep.match(/\((\d+)\/(\d+)\)/);
+    const progress = pct ?? (ocr ? Math.round(8 + (27 * Number(ocr[1])) / Math.max(1, Number(ocr[2]))) : undefined);
+    return db.material
+      .update({ where: { id: materialId }, data: { status: "PROCESSING", progressStep, ...(progress !== undefined ? { progress } : {}) } })
+      .then(() => undefined);
+  };
 
   try {
     let blob = material.blob;
@@ -30,7 +36,7 @@ export async function processMaterial(materialId: string) {
       if (quota) throw new UserFacingError(quota);
     }
     if (!blob.processedAt) {
-      await step("Lendo arquivo");
+      await step("Lendo arquivo", 3);
       const data = await readObject(blob.storageKey);
       const sha256 = createHash("sha256").update(data).digest("hex");
 
@@ -47,7 +53,7 @@ export async function processMaterial(materialId: string) {
         blob = existing;
       } else {
         if (!existing) await db.materialBlob.update({ where: { id: blob.id }, data: { sha256 } });
-        await step("Extraindo texto");
+        await step("Extraindo texto", 8);
         const blobId = blob.id;
         const pages = await extractPages(
           material.kind,
@@ -82,9 +88,9 @@ export async function processMaterial(materialId: string) {
           data: pages.map((p) => ({ blobId: blob.id, pageNumber: p.page, text: p.text, ocr: p.ocr })),
         });
 
-        await step("Dividindo em trechos");
+        await step("Dividindo em trechos", 36);
         const drafts = chunkPages(pages);
-        await step(`Gerando índice de busca (${drafts.length} trechos)`);
+        await step(`Gerando índice de busca (${drafts.length} trechos)`, 40);
         const vectors = await embed(drafts.map((c) => c.content), "document");
         await db.chunk.deleteMany({ where: { blobId: blob.id } });
         for (let i = 0; i < drafts.length; i++) {
@@ -96,14 +102,22 @@ export async function processMaterial(materialId: string) {
       }
     }
 
-    await step("Organizando assuntos");
+    await step("Organizando assuntos", 48);
     if (material.role === "CONTENT") await organizeContent(materialId);
     else await applySyllabus(materialId);
 
     // O plano é refeito antes de o material aparecer como pronto (o aluno já encontra as sessões novas).
-    await step("Montando o plano");
-    await generatePlan(material.preparationId);
-    await db.material.update({ where: { id: materialId }, data: { status: "READY", progressStep: null, errorMessage: null, autoRetries: 0 } });
+    // Vários arquivos enviados juntos: só o último monta o plano (montar a cada arquivo deixava tudo lento).
+    const others = await db.material.count({
+      where: { preparationId: material.preparationId, id: { not: materialId }, status: { in: ["QUEUED", "PROCESSING", "UPLOADING"] } },
+    });
+    if (others) {
+      await enqueue("plan.generate", { preparationId: material.preparationId }, { singletonKey: material.preparationId, startAfter: 20 });
+    } else {
+      await step("Montando o plano", 88);
+      await generatePlan(material.preparationId);
+    }
+    await db.material.update({ where: { id: materialId }, data: { status: "READY", progress: 100, progressStep: null, errorMessage: null, autoRetries: 0 } });
   } catch (err) {
     console.error(`[material ${materialId}]`, err);
     // Cota da chave acabou ou o Google oscilou: o arquivo volta para a fila sozinho, sem mostrar erro.
@@ -111,7 +125,7 @@ export async function processMaterial(materialId: string) {
     if (retry) {
       await db.material.update({
         where: { id: materialId },
-        data: { status: "QUEUED", errorMessage: null, progressStep: retry.message, autoRetries: { increment: 1 } },
+        data: { status: "QUEUED", errorMessage: null, progressStep: retry.message, progress: 0, autoRetries: { increment: 1 } },
       });
       await enqueue("material.process", { materialId }, { startAfter: retry.afterSeconds, singletonKey: `material:${materialId}:${material.autoRetries + 1}` });
       return;
@@ -124,7 +138,7 @@ export async function processMaterial(materialId: string) {
 
 /** Tentativas automáticas: cota (espera a cota voltar), Google fora do ar e falhas inesperadas (espera crescente). */
 const MAX_QUOTA_RETRIES = 12;
-const MAX_TRANSIENT_RETRIES = 5;
+const MAX_TRANSIENT_RETRIES = 8;
 
 export function retryPlan(err: unknown, tries: number): { afterSeconds: number; message: string } | null {
   if (err instanceof AiQuotaError) {
@@ -135,7 +149,8 @@ export function retryPlan(err: unknown, tries: number): { afterSeconds: number; 
   }
   const userFacing = (err instanceof UserFacingError || err instanceof AiUserError) && !(err instanceof AiUnavailableError);
   if (userFacing || tries >= MAX_TRANSIENT_RETRIES) return null;
-  return { afterSeconds: 60 * 2 ** tries, message: "Na fila: tentando de novo em instantes. Pode sair da tela." };
+  // espera curta (20 s, 40 s, 80 s... até 10 min): o Google costuma voltar logo
+  return { afterSeconds: Math.min(600, 20 * 2 ** tries), message: "Na fila: o Google demorou a responder, tentamos de novo sozinhos em instantes. Pode sair da tela." };
 }
 
 export class UserFacingError extends Error {}
