@@ -29,9 +29,12 @@ const GUIDES: Record<AiProvider, Guide> = {
     prefix: "gsk_",
     why: "A mais rápida: cria suas perguntas, corrige redações e responde o Professor IA em segundos.",
     steps: [
-      <>Toque em <strong>&quot;Continue with Google&quot;</strong> (entra com a mesma conta do Gmail).</>,
-      <>Toque em <strong>&quot;Create API Key&quot;</strong>, escreva um nome (ex.: Eduvia) e confirme.</>,
-      <>Copie a chave que aparece (começa com <code className="rounded bg-surface px-1">gsk_</code>) e cole aqui. Ela só aparece uma vez!</>,
+      <>Toque em <strong>&quot;Continue with Google&quot;</strong> e entre com a mesma conta do Gmail. Se pedir, aceite os termos.</>,
+      <>Você cai na página <strong>&quot;API Keys&quot;</strong>. Toque no botão <strong>&quot;Create API Key&quot;</strong>.</>,
+      <>No campo <strong>&quot;Display name&quot;</strong> (nome), escreva <strong>Eduvia</strong>.</>,
+      <>Se aparecer <strong>&quot;Expiration&quot;</strong> (validade), escolha <strong>&quot;No expiration&quot;</strong> (não expira). Assim a chave nunca para de funcionar.</>,
+      <>Toque em <strong>&quot;Submit&quot;</strong> (ou &quot;Create&quot;).</>,
+      <>Toque em <strong>&quot;Copy&quot;</strong> para copiar a chave (começa com <code className="rounded bg-surface px-1">gsk_</code>) e cole aqui embaixo. <strong>Ela só aparece uma vez</strong>: copie antes de fechar.</>,
     ],
   },
   openrouter: {
@@ -41,9 +44,14 @@ const GUIDES: Record<AiProvider, Guide> = {
     prefix: "sk-or-",
     why: "Reserva com vários modelos de IA: garante que seus estudos nunca param.",
     steps: [
-      <>Toque em <strong>&quot;Sign in&quot;</strong> e entre com sua <strong>conta Google</strong>.</>,
-      <>Na página <strong>&quot;API Keys&quot;</strong>, toque em <strong>&quot;Create API Key&quot;</strong>, escreva um nome (ex.: Eduvia) e confirme. Deixe o limite de crédito em branco.</>,
-      <>Copie a chave (começa com <code className="rounded bg-surface px-1">sk-or-</code>) e cole aqui. Ela só aparece uma vez!</>,
+      <>Toque em <strong>&quot;Sign in&quot;</strong> e depois em <strong>&quot;Continue with Google&quot;</strong> (a mesma conta do Gmail).</>,
+      <>Se não abrir direto, toque no menu (☰ ou na sua foto) e entre em <strong>&quot;Keys&quot;</strong> (ou &quot;API Keys&quot;).</>,
+      <>Toque em <strong>&quot;Create API Key&quot;</strong> (ou &quot;Create Key&quot;).</>,
+      <>Em <strong>&quot;Name&quot;</strong> (nome), escreva <strong>Eduvia</strong>.</>,
+      <>Em <strong>&quot;Credit limit&quot;</strong> (limite de crédito), deixe <strong>em branco</strong>. Não precisa colocar nada.</>,
+      <>Em <strong>&quot;Expiration&quot;</strong> (validade), escolha <strong>&quot;No expiration&quot;</strong> (não expira). Não escolha &quot;Custom&quot; nem uma quantidade de dias, senão a chave para de funcionar depois.</>,
+      <>Toque em <strong>&quot;Create&quot;</strong>.</>,
+      <>Copie a chave que aparece (começa com <code className="rounded bg-surface px-1">sk-or-</code>) e cole aqui embaixo. <strong>Ela só aparece uma vez</strong>: copie antes de fechar.</>,
     ],
   },
 };
@@ -81,7 +89,7 @@ export function AiConnectCard({ provider, hint, removable = true, step }: { prov
       {!hint && (
         <>
           <NoPaymentNotice />
-          <p className="text-sm font-semibold">Como pegar a chave (uns 2 minutos):</p>
+          <p className="text-sm font-semibold">Passo a passo para pegar a chave (uns 2 minutos):</p>
           <ol className="list-decimal space-y-1.5 pl-5 text-sm">
             <li>
               Abra o{" "}
@@ -90,8 +98,9 @@ export function AiConnectCard({ provider, hint, removable = true, step }: { prov
               </a>
               . {g.steps[0]}
             </li>
-            <li>{g.steps[1]}</li>
-            <li>{g.steps[2]}</li>
+            {g.steps.slice(1).map((st, i) => (
+              <li key={i}>{st}</li>
+            ))}
           </ol>
         </>
       )}
