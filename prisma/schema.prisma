@@ -53,6 +53,11 @@ model User {
   /// Últimos caracteres da chave, para o aluno reconhecer qual está usando.
   geminiKeyHint         String?
   geminiConnectedAt     DateTime?
+  /// IAs extras grátis do aluno (opcionais), criptografadas: entram quando o Gemini está ocupado ou no limite.
+  groqKey               String?
+  groqKeyHint           String?
+  cerebrasKey           String?
+  cerebrasKeyHint       String?
   /// A IA do aluno pediu pausa (cota do Google) até este horário.
   aiPausedUntil         DateTime?
   /// Foto de perfil: um dos personagens de /public/avatars (ex.: "gata").

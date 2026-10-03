@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { openSecret } from "@/lib/secret-box";
 import { localDayStart } from "@/lib/billing";
+import { callExtra, extraPaused, type ExtraMessage, type ExtraProvider } from "@/lib/ai/extra";
 
 /** Tarefas de IA (servem para o registro de uso e para escolher o modelo por tarefa via env). */
 export type AiTask = "outline" | "edital" | "session" | "grade" | "ocr" | "questions" | "essay" | "tutor";
@@ -217,7 +218,76 @@ type GeminiResponse = {
   modelVersion?: string;
 };
 
+/** Tarefas menores (perguntas, correções, chat): as IAs extras respondem primeiro, o Gemini fica de reserva. */
+const EXTRA_FIRST: AiTask[] = ["questions", "grade", "essay", "tutor"];
+
+/**
+ * Pede a resposta às IAs do aluno, em ordem: o Gemini (lê fotos e PDFs, aceita textos enormes) e,
+ * se ele conectou, Groq e Cerebras (grátis, modelos fortes, só texto). Se uma está no limite,
+ * ocupada ou recusa, a próxima responde; o aluno só vê erro se todas falharem.
+ */
 async function generate(req: Request): Promise<string> {
+  const user = req.userId
+    ? await db.user.findUnique({ where: { id: req.userId }, select: { groqKey: true, cerebrasKey: true } }).catch(() => null)
+    : null;
+  const hasMedia = req.contents.some((c) => c.parts.some((p) => "inlineData" in p));
+  const extras: { provider: ExtraProvider; key: string }[] = [];
+  if (user && !hasMedia && !isMockAi()) {
+    for (const provider of ["cerebras", "groq"] as const) {
+      const sealed = provider === "groq" ? user.groqKey : user.cerebrasKey;
+      const key = sealed ? openSecret(sealed) : null;
+      if (key && !extraPaused(provider, req.userId!)) extras.push({ provider, key });
+    }
+  }
+  if (!extras.length) return generateGemini(req);
+
+  const groqFirst = (a: { provider: ExtraProvider }, b: { provider: ExtraProvider }) => (a.provider === "groq" ? -1 : b.provider === "groq" ? 1 : 0);
+  const order: ("gemini" | { provider: ExtraProvider; key: string })[] = EXTRA_FIRST.includes(req.task)
+    ? [...[...extras].sort(groqFirst), "gemini"]
+    : ["gemini", ...extras];
+  const messages = extraMessages(req);
+  const errors: string[] = [];
+  let geminiError: unknown = null;
+  for (const step of order) {
+    if (step === "gemini") {
+      try {
+        return await generateGemini(req);
+      } catch (e) {
+        if (!(e instanceof AiQuotaError || e instanceof AiUnavailableError || e instanceof AiKeyError)) throw e;
+        geminiError = e;
+        errors.push(`gemini: ${e.message}`);
+        continue;
+      }
+    }
+    const r = await callExtra(step.provider, step.key, req.userId!, { messages, maxTokens: req.maxTokens, json: !!req.schema, light: NO_THINKING.includes(req.task) });
+    if (r.ok) {
+      await recordUsage(req.task, r.model, req.userId ?? null, { promptTokenCount: r.usage.input, candidatesTokenCount: r.usage.output });
+      req.onText?.(r.text);
+      return r.text;
+    }
+    errors.push(r.detail);
+    if (r.kind === "key") console.error(`[ia] chave da ${step.provider} recusada para ${req.userId}`);
+  }
+  console.error(`[ia] ${req.task} falhou em todas as IAs:`, errors.join(" | "));
+  if (geminiError) throw geminiError;
+  throw new AiUnavailableError("Não conseguimos gerar agora. Tente de novo em alguns minutos.", errors.join("\n"));
+}
+
+/** O pedido no formato das IAs extras (texto; o formato JSON esperado vai junto das instruções). */
+function extraMessages(req: Request): ExtraMessage[] {
+  const system = req.schema
+    ? `${req.system}\n\nResponda somente com JSON válido neste formato (JSON Schema), sem texto antes ou depois:\n${JSON.stringify(geminiSchema(req.schema))}`
+    : req.system;
+  return [
+    { role: "system", content: system },
+    ...req.contents.map((c) => ({
+      role: (c.role === "model" ? "assistant" : "user") as ExtraMessage["role"],
+      content: c.parts.map((p) => ("text" in p ? p.text : "")).join("\n"),
+    })),
+  ];
+}
+
+async function generateGemini(req: Request): Promise<string> {
   const key = await keyFor(req.userId);
   const chain = (await modelChain(req.task, key)).filter((m) => !unavailable.has(m));
   const errors: string[] = [];

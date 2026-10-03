@@ -5,6 +5,8 @@ import { z } from "zod";
 import { AiUnavailableError, AiUserError, callStructured, checkGeminiKey, isMockAi } from "@/lib/ai/client";
 import { db } from "@/lib/db";
 import { allowAttempt } from "@/lib/rate-limit";
+import { checkExtraKey, EXTRA_PROVIDERS, IA_EXTRA_XP, type ExtraProvider } from "@/lib/ai/extra";
+import { addXp } from "@/lib/gamification";
 import { sealSecret } from "@/lib/secret-box";
 import { requireUser } from "@/lib/session";
 import type { FormState } from "./account";
@@ -49,4 +51,36 @@ export async function testAiAction(): Promise<AiTestResult> {
     const details = e instanceof AiUnavailableError ? e.details : e instanceof Error ? e.message : String(e);
     return { ok: false, error: e instanceof AiUserError ? e.message : "Falhou.", details: user.isAdmin ? details : undefined };
   }
+}
+
+/** Conecta (ou troca) a chave de uma IA extra (Groq ou Cerebras). Na primeira vez, ganha XP. */
+export async function connectExtraAiAction(provider: ExtraProvider, _: FormState, f: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const key = String(f.get("key") ?? "").trim();
+  const label = EXTRA_PROVIDERS[provider].label;
+  if (!key) return { error: `Cole a chave da ${label}.` };
+  if (!(await allowAttempt(`aikey-${provider}:${user.id}`, 10, 15))) return { error: "Muitas tentativas. Aguarde 15 minutos." };
+  const check = await checkExtraKey(provider, key);
+  if (!check.ok) return { error: check.error };
+  const first = provider === "groq" ? !user.groqKey : !user.cerebrasKey;
+  await db.user.update({
+    where: { id: user.id },
+    data: provider === "groq" ? { groqKey: sealSecret(key), groqKeyHint: key.slice(-4) } : { cerebrasKey: sealSecret(key), cerebrasKeyHint: key.slice(-4) },
+  });
+  if (first && !(await db.xpEvent.findFirst({ where: { userId: user.id, reason: "ia-extra", refId: provider } }))) {
+    await addXp(user.id, IA_EXTRA_XP, "ia-extra", provider);
+  }
+  revalidatePath("/minha-ia");
+  revalidatePath("/inicio");
+  return { ok: true, message: first ? `${label} conectada! ⚡ +${IA_EXTRA_XP} XP` : `${label} atualizada! ✅` };
+}
+
+export async function removeExtraAiAction(provider: ExtraProvider) {
+  const user = await requireUser();
+  await db.user.update({
+    where: { id: user.id },
+    data: provider === "groq" ? { groqKey: null, groqKeyHint: null } : { cerebrasKey: null, cerebrasKeyHint: null },
+  });
+  revalidatePath("/minha-ia");
+  revalidatePath("/inicio");
 }

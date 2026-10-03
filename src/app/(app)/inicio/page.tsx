@@ -86,6 +86,16 @@ export default async function Page() {
         </p>
       </div>
 
+      {(!user.groqKeyHint || !user.cerebrasKeyHint) && (
+        <Link href="/minha-ia#turbo" className="flex items-center gap-3 rounded-xl border border-primary/40 bg-primary/10 p-3 text-sm transition hover:bg-primary/15">
+          <Zap size={20} className="shrink-0 text-primary" />
+          <span className="min-w-0 flex-1">
+            <strong>Turbine sua IA ({1 + Number(!!user.groqKeyHint) + Number(!!user.cerebrasKeyHint)} de 3)</strong>
+            <span className="block text-muted">Conecte mais IAs grátis: aulas e perguntas sem espera, mesmo quando o Google está ocupado. +100 XP cada.</span>
+          </span>
+          <span className="shrink-0 font-semibold text-primary">Ativar</span>
+        </Link>
+      )}
       <StreakCard streak={streak} best={user.longestStreak} day={day} studied={studied} minutesToday={minutesToday} goal={STREAK_MIN_MINUTES} href={pending.find((p) => unlocked.has(p.id)) ? `/estudar/${pending.find((p) => unlocked.has(p.id))!.id}` : preps.length ? "/revisoes" : "/preparacoes/nova"} />
 
       {!preps.length ? (
