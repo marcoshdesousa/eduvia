@@ -93,6 +93,7 @@ export function AiConnectCard({ provider, hint, removable = true, step }: { prov
       {!hint && (
         <>
           <NoPaymentNotice />
+          <p className="text-sm font-semibold">Como pegar a chave (uns 2 minutos):</p>
           <ol className="list-decimal space-y-1.5 pl-5 text-sm">
             <li>
               Abra o{" "}

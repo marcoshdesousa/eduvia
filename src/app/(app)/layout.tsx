@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { Avatar } from "@/components/avatar";
 import { Flame, Zap } from "lucide-react";
 import { Logo } from "@/components/brand";
@@ -16,6 +18,9 @@ import { vapidPublicKey } from "@/lib/notifications";
 import { NotificationBell } from "@/components/notification-bell";
 import { PdfViewerHost } from "@/components/pdf-viewer";
 
+/** Páginas liberadas com o teste encerrado: assinar, falar com o suporte e os ajustes da conta (sair). */
+const EXPIRED_ALLOWED = ["/assinatura", "/suporte", "/configuracoes", "/mais", "/notificacoes"];
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireReadyUser();
   const { level } = levelFromXp(user.xp);
@@ -25,6 +30,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db.groupInvite.count({ where: { inviteeId: user.id, status: "PENDING" } }),
     db.supportMessage.count({ where: { fromStaff: true, readAt: null, ticket: { userId: user.id } } }),
   ]);
+  // teste grátis acabou e sem assinatura: a conta continua salva, mas ao entrar vai direto para assinar
+  if (access.reason === "expired") {
+    const path = (await headers()).get("x-pathname") ?? "";
+    if (!EXPIRED_ALLOWED.some((p) => path === p || path.startsWith(`${p}/`))) redirect("/assinatura");
+  }
   const badges = { "/grupos": invites, "/suporte": supportReplies, "/mais": invites + supportReplies };
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[240px_1fr]">

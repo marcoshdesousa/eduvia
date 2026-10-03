@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { PASSWORD, signUp } from "./helpers";
+import { PASSWORD, signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
 
@@ -74,4 +74,17 @@ test("login por CPF ou @ e nova senha pelo CPF + telefone", async ({ page, brows
   await page.goto("/inicio");
   await expect(page).toHaveURL(/\/entrar/);
   await device2.close();
+});
+
+test("teste grátis acabou: a conta continua salva e, ao entrar, vai direto para assinar", async ({ page }) => {
+  const handle = `expirou.${uid}`;
+  await signUp(page, { name: "Teste Acabou", handle, plan: "gratis" });
+  await sql(`UPDATE "user" SET "trialEndsAt" = now() - interval '1 day' WHERE handle = $1`, [handle]);
+  await page.goto("/inicio");
+  await expect(page).toHaveURL(/\/assinatura/);
+  await expect(page.getByText(/Seu teste grátis acabou/).first()).toBeVisible();
+  await page.goto("/preparacoes");
+  await expect(page).toHaveURL(/\/assinatura/);
+  await page.goto("/suporte");
+  await expect(page).toHaveURL(/\/suporte/);
 });

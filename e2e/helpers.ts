@@ -37,15 +37,16 @@ export async function signUp(page: Page, opts: { name: string; handle: string; p
 /** Chaves de teste (o servidor em AI_MODE=mock aceita qualquer chave com formato plausível). */
 export const AI_KEYS = { gemini: GEMINI_KEY, cerebras: "csk-chavedetestedoeduvia123456", groq: "gsk_chavedetestedoeduvia123456", openrouter: "sk-or-v1-chavedetestedoeduvia123456" } as const;
 
-/** Conecta as 4 IAs na tela "Conecte suas IAs" (cada uma é salva na hora). */
+/** Conecta as IAs na tela "Conecte suas IAs": uma por tela; ao conectar, aparece a próxima. */
 export async function connectAis(page: Page) {
   for (const [p, key] of Object.entries(AI_KEYS)) {
     const card = page.locator(`#ia-${p}`);
-    if (await card.getByText(/Conectada/).count()) continue;
+    if (!(await card.count())) continue; // já conectada
     await card.locator("input[name=key]").fill(key);
     await card.getByRole("button", { name: /^Conectar / }).click();
-    await expect(card.getByText(/conectada! ✅/)).toBeVisible();
+    await expect(card).toHaveCount(0); // foi para a próxima
   }
+  await expect(page.getByRole("link", { name: /Começar a estudar/ })).toBeVisible();
 }
 
 /** Depois que os arquivos ficam prontos: toca em "Gerar aulas" e espera terminar. */
