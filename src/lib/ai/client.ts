@@ -224,18 +224,18 @@ const EXTRA_FIRST: AiTask[] = ["questions", "grade", "essay", "tutor"];
 
 /**
  * Pede a resposta às IAs do aluno, em ordem: o Gemini (lê fotos e PDFs, aceita textos enormes) e,
- * se ele conectou, Groq e Cerebras (grátis, modelos fortes, só texto). Se uma está no limite,
+ * Groq e OpenRouter (grátis, modelos fortes, só texto). Se uma está no limite,
  * ocupada ou recusa, a próxima responde; o aluno só vê erro se todas falharem.
  */
 async function generate(req: Request): Promise<string> {
   const user = req.userId
-    ? await db.user.findUnique({ where: { id: req.userId }, select: { groqKey: true, cerebrasKey: true, openrouterKey: true } }).catch(() => null)
+    ? await db.user.findUnique({ where: { id: req.userId }, select: { groqKey: true, openrouterKey: true } }).catch(() => null)
     : null;
   const off = await disabledProviders().catch(() => [] as AiProvider[]);
   const hasMedia = req.contents.some((c) => c.parts.some((p) => "inlineData" in p));
   const keys: Partial<Record<ExtraProvider, string>> = {};
   if (user && !hasMedia && !isMockAi()) {
-    const sealed: Record<ExtraProvider, string | null> = { groq: user.groqKey, cerebras: user.cerebrasKey, openrouter: user.openrouterKey };
+    const sealed: Record<ExtraProvider, string | null> = { groq: user.groqKey, openrouter: user.openrouterKey };
     for (const p of EXTRA_LIST) {
       const key = sealed[p] ? openSecret(sealed[p]!) : null;
       if (key && !off.includes(p) && !extraPaused(p, req.userId!)) keys[p] = key;
@@ -243,7 +243,7 @@ async function generate(req: Request): Promise<string> {
   }
   // ordem: tarefas menores vão primeiro às IAs rápidas (o Gemini fica para arquivos e aulas);
   // aulas, índice e edital vão primeiro ao Gemini, que aceita textos enormes
-  const order: AiProvider[] = (EXTRA_FIRST.includes(req.task) ? ["groq", "cerebras", "openrouter", "gemini"] : ["gemini", "cerebras", "openrouter", "groq"]) as AiProvider[];
+  const order: AiProvider[] = (EXTRA_FIRST.includes(req.task) ? ["groq", "openrouter", "gemini"] : ["gemini", "openrouter", "groq"]) as AiProvider[];
   const steps = order.filter((p) => (p === "gemini" ? !off.includes("gemini") || !Object.keys(keys).length : !!keys[p]));
   if (steps.length === 1 && steps[0] === "gemini") return generateGemini(req);
 

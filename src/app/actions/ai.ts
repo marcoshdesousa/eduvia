@@ -39,7 +39,6 @@ export async function testAiAction(): Promise<AiTestResult> {
 const KEY_FIELDS = {
   gemini: { key: "geminiKey", hint: "geminiKeyHint" },
   groq: { key: "groqKey", hint: "groqKeyHint" },
-  cerebras: { key: "cerebrasKey", hint: "cerebrasKeyHint" },
   openrouter: { key: "openrouterKey", hint: "openrouterKeyHint" },
 } as const;
 

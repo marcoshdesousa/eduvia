@@ -81,7 +81,6 @@ test("teste grátis → admin libera o Pro; 3 IAs obrigatórias", async ({ page,
   await expect(admin.getByText("Alunos que mais usaram")).toBeVisible();
   await expect(admin.getByText("IAs do sistema")).toBeVisible();
   await expect(admin.getByRole("button", { name: "Desligar" })).toHaveCount(3);
-  await expect(admin.getByRole("button", { name: "Ligar", exact: true })).toHaveCount(1); // Cerebras: passou a exigir cartão
 
   // redes sociais: o admin cadastra e o botão aparece no rodapé da página inicial
   await admin.goto("/admin?aba=site");

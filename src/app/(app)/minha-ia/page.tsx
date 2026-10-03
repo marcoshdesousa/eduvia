@@ -7,7 +7,7 @@ import { ALL_PROVIDERS, disabledProviders } from "@/lib/ai/providers";
 
 export const metadata = { title: "Minhas IAs" };
 
-const HINT = { gemini: "geminiKeyHint", cerebras: "cerebrasKeyHint", groq: "groqKeyHint", openrouter: "openrouterKeyHint" } as const;
+const HINT = { gemini: "geminiKeyHint", groq: "groqKeyHint", openrouter: "openrouterKeyHint" } as const;
 
 /** As IAs do aluno: ver, testar e trocar as chaves. */
 export default async function Page() {

@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Conecte suas IAs" };
 
-const HINT = { gemini: "geminiKeyHint", cerebras: "cerebrasKeyHint", groq: "groqKeyHint", openrouter: "openrouterKeyHint" } as const;
+const HINT = { gemini: "geminiKeyHint", groq: "groqKeyHint", openrouter: "openrouterKeyHint" } as const;
 
 /**
  * Passo 2 do cadastro: conectar as IAs (todas obrigatórias), UMA POR TELA para não confundir.

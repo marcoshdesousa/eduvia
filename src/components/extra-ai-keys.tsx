@@ -22,18 +22,6 @@ const GUIDES: Record<AiProvider, Guide> = {
       <>Copie a chave (começa com <code className="rounded bg-surface px-1">AIza</code>) e cole aqui.</>,
     ],
   },
-  cerebras: {
-    label: "Cerebras",
-    url: "https://cloud.cerebras.ai",
-    site: "cloud.cerebras.ai",
-    prefix: "csk-",
-    why: "Monta aulas e perguntas com muita rapidez quando o Gemini está ocupado.",
-    steps: [
-      <>Entre com sua <strong>conta Google</strong>.</>,
-      <>No menu, abra <strong>&quot;API Keys&quot;</strong> e toque em <strong>&quot;Generate API Key&quot;</strong> (se já aparecer uma chave, pode usar ela).</>,
-      <>Copie a chave (começa com <code className="rounded bg-surface px-1">csk-</code>) e cole aqui.</>,
-    ],
-  },
   groq: {
     label: "Groq",
     url: "https://console.groq.com/keys",

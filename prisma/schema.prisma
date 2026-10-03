@@ -56,8 +56,6 @@ model User {
   /// IAs extras grátis do aluno (opcionais), criptografadas: entram quando o Gemini está ocupado ou no limite.
   groqKey               String?
   groqKeyHint           String?
-  cerebrasKey           String?
-  cerebrasKeyHint       String?
   openrouterKey         String?
   openrouterKeyHint     String?
   /// A IA do aluno pediu pausa (cota do Google) até este horário.

@@ -35,9 +35,9 @@ export async function setProviderEnabled(p: AiProvider, enabled: boolean) {
   cache = null;
 }
 
-type KeyFields = { geminiKey: string | null; groqKey: string | null; cerebrasKey: string | null; openrouterKey: string | null };
+type KeyFields = { geminiKey: string | null; groqKey: string | null; openrouterKey: string | null };
 export const hasKey = (u: KeyFields, p: AiProvider) =>
-  !!(p === "gemini" ? u.geminiKey : p === "groq" ? u.groqKey : p === "cerebras" ? u.cerebrasKey : u.openrouterKey);
+  !!(p === "gemini" ? u.geminiKey : p === "groq" ? u.groqKey : u.openrouterKey);
 
 /** IAs ligadas que o aluno ainda não conectou (o cadastro só termina quando estiverem todas). */
 export async function missingProviders(u: KeyFields): Promise<AiProvider[]> {

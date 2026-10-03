@@ -35,7 +35,7 @@ export async function signUp(page: Page, opts: { name: string; handle: string; p
 }
 
 /** Chaves de teste (o servidor em AI_MODE=mock aceita qualquer chave com formato plausível). */
-export const AI_KEYS = { gemini: GEMINI_KEY, cerebras: "csk-chavedetestedoeduvia123456", groq: "gsk_chavedetestedoeduvia123456", openrouter: "sk-or-v1-chavedetestedoeduvia123456" } as const;
+export const AI_KEYS = { gemini: GEMINI_KEY, groq: "gsk_chavedetestedoeduvia123456", openrouter: "sk-or-v1-chavedetestedoeduvia123456" } as const;
 
 /** Conecta as IAs na tela "Conecte suas IAs": uma por tela; ao conectar, aparece a próxima. */
 export async function connectAis(page: Page) {

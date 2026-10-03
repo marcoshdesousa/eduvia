@@ -1,10 +1,10 @@
-// IAs extras do aluno (grátis, com a chave dele): Cerebras, Groq e OpenRouter. Todas usam o formato da OpenAI
+// IAs extras do aluno (grátis, com a chave dele): Groq e OpenRouter. Todas usam o formato da OpenAI
 // (chat/completions), rodam modelos abertos fortes (GPT-OSS 120B, Qwen 3 235B, Kimi K2, Llama 3.3 70B)
 // e entram junto com o Gemini: se uma está ocupada ou no limite, a próxima responde.
 // Elas só leem texto: fotos e PDFs escaneados continuam com o Gemini.
 
-export type ExtraProvider = "groq" | "cerebras" | "openrouter";
-export const EXTRA_LIST: ExtraProvider[] = ["cerebras", "groq", "openrouter"];
+export type ExtraProvider = "groq" | "openrouter";
+export const EXTRA_LIST: ExtraProvider[] = ["groq", "openrouter"];
 
 /** XP de presente na primeira vez que o aluno conecta cada IA extra. */
 export const IA_EXTRA_XP = 100;
@@ -27,13 +27,6 @@ export const EXTRA_PROVIDERS: Record<ExtraProvider, ProviderInfo> = {
     // o plano grátis da Groq aceita pouco texto por minuto: só pedidos menores (perguntas, correções, chat)
     maxPromptTokens: 6000,
     maxOutputTokens: 8000,
-  },
-  cerebras: {
-    label: "Cerebras",
-    base: () => process.env.CEREBRAS_API_BASE || "https://api.cerebras.ai/v1",
-    prefer: ["gpt-oss-120b", "qwen-3-235b-a22b-instruct-2507", "qwen-3-235b-a22b-thinking-2507", "qwen-3-32b", "llama-3.3-70b", "llama3.1-8b"],
-    maxPromptTokens: 55000,
-    maxOutputTokens: 16000,
   },
   // OpenRouter: vários modelos de empresas diferentes com uma chave só. SÓ os grátis (":free") são usados:
   // sem crédito na conta, um modelo pago nem funciona (nunca gera cobrança).
