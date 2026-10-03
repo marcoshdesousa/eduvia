@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { makeStudyPdf } from "./fixtures";
-import { signUp, sql } from "./helpers";
+import { generateLessons, signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
 
@@ -13,6 +13,7 @@ async function prepWithMaterial(page: Page, title: string) {
   await expect(page).toHaveURL(/\/preparacoes\/(?!nova)[^/?]+/);
   await page.locator('input[type="file"][multiple]').setInputFiles({ name: "biologia.pdf", mimeType: "application/pdf", buffer: await makeStudyPdf(12) });
   await expect(page.getByText("Pronto", { exact: true })).toBeVisible({ timeout: 90_000 });
+  await generateLessons(page);
 }
 
 test("fase 2: teste rápido, banco de erros, simulado, redação, professor e desempenho", async ({ page }) => {
@@ -112,18 +113,18 @@ test("fase 2: teste rápido, banco de erros, simulado, redação, professor e de
   await expect(page.getByRole("heading", { name: "Por disciplina" })).toBeVisible();
   await expect(page.getByText(/questões respondidas/)).toBeVisible();
 
-  // ── Sem assinatura (plano Grátis): simulado bloqueado; limite do dia de redação leva ao "Descanse"
+  // ── Sem assinatura (teste grátis): 1 simulado e 1 redação no teste inteiro (este aluno já fez antes)
   await sql(`DELETE FROM "Subscription" WHERE "userId" = (SELECT id FROM "user" WHERE handle = $1)`, [handle]);
   await page.goto("/simulados/novo");
   await page.getByRole("button", { name: "Montar simulado" }).click();
-  await expect(page.getByText(/Simulados não fazem parte do plano Grátis/)).toBeVisible();
+  await expect(page.getByText(/No teste grátis dá para fazer 1 simulado no total/)).toBeVisible();
   await page.goto("/redacao/nova?tipo=portugues");
   await expect(page.getByText("Proposta sorteada")).toBeVisible();
   await page.getByRole("button", { name: /Começar a escrever/ }).click();
   await page.getByLabel("Seu texto").fill(texto);
   await page.getByRole("button", { name: "Enviar para correção" }).click();
-  await expect(page.getByText(/limite de hoje: 1 redação/)).toBeVisible();
-  await page.getByRole("link", { name: "Ver sugestões para descansar" }).click();
+  await expect(page.getByText(/No teste grátis dá para fazer 1 redação corrigida no total/)).toBeVisible();
+  await page.goto("/descanse");
   await expect(page.getByRole("heading", { name: "Hora de descansar" })).toBeVisible();
   await expect(page.getByText("Ler o seu PDF")).toBeVisible();
   await expect(page.getByText("Fazer revisões")).toBeVisible();

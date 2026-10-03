@@ -19,7 +19,10 @@ export function AccessBanner({ access }: { access: Access }) {
       <Bar tone="warning" icon={<Sparkles size={15} />} text={`Seu plano ${access.planName} vence em ${timeLeft(access.until)}.`} cta="Renovar" />
     );
   }
-  return <Bar tone="warning" icon={<Lock size={15} />} text="Plano Grátis (teste): recursos limitados. Assine e libere tudo." cta="Assinar" />;
+  if (access.reason === "trial") {
+    return <Bar tone="warning" icon={<Sparkles size={15} />} text={`Teste grátis: faltam ${timeLeft(access.until)}. Assine e continue estudando.`} cta="Assinar" />;
+  }
+  return <Bar tone="danger" icon={<Lock size={15} />} text="Seu teste grátis acabou. Assine um plano para continuar estudando." cta="Assinar" />;
 }
 
 function Bar({ tone, icon, text, cta }: { tone: "primary" | "warning" | "danger"; icon: React.ReactNode; text: string; cta: string }) {

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AlertCircle, CheckCircle2, ClipboardPaste, ExternalLink, FileText, Loader2, Lock, RotateCw, Trash2, Upload } from "lucide-react";
-import type { MaterialRow } from "@/lib/materials/list";
+import type { LessonsState, MaterialRow } from "@/lib/materials/list";
 import { Button } from "@/components/ui/button";
 import { Badge, Progress } from "@/components/ui/badge";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
@@ -41,9 +41,11 @@ export function MaterialsPanel({
   syllabusRole,
   syllabusRequired,
   lockedMessage,
+  initialLessons,
 }: {
   preparationId: string;
   initial: MaterialRow[];
+  initialLessons: LessonsState;
   subjects: { id: string; name: string }[];
   syllabusRole: "EDITAL" | "EMENTA" | null;
   syllabusRequired: boolean;
@@ -52,6 +54,7 @@ export function MaterialsPanel({
 }) {
   const router = useRouter();
   const [materials, setMaterials] = useState(initial);
+  const [lessons, setLessons] = useState(initialLessons);
   const [uploads, setUploads] = useState<Uploading[]>([]);
   const [subjectId, setSubjectId] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -64,7 +67,11 @@ export function MaterialsPanel({
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/preparations/${preparationId}/materials`, { cache: "no-store" });
     if (res.ok) {
-      const json = (await res.json()) as { materials: MaterialRow[] };
+      const json = (await res.json()) as { materials: MaterialRow[]; lessons: LessonsState };
+      setLessons((prev) => {
+        if (prev.status === "RUNNING" && json.lessons.status === "DONE") router.refresh();
+        return json.lessons;
+      });
       setMaterials((prev) => {
         const becameReady = json.materials.some((m) => m.status === "READY" && prev.find((p) => p.id === m.id)?.status !== "READY");
         if (becameReady) router.refresh();
@@ -73,7 +80,8 @@ export function MaterialsPanel({
     }
   }, [preparationId, router]);
 
-  const busy = uploads.length > 0 || materials.some((m) => ["UPLOADING", "QUEUED", "PROCESSING"].includes(m.status));
+  const loading = uploads.length > 0 || materials.some((m) => ["UPLOADING", "QUEUED", "PROCESSING"].includes(m.status));
+  const busy = loading || lessons.status === "RUNNING";
   useEffect(() => {
     if (!busy) return;
     const t = setInterval(refresh, 3000);
@@ -147,8 +155,16 @@ export function MaterialsPanel({
     );
   }
 
+  async function generate() {
+    setError(null);
+    const res = await fetch(`/api/preparations/${preparationId}/lessons`, { method: "POST" });
+    if (!res.ok) return setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Não foi possível gerar as aulas agora.");
+    setLessons((l) => ({ ...l, status: "RUNNING", step: "Começando...", progress: 1, startedAt: new Date().toISOString() }));
+  }
+
   return (
     <div className="space-y-4">
+      <GenerateLessons lessons={lessons} loading={loading} ready={materials.filter((m) => m.status === "READY").length} onGenerate={generate} />
       {syllabusRole && (
         <div className={cn("rounded-xl border p-4", syllabusRequired && !hasSyllabus ? "border-warning/50 bg-warning/10" : "border-border bg-surface")}>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -221,6 +237,54 @@ export function MaterialsPanel({
         </ul>
       )}
       <MaterialList materials={materials} onRemove={remove} onRetry={retry} />
+    </div>
+  );
+}
+
+/**
+ * Botão "Gerar aulas", em cima da lista: cinza-alaranjado enquanto os arquivos carregam; quando todos
+ * estão prontos, fica laranja. Gerando: cronômetro, etapa e porcentagem.
+ */
+function GenerateLessons({ lessons, loading, ready, onGenerate }: { lessons: LessonsState; loading: boolean; ready: number; onGenerate: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  const running = lessons.status === "RUNNING";
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [running]);
+  if (!ready && !loading) return null;
+  if (running) {
+    const secs = lessons.startedAt ? Math.max(0, Math.floor((now - Date.parse(lessons.startedAt)) / 1000)) : 0;
+    return (
+      <div className="space-y-2 rounded-xl border border-primary/50 bg-primary/10 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="flex items-center gap-2 font-semibold"><Loader2 size={18} className="animate-spin text-primary" /> Gerando suas aulas</p>
+          <span className="font-mono text-lg tabular-nums" aria-label="Tempo">{String(Math.floor(secs / 60)).padStart(2, "0")}:{String(secs % 60).padStart(2, "0")}</span>
+        </div>
+        <p className="text-sm text-muted">{lessons.step ?? "Lendo seus materiais..."}</p>
+        <MaterialProgress target={lessons.progress} />
+        <p className="text-xs text-muted">As IAs leem todos os seus arquivos e dividem TODO o conteúdo em aulas, na ordem do material. Pode sair da tela: continuamos sozinhos.</p>
+      </div>
+    );
+  }
+  const done = lessons.status === "DONE" && lessons.pending === 0;
+  const canGenerate = !loading && ready > 0 && !done;
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={onGenerate}
+        disabled={!canGenerate}
+        className={cn(
+          "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-base font-semibold transition",
+          canGenerate ? "bg-primary text-primary-foreground hover:brightness-110" : done ? "bg-success/15 text-success" : "cursor-not-allowed bg-primary/35 text-primary-foreground/70 saturate-50",
+        )}
+      >
+        {done ? <><CheckCircle2 size={18} /> Aulas geradas</> : loading ? <><Loader2 size={18} className="animate-spin" /> Carregando os arquivos...</> : <>✨ Gerar aulas{lessons.status === "DONE" && lessons.pending ? ` (${lessons.pending} arquivo${lessons.pending > 1 ? "s" : ""} novo${lessons.pending > 1 ? "s" : ""})` : ""}</>}
+      </button>
+      {lessons.status === "ERROR" && <p className="text-sm text-danger">{lessons.step}</p>}
+      {loading && <p className="text-center text-xs text-muted">O botão libera quando todos os arquivos estiverem prontos.</p>}
     </div>
   );
 }

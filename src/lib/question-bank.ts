@@ -6,6 +6,8 @@ import { PROFILES, profileVoice } from "@/lib/core/profiles";
 import { chunksForPart, type SourceRef } from "@/lib/study";
 
 const PER_CALL = { jogo: 8, simulado: 12 } as const;
+/** Quanto da aula vai junto no pedido de questões (o bastante para seguir o mesmo foco). */
+const LESSON_CHARS = 6000;
 const MAX_CALLS = 10;
 const CONTEXT_CHARS = 24_000;
 
@@ -60,6 +62,9 @@ export async function ensureQuestionPool(input: {
         jobs.slice(i, i + 3).map(async (topic) => {
           const chunks = await chunksForPart(input.prep.id, topic, 1, 1, CONTEXT_CHARS);
           if (!chunks.length) return;
+          // a aula já criada para este assunto (por qualquer IA) guia as questões: mesmo assunto, mesmos termos
+          const lessons = await db.studyText.findMany({ where: { topicId: topic.id }, orderBy: { part: "asc" }, select: { content: true }, take: 3 });
+          const lessonText = lessons.map((l) => l.content).join("\n\n").slice(0, LESSON_CHARS) || null;
           const set = await generateQuestionSet({
             userId: input.userId,
             voice,
@@ -71,6 +76,7 @@ export async function ensureQuestionPool(input: {
             avoid: existing.filter((q) => q.topicId === topic.id).map((q) => q.statement),
             chunks,
             purpose: input.purpose,
+            lessonText,
           });
           const refs: SourceRef[] = chunks.map((c) => ({ label: c.label, materialId: c.materialId, title: c.materialTitle, pageStart: c.pageStart, pageEnd: c.pageEnd }));
           const valid = set.questions.filter((q) => q.options.length >= 2 && q.correctIndex >= 0 && q.correctIndex < q.options.length);

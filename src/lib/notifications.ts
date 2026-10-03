@@ -15,7 +15,8 @@ export type NotificationType =
   | "PLAN_EXPIRING"
   | "TRIAL_ENDING"
   | "SUPPORT_REPLY"
-  | "SUPPORT_MESSAGE";
+  | "SUPPORT_MESSAGE"
+  | "AI_ALERT";
 
 /**
  * Chaves do push (VAPID). Usa VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY do ambiente quando as duas existem;

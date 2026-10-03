@@ -79,9 +79,8 @@ export async function processMaterial(materialId: string) {
           },
         );
         if (!pages.some((p) => p.text.trim().length > 30)) {
-          throw new UserFacingError(
-            "Não encontramos texto neste arquivo. Se for escaneado, confira se a IA está configurada (OCR) ou envie uma versão com melhor qualidade.",
-          );
+          // último caso: nem o texto do arquivo nem a leitura por IA acharam conteúdo
+          throw new UserFacingError("Não lemos esse tipo de arquivo. Tente enviar em PDF com texto, DOCX ou uma foto mais nítida.");
         }
         await db.materialPage.deleteMany({ where: { blobId: blob.id } });
         await db.materialPage.createMany({
@@ -102,22 +101,12 @@ export async function processMaterial(materialId: string) {
       }
     }
 
-    await step("Organizando assuntos", 48);
-    if (material.role === "CONTENT") await organizeContent(materialId);
-    else await applySyllabus(materialId);
-
-    // O plano é refeito antes de o material aparecer como pronto (o aluno já encontra as sessões novas).
-    // Vários arquivos enviados juntos: só o último monta o plano (montar a cada arquivo deixava tudo lento).
-    const others = await db.material.count({
-      where: { preparationId: material.preparationId, id: { not: materialId }, status: { in: ["QUEUED", "PROCESSING", "UPLOADING"] } },
+    // Pronto: o arquivo já foi lido. As aulas (assuntos + plano) são geradas pelo botão "Gerar aulas",
+    // depois que todos os arquivos estiverem prontos (veja lessons.ts).
+    await db.material.update({
+      where: { id: materialId },
+      data: { status: "READY", progress: 100, progressStep: null, errorMessage: null, autoRetries: 0, organizedAt: null },
     });
-    if (others) {
-      await enqueue("plan.generate", { preparationId: material.preparationId }, { singletonKey: material.preparationId, startAfter: 20 });
-    } else {
-      await step("Montando o plano", 88);
-      await generatePlan(material.preparationId);
-    }
-    await db.material.update({ where: { id: materialId }, data: { status: "READY", progress: 100, progressStep: null, errorMessage: null, autoRetries: 0 } });
   } catch (err) {
     console.error(`[material ${materialId}]`, err);
     // Cota da chave acabou ou o Google oscilou: o arquivo volta para a fila sozinho, sem mostrar erro.
@@ -156,7 +145,7 @@ export function retryPlan(err: unknown, tries: number): { afterSeconds: number; 
 export class UserFacingError extends Error {}
 
 /** Material de conteúdo: liga ao programa (edital/ementa) se existir; senão, cria tópicos a partir do índice do próprio material. */
-async function organizeContent(materialId: string) {
+export async function organizeContent(materialId: string) {
   const material = await db.material.findUniqueOrThrow({
     where: { id: materialId },
     include: { preparation: { include: { subjects: true } }, subject: true },
@@ -175,12 +164,17 @@ async function organizeContent(materialId: string) {
   if (await copyTopicsFromTwin(material)) return;
 
   const pages = await db.materialPage.findMany({ where: { blobId: material.blobId! }, orderBy: { pageNumber: "asc" } });
+  // as IAs do aluno montam o índice; se todas estiverem fora, divide pelo próprio texto (nunca trava)
   const outline = await extractOutline({
     userId: material.uploaderId,
     materialTitle: material.title,
     subjectHint: material.subject?.name ?? null,
     existingSubjects: prep.subjects.map((s) => s.name),
     pages: pages.map((p) => ({ page: p.pageNumber, text: p.text })),
+  }).catch((e) => {
+    if (e instanceof AiUserError && !(e instanceof AiQuotaError || e instanceof AiUnavailableError)) throw e;
+    console.error(`[material ${materialId}] índice sem IA:`, (e as Error).message);
+    return simpleOutline(material.title, material.subject?.name ?? null, pages);
   });
 
   const chunks = await db.chunk.findMany({ where: { blobId: material.blobId! }, select: { id: true, pageStart: true, pageEnd: true, tokenCount: true } });
@@ -280,7 +274,7 @@ async function copyTopicsFromTwin(material: { id: string; blobId: string | null;
 }
 
 /** Edital/ementa: cria disciplinas e assuntos com pesos e liga os materiais já enviados. */
-async function applySyllabus(materialId: string) {
+export async function applySyllabus(materialId: string) {
   const material = await db.material.findUniqueOrThrow({ where: { id: materialId }, include: { preparation: true } });
   const prep = material.preparation;
   const pages = await db.materialPage.findMany({ where: { blobId: material.blobId! }, orderBy: { pageNumber: "asc" } });
@@ -370,4 +364,32 @@ async function upsertSubject(preparationId: string, name: string, weight?: numbe
 
 function clampInt(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.round(n || 3)));
+}
+
+/**
+ * Índice sem IA (reserva): divide o material em partes de ~12 páginas, na ordem, cobrindo tudo.
+ * O título de cada parte é o primeiro título que aparece nela (linha curta, em maiúsculas ou numerada).
+ */
+export function simpleOutline(title: string, subject: string | null, pages: { pageNumber: number; text: string }[]) {
+  const SIZE = 12;
+  const heading = (text: string) =>
+    text
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.length >= 4 && l.length <= 90 && /[A-Za-zÀ-ú]/.test(l) && (/^(cap[íi]tulo|aula|unidade|m[óo]dulo|se[çc][ãa]o|parte)\b/i.test(l) || /^\d+(\.\d+)*[.)]?\s+\S/.test(l) || (l === l.toUpperCase() && /[A-ZÀ-Ú]{4}/.test(l))));
+  const topics: { title: string; description: string; subject: string; pageStart: number; pageEnd: number; difficulty: number }[] = [];
+  for (let i = 0; i < pages.length; i += SIZE) {
+    const part = pages.slice(i, i + SIZE);
+    const found = part.map((p) => heading(p.text)).find(Boolean);
+    const n = topics.length + 1;
+    topics.push({
+      title: (found ?? `${title} — parte ${n}`).slice(0, 120),
+      description: "",
+      subject: subject ?? "Geral",
+      pageStart: part[0].pageNumber,
+      pageEnd: part[part.length - 1].pageNumber,
+      difficulty: 3,
+    });
+  }
+  return { topics, books: [] as { subject: string; title: string; author: string }[] };
 }

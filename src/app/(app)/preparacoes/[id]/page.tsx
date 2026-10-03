@@ -6,7 +6,7 @@ import { requireReadyUser } from "@/lib/session";
 import { ensurePlanFresh, latestPlan } from "@/lib/plan";
 import { PROFILES } from "@/lib/core/profiles";
 import { addDays, diffDays, formatDay, keyFromDay, today, weekdayShort } from "@/lib/core/dates";
-import { listMaterials } from "@/lib/materials/list";
+import { lessonsState, listMaterials } from "@/lib/materials/list";
 import { uploadLimitError } from "@/lib/billing";
 import { MaterialsPanel } from "@/components/materials-panel";
 import { Badge, MasteryBadge, Progress } from "@/components/ui/badge";
@@ -109,6 +109,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           syllabusRole={syllabusRole}
           syllabusRequired={prep.studentType === "CONCURSO"}
           lockedMessage={uploadLocked}
+          initialLessons={lessonsState(prep, materials.filter((m) => m.status === "READY" && !m.organized).length)}
         />
       )}
 

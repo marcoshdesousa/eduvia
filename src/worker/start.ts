@@ -3,6 +3,7 @@ import { ensurePiper } from "@/lib/ai/piper";
 // Roda como processo separado (npm run worker) ou dentro do próprio app web (RUN_WORKER_IN_WEB=true).
 import { enqueue, getBoss, QUEUES, type JobPayloads } from "@/lib/queue";
 import { processMaterial } from "@/lib/materials/process";
+import { generateLessons } from "@/lib/materials/lessons";
 import { generatePlan } from "@/lib/plan";
 import { db } from "@/lib/db";
 import { sendBillingReminders, sendDailyNudges, sendStudyReminders } from "@/lib/jobs/reminders";
@@ -26,6 +27,12 @@ async function recoverStuckMaterials() {
     await enqueue(QUEUES.processMaterial, { materialId: m.id }, { singletonKey: `material:${m.id}:recover:${Math.floor(Date.now() / 600_000)}` });
   }
   if (stuck.length) console.log(`[worker] ${stuck.length} material(is) parado(s) voltaram para a fila`);
+  // "Gerar aulas" parado há muito tempo (o servidor reiniciou no meio): continua de onde parou
+  const lessons = await db.preparation.findMany({ where: { lessonsStatus: "RUNNING", updatedAt: { lt: new Date(Date.now() - 20 * 60_000) } }, select: { id: true }, take: 20 });
+  for (const p of lessons) {
+    await db.preparation.update({ where: { id: p.id }, data: { lessonsStep: "Retomando a geração das aulas..." } });
+    await enqueue(QUEUES.generateLessons, { preparationId: p.id }, { singletonKey: `lessons:${p.id}:recover:${Math.floor(Date.now() / 600_000)}` });
+  }
 }
 
 /** Limpeza única dos arquivos no disco depois de "recomeçar do zero" (marcada no banco pela migração 19). */
@@ -54,6 +61,10 @@ export async function startWorker({ handleSignals }: { handleSignals: boolean })
 
   await boss.work<JobPayloads["material.process"]>(QUEUES.processMaterial, { localConcurrency: 2 }, async (jobs) => {
     for (const job of jobs) await processMaterial(job.data.materialId);
+  });
+
+  await boss.work<JobPayloads["lessons.generate"]>(QUEUES.generateLessons, async (jobs) => {
+    for (const job of jobs) await generateLessons(job.data.preparationId, job.data.tries ?? 0);
   });
 
   await boss.work<JobPayloads["plan.generate"]>(QUEUES.generatePlan, async (jobs) => {

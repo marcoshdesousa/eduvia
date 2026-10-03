@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addPeriod, localDayStart, localMonthStart, subscribeMessage, whatsappLink } from "./billing";
-import { DEFAULT_PLANS, normalizeLimits, planFeatures } from "./plans";
+import { DEFAULT_PLANS, INTERVALS, normalizeLimits, planFeatures, TRIAL_DAYS } from "./plans";
 import { isValidCnpj, isValidCpf } from "./core/cpf";
 import { normalizePhone } from "./core/phone";
 
@@ -33,7 +33,7 @@ describe("assinatura", () => {
     const link = whatsappLink(subscribeMessage(eduvia, "MONTH", { name: "Ana", handle: "ana.silva" }));
     expect(link).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
     expect(decodeURIComponent(link.split("text=")[1])).toContain("plano Pro mensal (30 dias)");
-    expect(decodeURIComponent(link.split("text=")[1])).toContain("15,00");
+    expect(decodeURIComponent(link.split("text=")[1])).toContain("9,90");
     expect(decodeURIComponent(link.split("text=")[1])).toContain("@ana.silva");
   });
   it("início do dia em São Paulo é 03:00 UTC", () => {
@@ -52,27 +52,27 @@ describe("planos", () => {
     expect(l.gamesPerDay).toBe(-1);
     expect(l.groups).toBe(true);
     expect(l.examsPerMonth).toBe(2);
-    expect(l.tutorMessagesPerDay).toBe(40);
+    expect(l.tutorMessagesPerDay).toBe(20);
   });
   it("lista os benefícios do plano", () => {
     const f = planFeatures(DEFAULT_PLANS[0].limits);
     expect(f).toContain("Sem grupos");
-    expect(f).toContain("3 testes rápidos por dia");
-    expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("6 guias de estudo por mês");
-    expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Professor IA: 40 mensagens por dia");
-    expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Testes rápidos à vontade");
+    expect(f).toContain("1 teste rápido por dia");
+    expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("3 guias de estudo por mês");
+    expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Professor IA: 20 mensagens por dia");
+    expect(planFeatures(DEFAULT_PLANS[3].limits)).toContain("Testes rápidos à vontade");
   });
-  it("três planos pagos com 7, 15 e 30 dias; Grátis com 1 PDF de até 100 páginas", () => {
+  it("três planos mensais (9,90, 19,90 e 44,90) e teste grátis de 3 dias, todos com arquivos sem limite", () => {
     const by = Object.fromEntries(DEFAULT_PLANS.map((p) => [p.slug, p]));
     const paid = [by.eduvia, by.avancado, by.ilimitado];
-    expect(paid.map((p) => p.limits.preparationsPerMonth)).toEqual([6, 15, 35]);
-    expect(paid.map((p) => p.priceMonthCents)).toEqual([1500, 3000, 5000]);
-    expect(paid.every((p) => p.priceWeekCents > 0 && p.priceFortnightCents > p.priceWeekCents && p.priceMonthCents > p.priceFortnightCents)).toBe(true);
+    expect(paid.map((p) => p.priceMonthCents)).toEqual([990, 1990, 4490]);
+    expect(paid.every((p) => p.priceWeekCents === 0 && p.priceFortnightCents === 0)).toBe(true);
+    expect(INTERVALS.map((i) => i.key)).toEqual(["MONTH"]);
+    expect(TRIAL_DAYS).toBe(3);
+    expect(DEFAULT_PLANS.every((p) => p.limits.materials === -1 && p.limits.pagesPerPdf === -1 && p.limits.pagesPerDay === -1)).toBe(true);
     expect(by.ilimitado.limits.essaysPerDay).toBe(-1);
-    expect(paid.every((p) => p.limits.materials === -1 && p.limits.pagesPerPdf === -1)).toBe(true);
-    expect(by.gratis.limits.materials).toBe(1);
-    expect(by.gratis.limits.pagesPerPdf).toBe(100);
-    expect(planFeatures(by.gratis.limits)).toContain("1 PDF de até 100 páginas");
+    expect(by.gratis.limits.essaysPerDay).toBe(1);
+    expect(by.gratis.limits.examsPerMonth).toBe(1);
     expect(DEFAULT_PLANS.filter((p) => p.slug !== "gratis").map((p) => p.slug)).toEqual(["eduvia", "avancado", "ilimitado"]);
   });
 });

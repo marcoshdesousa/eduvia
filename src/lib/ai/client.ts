@@ -4,7 +4,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { openSecret } from "@/lib/secret-box";
 import { localDayStart } from "@/lib/billing";
-import { callExtra, extraPaused, type ExtraMessage, type ExtraProvider } from "@/lib/ai/extra";
+import { callExtra, EXTRA_LIST, extraPaused, PAYMENT_REQUIRED, type ExtraMessage, type ExtraProvider } from "@/lib/ai/extra";
+import { disabledProviders, reportPaidProvider, type AiProvider } from "@/lib/ai/providers";
 
 /** Tarefas de IA (servem para o registro de uso e para escolher o modelo por tarefa via env). */
 export type AiTask = "outline" | "edital" | "session" | "grade" | "ocr" | "questions" | "essay" | "tutor";
@@ -228,27 +229,28 @@ const EXTRA_FIRST: AiTask[] = ["questions", "grade", "essay", "tutor"];
  */
 async function generate(req: Request): Promise<string> {
   const user = req.userId
-    ? await db.user.findUnique({ where: { id: req.userId }, select: { groqKey: true, cerebrasKey: true } }).catch(() => null)
+    ? await db.user.findUnique({ where: { id: req.userId }, select: { groqKey: true, cerebrasKey: true, openrouterKey: true } }).catch(() => null)
     : null;
+  const off = await disabledProviders().catch(() => [] as AiProvider[]);
   const hasMedia = req.contents.some((c) => c.parts.some((p) => "inlineData" in p));
-  const extras: { provider: ExtraProvider; key: string }[] = [];
+  const keys: Partial<Record<ExtraProvider, string>> = {};
   if (user && !hasMedia && !isMockAi()) {
-    for (const provider of ["cerebras", "groq"] as const) {
-      const sealed = provider === "groq" ? user.groqKey : user.cerebrasKey;
-      const key = sealed ? openSecret(sealed) : null;
-      if (key && !extraPaused(provider, req.userId!)) extras.push({ provider, key });
+    const sealed: Record<ExtraProvider, string | null> = { groq: user.groqKey, cerebras: user.cerebrasKey, openrouter: user.openrouterKey };
+    for (const p of EXTRA_LIST) {
+      const key = sealed[p] ? openSecret(sealed[p]!) : null;
+      if (key && !off.includes(p) && !extraPaused(p, req.userId!)) keys[p] = key;
     }
   }
-  if (!extras.length) return generateGemini(req);
+  // ordem: tarefas menores vão primeiro às IAs rápidas (o Gemini fica para arquivos e aulas);
+  // aulas, índice e edital vão primeiro ao Gemini, que aceita textos enormes
+  const order: AiProvider[] = (EXTRA_FIRST.includes(req.task) ? ["groq", "cerebras", "openrouter", "gemini"] : ["gemini", "cerebras", "openrouter", "groq"]) as AiProvider[];
+  const steps = order.filter((p) => (p === "gemini" ? !off.includes("gemini") || !Object.keys(keys).length : !!keys[p]));
+  if (steps.length === 1 && steps[0] === "gemini") return generateGemini(req);
 
-  const groqFirst = (a: { provider: ExtraProvider }, b: { provider: ExtraProvider }) => (a.provider === "groq" ? -1 : b.provider === "groq" ? 1 : 0);
-  const order: ("gemini" | { provider: ExtraProvider; key: string })[] = EXTRA_FIRST.includes(req.task)
-    ? [...[...extras].sort(groqFirst), "gemini"]
-    : ["gemini", ...extras];
   const messages = extraMessages(req);
   const errors: string[] = [];
   let geminiError: unknown = null;
-  for (const step of order) {
+  for (const step of steps) {
     if (step === "gemini") {
       try {
         return await generateGemini(req);
@@ -259,14 +261,15 @@ async function generate(req: Request): Promise<string> {
         continue;
       }
     }
-    const r = await callExtra(step.provider, step.key, req.userId!, { messages, maxTokens: req.maxTokens, json: !!req.schema, light: NO_THINKING.includes(req.task) });
+    const r = await callExtra(step, keys[step]!, req.userId!, { messages, maxTokens: req.maxTokens, json: !!req.schema, light: NO_THINKING.includes(req.task) });
     if (r.ok) {
       await recordUsage(req.task, r.model, req.userId ?? null, { promptTokenCount: r.usage.input, candidatesTokenCount: r.usage.output });
       req.onText?.(r.text);
       return r.text;
     }
     errors.push(r.detail);
-    if (r.kind === "key") console.error(`[ia] chave da ${step.provider} recusada para ${req.userId}`);
+    if (r.kind === "key") console.error(`[ia] chave da ${step} recusada para ${req.userId}`);
+    if (r.kind === "paid") await reportPaidProvider(step, r.detail).catch(() => {});
   }
   console.error(`[ia] ${req.task} falhou em todas as IAs:`, errors.join(" | "));
   if (geminiError) throw geminiError;
@@ -336,6 +339,9 @@ async function generateGemini(req: Request): Promise<string> {
         if (res.status === 429) {
           lastQuota = parseQuota(body);
           break; // cota deste modelo acabou: tenta o próximo
+        }
+        if (res.status !== 429 && PAYMENT_REQUIRED.test(body.error?.message ?? "")) {
+          await reportPaidProvider("gemini", `${res.status} ${body.error?.message ?? ""}`).catch(() => {});
         }
         if (isKeyProblem(res.status, body)) {
           throw new AiKeyError("Sua chave de acesso do Google não funciona mais. Cole uma nova em Ajustes → Chave de acesso.");

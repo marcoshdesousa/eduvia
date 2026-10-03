@@ -58,6 +58,8 @@ model User {
   groqKeyHint           String?
   cerebrasKey           String?
   cerebrasKeyHint       String?
+  openrouterKey         String?
+  openrouterKeyHint     String?
   /// A IA do aluno pediu pausa (cota do Google) até este horário.
   aiPausedUntil         DateTime?
   /// Foto de perfil: um dos personagens de /public/avatars (ex.: "gata").
@@ -199,6 +201,11 @@ model Preparation {
   status          PreparationStatus @default(ACTIVE)
   lastReplanDate  DateTime?         @db.Date
   lastReminderAt  DateTime?
+  /// Botão "Gerar aulas": IDLE (ainda não gerou), RUNNING, DONE ou ERROR.
+  lessonsStatus    String            @default("IDLE")
+  lessonsStartedAt DateTime?
+  lessonsStep      String?
+  lessonsProgress  Int               @default(0)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -318,6 +325,8 @@ model Material {
   progressStep  String?
   /// Andamento do processamento (0 a 100).
   progress      Int            @default(0)
+  /// Quando os assuntos deste material entraram nas aulas (botão "Gerar aulas").
+  organizedAt   DateTime?
   errorMessage  String?
   /// Tentativas automáticas (cota da IA, instabilidade): o aluno não vê erro enquanto tentamos de novo.
   autoRetries   Int      @default(0)

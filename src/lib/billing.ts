@@ -1,11 +1,11 @@
 // Assinatura manual: o aluno paga pelo WhatsApp e um admin libera o plano em /admin.
-// Planos pagos por guias de estudo no mês (Pro, Avançado e Ilimitado, por 7, 15 ou 30 dias) e o plano Grátis para testar.
-// PDFs e páginas não têm limite em nenhum plano.
+// Planos mensais (Pro, Avançado e Ilimitado) e o teste grátis de 3 dias. Depois do teste, só assinando.
+// Arquivos e páginas não têm limite em nenhum plano.
 import { db } from "@/lib/db";
 import { addDays, today } from "@/lib/core/dates";
-import { DEFAULT_PLANS, intervalInfo, isUnlimited, normalizeLimits, PAID_PLAN, PERIOD_DAYS, priceFor, type Interval, type PlanLimits, type PlanSlug } from "@/lib/plans";
+import { DEFAULT_PLANS, intervalInfo, isUnlimited, normalizeLimits, PAID_PLAN, PERIOD_DAYS, priceFor, TRIAL_DAYS, type Interval, type PlanLimits, type PlanSlug } from "@/lib/plans";
 
-type UserLike = { id: string; timezone?: string; isAdmin?: boolean };
+type UserLike = { id: string; timezone?: string; isAdmin?: boolean; createdAt?: Date; trialEndsAt?: Date | null };
 
 export type PlanRow = { slug: string; name: string; order: number; priceWeekCents: number; priceFortnightCents: number; priceMonthCents: number; limits: PlanLimits; active: boolean };
 
@@ -61,8 +61,27 @@ export async function activeSubscription(userId: string) {
 export type Access = { planSlug: PlanSlug; planName: string; limits: PlanLimits } & (
   | { mode: "full"; reason: "subscription"; until: Date; interval: Interval }
   | { mode: "full"; reason: "dev" }
-  | { mode: "limited"; reason: "free" }
+  | { mode: "limited"; reason: "trial"; since: Date; until: Date }
+  | { mode: "limited"; reason: "expired" }
 );
+
+/** Fim do teste grátis: o que ficou gravado no cadastro (ou 3 dias depois de criar a conta). */
+async function trialWindow(user: UserLike) {
+  let { createdAt, trialEndsAt } = user;
+  if (!createdAt) {
+    const row = await db.user.findUnique({ where: { id: user.id }, select: { createdAt: true, trialEndsAt: true } });
+    createdAt = row?.createdAt ?? new Date();
+    trialEndsAt = row?.trialEndsAt ?? null;
+  }
+  const until = trialEndsAt ?? addDays(createdAt, TRIAL_DAYS);
+  return { since: createdAt, until };
+}
+
+/** Teste encerrado sem assinatura: dá para ver o que já tem, mas não criar nada novo. */
+const EXPIRED_LIMITS: PlanLimits = {
+  activePreparations: 0, preparationsPerMonth: 0, materials: 0, pagesPerDay: 0, pagesPerPdf: 0, scannedPagesPerDay: 0, newSessionsPerDay: 0,
+  gamesPerDay: 0, examsPerMonth: 0, essaysPerDay: 0, tutorMessagesPerDay: 0, groups: false, groupsOwned: 0, restAfterMinutes: 180,
+};
 
 export async function getAccess(user: UserLike): Promise<Access> {
   const plans = await listPlans();
@@ -78,7 +97,9 @@ export async function getAccess(user: UserLike): Promise<Access> {
     return { mode: "full", reason: "dev", planSlug: p.slug as PlanSlug, planName: p.name, limits: p.limits };
   }
   const free = plan("gratis");
-  return { mode: "limited", reason: "free", planSlug: "gratis", planName: free.name, limits: free.limits };
+  const trial = await trialWindow(user);
+  if (trial.until > new Date()) return { mode: "limited", reason: "trial", ...trial, planSlug: "gratis", planName: free.name, limits: free.limits };
+  return { mode: "limited", reason: "expired", planSlug: "gratis", planName: "Teste grátis (encerrado)", limits: EXPIRED_LIMITS };
 }
 
 // ───────────── Uso de hoje (para aplicar limites e mostrar ao aluno) ─────────────
@@ -130,7 +151,8 @@ export async function usage(user: UserLike) {
 const over = (used: number, max: number) => !isUnlimited(max) && used >= max;
 
 function upgradeHint(a: Access) {
-  if (a.reason === "free") return " Assine um plano para liberar mais.";
+  if (a.reason === "expired") return " Seu teste grátis acabou: assine um plano para continuar.";
+  if (a.reason === "trial") return " Assine um plano para liberar mais.";
   return a.planSlug !== "ilimitado" && a.reason === "subscription" ? " Um plano maior libera mais." : "";
 }
 
@@ -224,6 +246,17 @@ export async function featureLimitError(user: UserLike & { timezone: string }, f
   const f = FEATURE[feature];
   const max = a.limits[f.limit] as number;
   if (max === 0) return `${f.none} do plano ${a.planName}.${upgradeHint(a)}`;
+  if (a.reason === "trial" && feature !== "tutor") {
+    const since = a.since;
+    const used =
+      feature === "game"
+        ? await db.gameRun.count({ where: { userId: user.id, startedAt: { gte: since } } })
+        : feature === "exam"
+          ? await db.exam.count({ where: { ownerId: user.id, createdAt: { gte: since } } })
+          : await db.essay.count({ where: { userId: user.id, status: { not: "DRAFT" }, createdAt: { gte: since } } });
+    const [one, many] = { game: ["teste rápido", "testes rápidos"], exam: ["simulado", "simulados"], essay: ["redação corrigida", "redações corrigidas"] }[feature];
+    return over(used, max) ? `No teste grátis dá para fazer ${max} ${max === 1 ? one : many} no total.${upgradeHint(a)}` : null;
+  }
   const u = await usage(user);
   if (!over(u[f.used], max)) return null;
   return f.period === "month"

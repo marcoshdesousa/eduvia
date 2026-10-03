@@ -1,9 +1,10 @@
-// IAs extras do aluno (grátis, com a chave dele): Groq e Cerebras. As duas usam o formato da OpenAI
+// IAs extras do aluno (grátis, com a chave dele): Cerebras, Groq e OpenRouter. Todas usam o formato da OpenAI
 // (chat/completions), rodam modelos abertos fortes (GPT-OSS 120B, Qwen 3 235B, Kimi K2, Llama 3.3 70B)
 // e entram junto com o Gemini: se uma está ocupada ou no limite, a próxima responde.
 // Elas só leem texto: fotos e PDFs escaneados continuam com o Gemini.
 
-export type ExtraProvider = "groq" | "cerebras";
+export type ExtraProvider = "groq" | "cerebras" | "openrouter";
+export const EXTRA_LIST: ExtraProvider[] = ["cerebras", "groq", "openrouter"];
 
 /** XP de presente na primeira vez que o aluno conecta cada IA extra. */
 export const IA_EXTRA_XP = 100;
@@ -34,7 +35,27 @@ export const EXTRA_PROVIDERS: Record<ExtraProvider, ProviderInfo> = {
     maxPromptTokens: 55000,
     maxOutputTokens: 16000,
   },
+  // OpenRouter: vários modelos de empresas diferentes com uma chave só. SÓ os grátis (":free") são usados:
+  // sem crédito na conta, um modelo pago nem funciona (nunca gera cobrança).
+  openrouter: {
+    label: "OpenRouter",
+    base: () => process.env.OPENROUTER_API_BASE || "https://openrouter.ai/api/v1",
+    prefer: [
+      "deepseek/deepseek-chat-v3.1:free",
+      "deepseek/deepseek-chat-v3-0324:free",
+      "qwen/qwen3-235b-a22b:free",
+      "meta-llama/llama-4-maverick:free",
+      "openai/gpt-oss-120b:free",
+      "google/gemma-3-27b-it:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+    ],
+    maxPromptTokens: 30000,
+    maxOutputTokens: 12000,
+  },
 };
+
+/** A IA passou a cobrar (pede pagamento ou crédito): o admin é avisado para decidir se tira do sistema. */
+export const PAYMENT_REQUIRED = /payment required|insufficient (credits|balance|funds)|add credits|billing|requires? (a )?paid|upgrade your plan/i;
 
 export const estimateTokens = (chars: number) => Math.ceil(chars / 3.5);
 
@@ -43,7 +64,7 @@ export type ExtraMessage = { role: "system" | "user" | "assistant"; content: str
 /** Resultado de uma tentativa: texto, ou o motivo para passar à próxima IA. */
 export type ExtraResult =
   | { ok: true; text: string; model: string; usage: { input: number; output: number } }
-  | { ok: false; kind: "quota" | "key" | "too-big" | "busy" | "format"; detail: string; retryAfter?: number };
+  | { ok: false; kind: "quota" | "key" | "too-big" | "busy" | "format" | "paid"; detail: string; retryAfter?: number };
 
 const found = new Map<string, { models: string[]; at: number }>();
 /** Pausa por IA e por aluno depois de um "limite" (não insiste enquanto a cota não volta). */
@@ -63,9 +84,11 @@ async function models(provider: ExtraProvider, key: string): Promise<string[]> {
     const res = await fetch(`${p.base()}/models`, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000) });
     if (res.ok) names = ((await res.json()) as { data?: { id?: string }[] }).data?.flatMap((m) => (m.id ? [m.id] : [])) ?? [];
   } catch {}
-  // os preferidos que existem na conta; se a lista não veio, tenta os preferidos mesmo assim
+  // OpenRouter: só modelos grátis (":free"), nunca os pagos
+  if (provider === "openrouter") names = names.filter((n) => n.endsWith(":free"));
+  // os preferidos que existem na conta; se nenhum existe mais, usa outros grátis da lista; sem lista, os preferidos
   const chosen = names.length ? p.prefer.filter((m) => names.includes(m)) : p.prefer;
-  const list = chosen.length ? chosen : p.prefer;
+  const list = chosen.length ? chosen : provider === "openrouter" && names.length ? names.slice(0, 5) : p.prefer;
   if (names.length) found.set(cacheKey, { models: list, at: Date.now() });
   return list;
 }
@@ -117,6 +140,10 @@ export async function callExtra(
         return { ok: true, text, model: `${provider}:${model}`, usage: { input: data.usage?.prompt_tokens ?? 0, output: data.usage?.completion_tokens ?? 0 } };
       }
       const errText = (await res.text().catch(() => "")).slice(0, 300);
+      // a IA passou a pedir pagamento: não usa (nunca gera cobrança) e avisa o admin
+      if (res.status === 402 || (res.status >= 400 && res.status < 500 && res.status !== 429 && PAYMENT_REQUIRED.test(errText))) {
+        return { ok: false, kind: "paid", detail: `${p.label} ${model}: pede pagamento (${res.status} ${errText})` };
+      }
       if (res.status === 401 || res.status === 403) return { ok: false, kind: "key", detail: `${p.label}: chave recusada (${res.status})` };
       if (res.status === 429) {
         const retryAfter = Number(res.headers.get("retry-after")) || 60;
@@ -150,7 +177,8 @@ export async function checkExtraKey(provider: ExtraProvider, key: string): Promi
   if (k.length < 20 || /\s/.test(k)) return { ok: false, error: `Essa não parece uma chave da ${p.label}. Copie a chave inteira.` };
   if (process.env.AI_MODE === "mock") return { ok: true };
   try {
-    const res = await fetch(`${p.base()}/models`, { headers: { authorization: `Bearer ${k}` }, signal: AbortSignal.timeout(15_000) });
+    // no OpenRouter a lista de modelos é pública: a chave é conferida em /key
+    const res = await fetch(`${p.base()}/${provider === "openrouter" ? "key" : "models"}`, { headers: { authorization: `Bearer ${k}` }, signal: AbortSignal.timeout(15_000) });
     if (res.ok) return { ok: true };
     if (res.status === 401 || res.status === 403) return { ok: false, error: `A ${p.label} recusou essa chave. Confira se copiou inteira ou crie uma nova.` };
     return { ok: false, error: `Não conseguimos falar com a ${p.label} agora. Tente de novo em instantes.` };

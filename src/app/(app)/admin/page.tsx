@@ -20,6 +20,8 @@ import { Avatar } from "@/components/avatar";
 import { replySupportAction } from "@/app/actions/support";
 import { markUserMessagesRead, staffTickets, supportUnreadForStaff, ticketFor } from "@/lib/support";
 import { CloseTicketButton } from "./close-ticket-button";
+import { ALL_PROVIDERS, disabledProviders, providerLabel } from "@/lib/ai/providers";
+import { toggleProviderAction } from "@/app/actions/ai";
 
 export const metadata = { title: "Admin" };
 
@@ -164,6 +166,34 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
   }
 
   if (tab === "ia") {
+    const off = await disabledProviders();
+    const byModel = await db.aiUsage.groupBy({ by: ["model"], where: { createdAt: { gte: dayStart } }, _count: true });
+    const usedBy = (p: string) =>
+      byModel.filter((m) => (p === "gemini" ? !m.model.includes(":") || m.model.startsWith("gemini") : m.model.startsWith(`${p}:`))).reduce((n, m) => n + m._count, 0);
+    const providersCard = (
+      <Card className="space-y-3">
+        <CardTitle>IAs do sistema</CardTitle>
+        <p className="text-sm text-muted">
+          O Eduvia só usa IAs grátis. Se alguma passar a pedir pagamento, ela deixa de ser usada na hora (nunca gera cobrança) e você
+          recebe um aviso. Desligada, a IA sai do cadastro e de todo o sistema; dá para ligar de novo quando quiser.
+        </p>
+        <ul className="divide-y divide-border">
+          {ALL_PROVIDERS.map((p) => {
+            const enabled = !off.includes(p);
+            return (
+              <li key={p} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <span className="font-medium">{providerLabel(p)}</span>
+                <span className="text-xs text-muted">{usedBy(p)} pedido(s) hoje</span>
+                <Badge tone={enabled ? "success" : "neutral"}>{enabled ? "Ligada" : "Desligada"}</Badge>
+                <form action={toggleProviderAction.bind(null, p, !enabled)}>
+                  <Button size="sm" variant={enabled ? "ghost" : "outline"}>{enabled ? "Desligar" : "Ligar"}</Button>
+                </form>
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
+    );
     const [byTask, byUser] = await Promise.all([
       db.aiUsage.groupBy({ by: ["task"], where: { createdAt: { gte: dayStart } }, _sum: { inputTokens: true, outputTokens: true }, _count: true, orderBy: { _count: { task: "desc" } } }),
       db.aiUsage.groupBy({ by: ["userId"], where: { createdAt: { gte: dayStart } }, _count: true, orderBy: { _count: { userId: "desc" } }, take: 20 }),
@@ -176,7 +206,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
     return (
       <div className="space-y-6">
         {header}
-        <p className="text-xs text-muted">Hoje. Cada aluno usa a própria chave do Gemini, então a IA não custa nada para a plataforma. Serve para ver quem está perto dos limites.</p>
+        {providersCard}
+        <p className="text-xs text-muted">Hoje. Cada aluno usa as próprias chaves das IAs, então a IA não custa nada para a plataforma. Serve para ver quem está perto dos limites.</p>
         <Card>
           <CardTitle>Por tarefa</CardTitle>
           {!byTask.length && <p className="mt-2 text-sm text-muted">Nenhum uso de IA hoje.</p>}
@@ -255,7 +286,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
                   ) : (
                     <Badge tone="warning">Grátis</Badge>
                   )}
-                  {u.geminiKey ? <Badge tone="primary">IA conectada</Badge> : <Badge tone="danger">Sem IA</Badge>}
+                  {u.geminiKey && u.cerebrasKey && u.groqKey && u.openrouterKey ? <Badge tone="primary">4 IAs conectadas</Badge> : <Badge tone="danger">IAs incompletas</Badge>}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-muted">
                   <span>CPF {formatCpf(u.cpf!)}</span>

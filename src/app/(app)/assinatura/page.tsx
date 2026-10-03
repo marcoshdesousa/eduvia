@@ -44,7 +44,7 @@ export default async function Page() {
           ) : access.reason === "dev" ? (
             <Badge>Liberado</Badge>
           ) : (
-            <Badge tone="warning">Grátis (teste)</Badge>
+            <Badge tone="warning">{access.reason === "trial" ? `Teste até ${formatDay(access.until, { day: "2-digit", month: "short" })}` : "Teste encerrado"}</Badge>
           )}
         </div>
         <p className="text-sm text-muted">
@@ -52,7 +52,9 @@ export default async function Page() {
             ? `Plano ${intervalInfo(access.interval).adjective} (${intervalInfo(access.interval).label}) válido até ${longDate(access.until)}. Para continuar depois disso, é só renovar pelo WhatsApp.`
             : access.reason === "dev"
               ? "Tudo liberado (conta de administrador ou cobrança desativada)."
-              : "Você está no plano Grátis, para testar com limites bem pequenos. Escolha um plano abaixo para liberar tudo."}
+              : access.reason === "trial"
+                ? `Você está no teste grátis de 3 dias (até ${longDate(access.until)}), com arquivos à vontade e 1 redação, 1 simulado e 1 teste rápido para experimentar. Escolha um plano abaixo para continuar depois.`
+                : "Seu teste grátis acabou. Seus estudos continuam guardados: escolha um plano abaixo para continuar."}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {meters.map((m) => (
@@ -70,7 +72,7 @@ export default async function Page() {
       <div className="space-y-3">
         <div>
           <h2 className="text-lg font-bold">Planos</h2>
-          <p className="text-sm text-muted">Todos com PDFs e páginas sem limite, testes rápidos à vontade, grupos e torneios. O que muda é quantos guias de estudo você cria por mês (apagar um guia não devolve a vaga).</p>
+          <p className="text-sm text-muted">Planos mensais. Todos com arquivos, páginas e tipos de arquivo sem limite. O que muda é a quantidade de guias de estudo, aulas, redações, simulados e testes rápidos.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {paidPlans.map((p) => {
@@ -117,7 +119,7 @@ export default async function Page() {
 
       {free && (
         <Card className="text-sm">
-          <CardTitle>Plano Grátis (para testar)</CardTitle>
+          <CardTitle>Teste grátis (3 dias)</CardTitle>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">{planFeatures(free.limits).map((f) => <li key={f}>{f}</li>)}</ul>
         </Card>
       )}
@@ -125,7 +127,7 @@ export default async function Page() {
       <Card className="space-y-2 text-sm">
         <CardTitle>Como funciona</CardTitle>
         <ol className="list-decimal space-y-1 pl-5 text-muted">
-          <li>Escolha o plano e o período (7, 15 ou 30 dias): a mensagem com o plano e o seu @ já vai pronta no WhatsApp.</li>
+          <li>Escolha o plano mensal: a mensagem com o plano e o seu @ já vai pronta no WhatsApp.</li>
           <li>Combine o pagamento por lá (Pix).</li>
           <li>Assim que o pagamento for confirmado, liberamos o plano na sua conta. Não há cobrança automática: quando vencer, é só renovar.</li>
         </ol>

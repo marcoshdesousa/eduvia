@@ -1,11 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { EDITAL, makeStudyPdf } from "./fixtures";
-import { signUp, sql } from "./helpers";
+import { generateLessons, signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
 
 async function waitMaterialsReady(page: Page, count: number) {
   await expect(page.getByText("Pronto", { exact: true })).toHaveCount(count, { timeout: 90_000 });
+  await generateLessons(page);
 }
 
 test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de erros", async ({ page }) => {

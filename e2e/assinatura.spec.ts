@@ -1,49 +1,46 @@
 import { expect, test } from "@playwright/test";
 import { makeStudyPdf } from "./fixtures";
-import { GEMINI_KEY, signUp, sql } from "./helpers";
+import { AI_KEYS, connectAis, generateLessons, signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
 
 // Requer BILLING_ENFORCED diferente de "false" e AI_MODE=mock no servidor.
-test("plano Grátis → admin libera o Pro; chave do Gemini obrigatória", async ({ page, browser }) => {
+test("teste grátis → admin libera o Pro; 4 IAs obrigatórias", async ({ page, browser }) => {
   const handle = `aluno.pago.${uid}`;
   await signUp(page, { name: "Aluno Pagante", handle, plan: "gratis" });
 
-  // plano Grátis: aviso no topo e links do WhatsApp com a mensagem pronta (7 e 30 dias)
-  await expect(page.getByText(/Plano Grátis \(teste\)/)).toBeVisible();
+  // teste grátis de 3 dias: aviso no topo e link do WhatsApp com a mensagem pronta (só plano mensal)
+  await expect(page.getByText(/Teste grátis: faltam 3 dias/)).toBeVisible();
   await page.getByRole("link", { name: "Assinar", exact: true }).click();
   await expect(page).toHaveURL(/\/assinatura/);
-  const week = decodeURIComponent((await page.getByRole("link", { name: /Assinar Pro semanal pelo WhatsApp/ }).getAttribute("href"))!);
   const month = decodeURIComponent((await page.getByRole("link", { name: /Assinar Pro mensal pelo WhatsApp/ }).getAttribute("href"))!);
-  expect(week).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
-  expect(week).toContain("plano Pro semanal (7 dias)");
-  expect(week).toContain("7,00");
+  expect(month).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
   expect(month).toContain("plano Pro mensal (30 dias)");
-  expect(month).toContain("15,00");
+  expect(month).toContain("9,90");
   expect(month).toContain(`@${handle}`);
-  // três planos pagos, cada um por 7, 15 ou 30 dias; o Ilimitado custa R$ 50 por 30 dias
-  for (const p of ["semanal", "quinzenal", "mensal"]) await expect(page.getByRole("link", { name: new RegExp(`Assinar Ilimitado ${p} pelo WhatsApp`) })).toBeVisible();
+  await expect(page.getByRole("link", { name: /semanal|quinzenal/ })).toHaveCount(0);
   const ilimitado = decodeURIComponent((await page.getByRole("link", { name: /Assinar Ilimitado mensal/ }).getAttribute("href"))!);
-  expect(ilimitado).toContain("50,00");
-  await expect(page.getByText("1 PDF de até 100 páginas")).toBeVisible();
-  await expect(page.getByRole("link", { name: /Assinar (Básico|Plus) / })).toHaveCount(0);
-  await expect(page.getByText("35 guias de estudo por mês")).toBeVisible();
-  await expect(page.getByText("PDFs e páginas sem limite").first()).toBeVisible();
+  expect(ilimitado).toContain("44,90");
+  const avancado = decodeURIComponent((await page.getByRole("link", { name: /Assinar Avançado mensal/ }).getAttribute("href"))!);
+  expect(avancado).toContain("19,90");
+  await expect(page.getByText("Teste grátis (3 dias)")).toBeVisible();
+  await expect(page.getByText(/Arquivos e páginas sem limite/).first()).toBeVisible();
 
-  // Minha IA: chave conectada (só o final aparece)
+  // Minhas IAs: as 4 conectadas (só o final da chave aparece)
   await page.goto("/minha-ia");
-  await expect(page.getByText("✅ Conectada")).toBeVisible();
-  await expect(page.getByText(`…${GEMINI_KEY.slice(-4)}`, { exact: true })).toBeVisible();
+  await expect(page.getByText(/Conectada \(…/)).toHaveCount(4);
+  await expect(page.getByText(`Conectada (…${AI_KEYS.gemini.slice(-4)})`)).toBeVisible();
 
-  // sem chave, o app leva para "Conecte sua IA"
-  await sql(`UPDATE "user" SET "geminiKey" = NULL WHERE handle = $1`, [handle]);
+  // faltando uma IA, o app leva para "Conecte suas IAs"
+  await sql(`UPDATE "user" SET "geminiKey" = NULL, "geminiKeyHint" = NULL WHERE handle = $1`, [handle]);
   await page.goto("/inicio");
   await expect(page).toHaveURL(/\/conectar-ia/);
-  await page.getByLabel("Chave da API do Gemini").fill("curta");
-  await page.getByRole("button", { name: "Conectar IA" }).click();
+  await expect(page.getByText(/não coloque cartão, dados bancários nem faça Pix/i).first()).toBeVisible();
+  await page.locator("#ia-gemini input[name=key]").fill("curta");
+  await page.locator("#ia-gemini").getByRole("button", { name: /^Conectar / }).click();
   await expect(page.getByText(/não parece uma chave do Gemini/)).toBeVisible();
-  await page.getByLabel("Chave da API do Gemini").fill(GEMINI_KEY);
-  await page.getByRole("button", { name: "Conectar IA" }).click();
+  await connectAis(page);
+  await page.getByRole("link", { name: /Começar a estudar/ }).click();
   await expect(page).toHaveURL(/\/inicio/);
 
   // Grátis: 1 preparação
@@ -73,7 +70,7 @@ test("plano Grátis → admin libera o Pro; chave do Gemini obrigatória", async
   await signUp(admin, { name: "Admin Teste", handle: `admin.${uid}` });
   await sql(`UPDATE "user" SET "isAdmin" = true WHERE handle = $1`, [`admin.${uid}`]);
   await admin.goto(`/admin?q=${handle}`);
-  await expect(admin.getByText("IA conectada", { exact: true })).toBeVisible();
+  await expect(admin.getByText("4 IAs conectadas", { exact: true })).toBeVisible();
   admin.on("dialog", (d) => d.accept());
   await admin.getByLabel("Período").selectOption("MONTH");
   await admin.getByRole("button", { name: "Liberar" }).click();
@@ -82,6 +79,8 @@ test("plano Grátis → admin libera o Pro; chave do Gemini obrigatória", async
   await expect(admin.getByRole("button", { name: "Salvar" }).first()).toBeVisible();
   await admin.goto("/admin?aba=ia");
   await expect(admin.getByText("Alunos que mais usaram")).toBeVisible();
+  await expect(admin.getByText("IAs do sistema")).toBeVisible();
+  await expect(admin.getByRole("button", { name: "Desligar" })).toHaveCount(4);
 
   // redes sociais: o admin cadastra e o botão aparece no rodapé da página inicial
   await admin.goto("/admin?aba=site");
@@ -138,11 +137,12 @@ test("plano Grátis → admin libera o Pro; chave do Gemini obrigatória", async
   // aluno passa a ter o plano Pro
   await page.goto("/assinatura");
   await expect(page.getByText("Seu plano: Pro")).toBeVisible();
-  await expect(page.getByText(/Plano Grátis \(teste\)/)).toHaveCount(0);
+  await expect(page.getByText(/Teste grátis: faltam/)).toHaveCount(0);
   const prep = await sql<{ id: string }>(`SELECT p.id FROM "Preparation" p JOIN "user" u ON u.id = p."userId" WHERE u.handle = $1`, [handle]);
   await page.goto(`/preparacoes/${prep[0].id}?aba=materiais`);
   await page.locator('input[type="file"][multiple]').setInputFiles({ name: "aula.pdf", mimeType: "application/pdf", buffer: await makeStudyPdf(2) });
   await expect(page.getByText("Pronto", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await generateLessons(page);
 
   // não-admin não acessa /admin (a 1ª conta de um banco vazio vira admin; garante que este aluno não é)
   await sql(`UPDATE "user" SET "isAdmin" = false WHERE handle = $1`, [handle]);

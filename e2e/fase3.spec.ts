@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { makeStudyPdf } from "./fixtures";
-import { signUp, sql } from "./helpers";
+import { generateLessons, signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
 
@@ -14,6 +14,7 @@ async function newPrep(page: Page, title: string, pdf: boolean) {
   if (pdf) {
     await page.locator('input[type="file"][multiple]').setInputFiles({ name: "apostila.pdf", mimeType: "application/pdf", buffer: await makeStudyPdf(10) });
     await expect(page.getByText("Pronto", { exact: true })).toBeVisible({ timeout: 90_000 });
+    await generateLessons(page);
   }
 }
 
@@ -122,8 +123,9 @@ test("fase 3: grupo com convite, mural, compartilhamento, simulado com ranking, 
   // material importado ficou pronto na preparação do Beto
   await b.goto("/preparacoes");
   await b.getByRole("link", { name: /Biologia do Beto/ }).click();
-  await b.getByRole("link", { name: "Materiais" }).click();
+  await b.getByRole("link", { name: "Materiais", exact: true }).click();
   await expect(b.getByText("Pronto", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await generateLessons(b);
 
   // conquista de grupo e perfil
   await b.goto("/perfil");

@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { missingProviders } from "@/lib/ai/providers";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -26,8 +27,8 @@ export async function requireUser() {
 export async function requireReadyUser() {
   const user = await requireUser();
   if (!user.handle || !user.termsAcceptedAt || !user.cpf || !user.phone) redirect("/boas-vindas");
-  // a IA roda com a chave do Gemini do próprio aluno: sem ela, só dá para conectar
-  if (!user.geminiKey) redirect("/conectar-ia");
+  // o Eduvia roda com as IAs do próprio aluno: sem todas conectadas, só dá para conectar
+  if ((await missingProviders(user)).length) redirect("/conectar-ia");
   return user;
 }
 

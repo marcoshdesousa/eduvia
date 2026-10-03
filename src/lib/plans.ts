@@ -30,45 +30,53 @@ export type PlanLimits = {
 export type PlanSlug = "gratis" | "eduvia" | "avancado" | "ilimitado";
 export type PlanDef = { slug: PlanSlug; name: string; order: number; priceWeekCents: number; priceFortnightCents: number; priceMonthCents: number; limits: PlanLimits; active?: boolean };
 
-const PAID_BASE = { activePreparations: -1, materials: -1, pagesPerDay: -1, pagesPerPdf: -1, scannedPagesPerDay: -1, gamesPerDay: -1, groups: true, groupsOwned: 5, restAfterMinutes: 180 };
+/** Em todos os planos: arquivos, páginas, tamanho e tipos de arquivo sem limite. */
+const FILES_UNLIMITED = { activePreparations: -1, materials: -1, pagesPerDay: -1, pagesPerPdf: -1, scannedPagesPerDay: -1, restAfterMinutes: 180 };
 
-/** Três planos pagos (Pro, Avançado e Ilimitado), cada um com preço de 7, 15 e 30 dias. PDFs e páginas sem limite nos pagos. */
+/** Dias do teste grátis (começa no cadastro). */
+export const TRIAL_DAYS = 3;
+
+/**
+ * Teste grátis de 3 dias ("gratis") e três planos mensais (Pro, Avançado e Ilimitado).
+ * Arquivos e páginas são ilimitados em todos; o que muda são as atividades (guias, sessões, redações, simulados...).
+ * No teste, redação, simulado e teste rápido contam no teste inteiro (1 de cada), não por dia.
+ */
 export const DEFAULT_PLANS: PlanDef[] = [
   {
     slug: "gratis",
-    name: "Grátis",
+    name: "Teste grátis",
     order: 0,
     priceWeekCents: 0,
     priceFortnightCents: 0,
     priceMonthCents: 0,
-    limits: { activePreparations: 1, preparationsPerMonth: 1, materials: 1, pagesPerDay: -1, pagesPerPdf: 100, scannedPagesPerDay: -1, newSessionsPerDay: 1, gamesPerDay: 3, examsPerMonth: 0, essaysPerDay: 1, tutorMessagesPerDay: 5, groups: false, groupsOwned: 0, restAfterMinutes: 180 },
+    limits: { ...FILES_UNLIMITED, preparationsPerMonth: 1, newSessionsPerDay: 3, gamesPerDay: 1, examsPerMonth: 1, essaysPerDay: 1, tutorMessagesPerDay: 5, groups: false, groupsOwned: 0 },
   },
   {
     slug: "eduvia",
     name: "Pro",
     order: 1,
-    priceWeekCents: 700,
-    priceFortnightCents: 1000,
-    priceMonthCents: 1500,
-    limits: { ...PAID_BASE, preparationsPerMonth: 6, newSessionsPerDay: 6, examsPerMonth: 15, essaysPerDay: 3, tutorMessagesPerDay: 40 },
+    priceWeekCents: 0,
+    priceFortnightCents: 0,
+    priceMonthCents: 990,
+    limits: { ...FILES_UNLIMITED, preparationsPerMonth: 3, newSessionsPerDay: 5, gamesPerDay: 5, examsPerMonth: 4, essaysPerDay: 1, tutorMessagesPerDay: 20, groups: true, groupsOwned: 1 },
   },
   {
     slug: "avancado",
     name: "Avançado",
     order: 2,
-    priceWeekCents: 1200,
-    priceFortnightCents: 1900,
-    priceMonthCents: 3000,
-    limits: { ...PAID_BASE, preparationsPerMonth: 15, newSessionsPerDay: 10, examsPerMonth: 40, essaysPerDay: 6, tutorMessagesPerDay: 100 },
+    priceWeekCents: 0,
+    priceFortnightCents: 0,
+    priceMonthCents: 1990,
+    limits: { ...FILES_UNLIMITED, preparationsPerMonth: 8, newSessionsPerDay: 10, gamesPerDay: 15, examsPerMonth: 15, essaysPerDay: 3, tutorMessagesPerDay: 60, groups: true, groupsOwned: 3 },
   },
   {
     slug: "ilimitado",
     name: "Ilimitado",
     order: 3,
-    priceWeekCents: 1800,
-    priceFortnightCents: 3000,
-    priceMonthCents: 5000,
-    limits: { ...PAID_BASE, preparationsPerMonth: 35, newSessionsPerDay: -1, examsPerMonth: -1, essaysPerDay: -1, tutorMessagesPerDay: -1, groupsOwned: -1 },
+    priceWeekCents: 0,
+    priceFortnightCents: 0,
+    priceMonthCents: 4490,
+    limits: { ...FILES_UNLIMITED, preparationsPerMonth: -1, newSessionsPerDay: -1, gamesPerDay: -1, examsPerMonth: -1, essaysPerDay: -1, tutorMessagesPerDay: -1, groups: true, groupsOwned: -1 },
   },
 ];
 
@@ -77,16 +85,18 @@ export const PAID_PLAN: PlanSlug = "eduvia";
 /** Duração de cada período pago, em dias. */
 export const PERIOD_DAYS = { WEEK: 7, FORTNIGHT: 15, MONTH: 30 } as const;
 export type Interval = keyof typeof PERIOD_DAYS;
-export const INTERVALS: { key: Interval; days: number; label: string; adjective: string }[] = [
+/** Planos só mensais. (7 e 15 dias continuam reconhecidos só para assinaturas antigas.) */
+export const INTERVALS: { key: Interval; days: number; label: string; adjective: string }[] = [{ key: "MONTH", days: 30, label: "30 dias", adjective: "mensal" }];
+const ALL_INTERVALS: typeof INTERVALS = [
   { key: "WEEK", days: 7, label: "7 dias", adjective: "semanal" },
   { key: "FORTNIGHT", days: 15, label: "15 dias", adjective: "quinzenal" },
-  { key: "MONTH", days: 30, label: "30 dias", adjective: "mensal" },
+  ...INTERVALS,
 ];
 type Priced = { priceWeekCents: number; priceFortnightCents: number; priceMonthCents: number };
 export function priceFor(plan: Priced, interval: Interval) {
   return interval === "WEEK" ? plan.priceWeekCents : interval === "FORTNIGHT" ? plan.priceFortnightCents : plan.priceMonthCents;
 }
-export const intervalInfo = (i: Interval) => INTERVALS.find((x) => x.key === i)!;
+export const intervalInfo = (i: Interval) => ALL_INTERVALS.find((x) => x.key === i)!;
 
 /** Máximo de pessoas por grupo de estudo. */
 export const MAX_GROUP_MEMBERS = 30;
@@ -131,10 +141,10 @@ export function planFeatures(l: PlanLimits): string[] {
   return [
     `${n(l.preparationsPerMonth, "guia de estudo", "guias de estudo", "Guias de estudo à vontade")}${isUnlimited(l.preparationsPerMonth) ? "" : " por mês"}`,
     isUnlimited(l.materials) && isUnlimited(l.pagesPerPdf)
-      ? "PDFs e páginas sem limite"
+      ? "Arquivos e páginas sem limite (PDF, foto, DOCX...)"
       : `${n(l.materials, "PDF", "PDFs", "PDFs sem limite")}${isUnlimited(l.pagesPerPdf) ? "" : ` de até ${l.pagesPerPdf} páginas`}`,
     l.newSessionsPerDay ? `${n(l.newSessionsPerDay, "sessão nova", "sessões novas", "Sessões à vontade")}${isUnlimited(l.newSessionsPerDay) ? "" : " por dia"} + revisões ilimitadas` : "Só revisões",
-    l.gamesPerDay ? (isUnlimited(l.gamesPerDay) ? "Testes rápidos à vontade" : `${l.gamesPerDay} testes rápidos por dia`) : "Sem testes rápidos",
+    l.gamesPerDay ? (isUnlimited(l.gamesPerDay) ? "Testes rápidos à vontade" : `${n(l.gamesPerDay, "teste rápido", "testes rápidos", "")} por dia`) : "Sem testes rápidos",
     l.examsPerMonth ? `${n(l.examsPerMonth, "simulado", "simulados", "Simulados à vontade")}${isUnlimited(l.examsPerMonth) ? "" : " por mês"}` : "Sem simulados",
     l.essaysPerDay ? `${n(l.essaysPerDay, "redação corrigida", "redações corrigidas", "Redações à vontade")}${isUnlimited(l.essaysPerDay) ? "" : " por dia"}` : "Sem correção de redação",
     l.tutorMessagesPerDay ? (isUnlimited(l.tutorMessagesPerDay) ? "Professor IA à vontade" : `Professor IA: ${l.tutorMessagesPerDay} mensagens por dia`) : "Sem Professor IA",

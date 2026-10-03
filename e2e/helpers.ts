@@ -24,13 +24,34 @@ export async function signUp(page: Page, opts: { name: string; handle: string; p
   await page.getByLabel("Senha", { exact: true }).fill(PASSWORD);
   await page.getByLabel("Confirme a senha").fill(PASSWORD);
   await page.locator('input[name="terms"]').check();
-  // passo 2: chave do Gemini
+  // passo 1 cria a conta; passo 2: conectar as 4 IAs
   await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByLabel("Chave da API do Gemini").fill(GEMINI_KEY);
-  await page.getByRole("button", { name: /Criar conta/ }).click();
+  await expect(page).toHaveURL(/\/conectar-ia/);
+  await connectAis(page);
+  await page.getByRole("link", { name: /Começar a estudar/ }).click();
   await expect(page).toHaveURL(/\/inicio/);
   if ((opts.plan ?? "eduvia") === "eduvia") await grantPlan(opts.handle);
   return { cpf, phone };
+}
+
+/** Chaves de teste (o servidor em AI_MODE=mock aceita qualquer chave com formato plausível). */
+export const AI_KEYS = { gemini: GEMINI_KEY, cerebras: "csk-chavedetestedoeduvia123456", groq: "gsk_chavedetestedoeduvia123456", openrouter: "sk-or-v1-chavedetestedoeduvia123456" } as const;
+
+/** Conecta as 4 IAs na tela "Conecte suas IAs" (cada uma é salva na hora). */
+export async function connectAis(page: Page) {
+  for (const [p, key] of Object.entries(AI_KEYS)) {
+    const card = page.locator(`#ia-${p}`);
+    if (await card.getByText(/Conectada/).count()) continue;
+    await card.locator("input[name=key]").fill(key);
+    await card.getByRole("button", { name: /^Conectar / }).click();
+    await expect(card.getByText(/conectada! ✅/)).toBeVisible();
+  }
+}
+
+/** Depois que os arquivos ficam prontos: toca em "Gerar aulas" e espera terminar. */
+export async function generateLessons(page: Page) {
+  await page.getByRole("button", { name: /Gerar aulas/ }).click();
+  await expect(page.getByText("Aulas geradas")).toBeVisible({ timeout: 120_000 });
 }
 
 export async function grantPlan(handle: string) {

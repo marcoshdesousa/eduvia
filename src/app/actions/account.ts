@@ -6,8 +6,7 @@ import { auth, internalEmail } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { checkHandleAvailable } from "@/lib/handles";
 import { requireUser } from "@/lib/session";
-import { checkGeminiKey } from "@/lib/ai/client";
-import { sealSecret } from "@/lib/secret-box";
+import { TRIAL_DAYS } from "@/lib/plans";
 import { TERMS_VERSION } from "@/lib/terms";
 import { isValidCpf, onlyDigits } from "@/lib/core/cpf";
 import { normalizePhone } from "@/lib/core/phone";
@@ -45,10 +44,6 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
   if (!(await allowAttempt(`signup:${await clientIp()}`, 10, 60))) return { error: "Muitas tentativas. Tente de novo mais tarde." };
   const p = await validateProfile(f);
   if ("error" in p) return { error: p.error };
-  const geminiKey = field(f, "geminiKey");
-  if (!geminiKey) return { error: "Cole a chave da sua IA do Gemini para criar a conta." };
-  const check = await checkGeminiKey(geminiKey);
-  if (!check.ok) return { error: check.error };
 
   // a primeira conta de um banco vazio vira administradora (depois: npm run admin -- @usuario)
   const firstAccount = (await db.user.count()) === 0;
@@ -69,9 +64,7 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
         handle: p.handle,
         termsAcceptedAt: new Date(),
         termsVersion: TERMS_VERSION,
-        geminiKey: sealSecret(geminiKey),
-        geminiKeyHint: geminiKey.slice(-4),
-        geminiConnectedAt: new Date(),
+        trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 3600_000),
         isAdmin: firstAccount,
       },
     });
@@ -82,7 +75,8 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
     }
     throw e;
   }
-  redirect("/inicio");
+  // passo 2: conectar as IAs (a conta já está salva; se sair no meio, continua de onde parou)
+  redirect("/conectar-ia");
 }
 
 /** Login com CPF ou @ + senha. */

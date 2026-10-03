@@ -4,6 +4,7 @@ import { PgBoss } from "pg-boss";
 export const QUEUES = {
   processMaterial: "material.process",
   generatePlan: "plan.generate",
+  generateLessons: "lessons.generate",
   dailyMaintenance: "maintenance.daily",
   reminders: "reminders.tick",
 } as const;
@@ -11,6 +12,7 @@ export const QUEUES = {
 export type JobPayloads = {
   "material.process": { materialId: string };
   "plan.generate": { preparationId: string };
+  "lessons.generate": { preparationId: string; tries?: number };
   "maintenance.daily": Record<string, never>;
   "reminders.tick": Record<string, never>;
 };

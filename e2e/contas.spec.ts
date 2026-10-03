@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { GEMINI_KEY, PASSWORD, signUp } from "./helpers";
+import { PASSWORD, signUp } from "./helpers";
 
 const uid = Date.now().toString(36);
 
@@ -24,13 +24,9 @@ test("login por CPF ou @ e nova senha pelo CPF + telefone", async ({ page, brows
   await other.getByLabel("Confirme a senha").fill(PASSWORD);
   await other.locator('input[name="terms"]').check();
   await other.getByRole("button", { name: "Continuar" }).click();
-  // "Voltar" volta ao passo 1 sem perder o que foi digitado
-  await other.getByRole("button", { name: "Voltar" }).click();
-  await expect(other.getByLabel("Nome", { exact: true })).toHaveValue("Outra Pessoa");
-  await other.getByRole("button", { name: "Continuar" }).click();
-  await other.getByLabel("Chave da API do Gemini").fill(GEMINI_KEY);
-  await other.getByRole("button", { name: /Criar conta/ }).click();
   await expect(other.getByText(/Já existe uma conta com esse CPF/)).toBeVisible();
+  // o que foi digitado continua no formulário
+  await expect(other.getByLabel("Nome", { exact: true })).toHaveValue("Outra Pessoa");
   await other.close();
 
   // sair e entrar pelo CPF

@@ -209,7 +209,8 @@ export async function ocrImage(input: { userId: string; base64: string; mediaTyp
     userId: input.userId,
     schema: OcrSchema,
     maxTokens: 16000,
-    system: `Transcreva fielmente o texto da imagem, na ordem de leitura. Não resuma.`,
+    system: `Transcreva fielmente o texto da imagem, na ordem de leitura. Não resuma.
+Se a imagem tiver pouco ou nenhum texto (foto, esquema, mapa, gráfico, ilustração), depois do texto escreva também uma descrição clara do que a imagem mostra e do que ela ensina, para servir de material de estudo.`,
     content: [
       { type: "image", mediaType: input.mediaType, data: input.base64 },
       { type: "text", text: "Retorne como página 1." },
@@ -235,6 +236,8 @@ export async function generateQuestionSet(input: {
   avoid: string[];
   chunks: RetrievedChunk[];
   purpose: "jogo" | "simulado";
+  /** Aula que o aluno já estudou neste assunto: as questões seguem os mesmos termos e o mesmo foco. */
+  lessonText?: string | null;
 }): Promise<QuestionSet> {
   if (isMockAi()) {
     const c = mock.generateSessionContent({ ...input, objectiveCount: input.count, recallCount: 0 });
@@ -258,7 +261,7 @@ Tarefa: criar questões objetivas a partir dos trechos do material do aluno (rot
 - ${purposeRule}
 - ${styleRule}
 - Todas as questões precisam ser respondíveis com base nos trechos. Cubra pontos diferentes do conteúdo.
-- Não repita nem reformule levemente as questões listadas como já existentes.`,
+- Não repita nem reformule levemente as questões listadas como já existentes.${input.lessonText ? "\n- O aluno estudou este assunto pela aula abaixo: use os mesmos termos, exemplos e foco da aula, para as questões conversarem com o que ele leu (sem cobrar nada que não esteja na aula ou nos trechos)." : ""}`,
     content: `Perfil do aluno: ${input.voice}
 Disciplina: ${input.subjectName}
 Assunto: ${input.topicTitle}
@@ -266,7 +269,7 @@ Quantidade: ${input.count} questões.
 Questões já existentes (não repetir):
 ${input.avoid.slice(0, 40).map((a) => `- ${a.slice(0, 160)}`).join("\n") || "(nenhuma)"}
 
-Trechos do material:
+${input.lessonText ? `Aula que o aluno estudou:\n<aula>\n${input.lessonText}\n</aula>\n\n` : ""}Trechos do material:
 ${input.chunks.map((c) => `<trecho rotulo="${c.label}" arquivo="${c.materialTitle}" paginas="${c.pageStart}-${c.pageEnd}">\n${c.content}\n</trecho>`).join("\n")}`,
   });
 }

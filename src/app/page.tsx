@@ -55,11 +55,11 @@ const FAQ = [
   },
   {
     q: "Preciso pagar alguma coisa para começar?",
-    a: "Não. A conta é grátis e não pede cartão. No cadastro você ativa o Eduvia com uma chave gratuita do Google (o passo a passo aparece lá). Quando quiser mais, é só assinar um plano.",
+    a: "Não. A conta é grátis e não pede cartão. No cadastro você conecta as IAs do Eduvia, que são grátis (o passo a passo aparece lá). Quando quiser mais, é só assinar um plano.",
   },
   {
     q: "Quanto custa?",
-    a: "Você começa grátis, com limites pequenos para testar. São três planos: Pro (R$ 15 por 30 dias), Avançado (R$ 30) e Ilimitado (R$ 50), cada um também por 7 ou 15 dias. Todos têm PDFs e páginas sem limite; o que muda é quantos guias de estudo você cria por mês. O pagamento é combinado pelo WhatsApp (Pix) e não há renovação automática.",
+    a: "Você começa com 3 dias de teste grátis. Depois, são três planos mensais: Pro (R$ 9,90), Avançado (R$ 19,90) e Ilimitado (R$ 44,90). Todos têm arquivos e páginas sem limite; o que muda é a quantidade de guias de estudo, aulas, redações e simulados. O pagamento é combinado pelo WhatsApp (Pix) e não há renovação automática.",
   },
   {
     q: "Meus materiais e dados ficam seguros?",
@@ -165,7 +165,7 @@ export default async function Home() {
 
         {/* ── Preço */}
         <section id="preco" className="scroll-mt-20 py-14">
-          <SectionTitle kicker="Preço" title="Planos que cabem no bolso" subtitle="Comece grátis. Os planos pagos têm PDFs e páginas sem limite, por 7, 15 ou 30 dias; o que muda é quantos guias de estudo você cria por mês." />
+          <SectionTitle kicker="Preço" title="Planos que cabem no bolso" subtitle="Comece com 3 dias grátis. Planos mensais, todos com arquivos e páginas sem limite; o que muda é a quantidade de guias, aulas, redações e simulados." />
           <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {plans.map((p) => (
               <PriceCard
@@ -173,7 +173,6 @@ export default async function Home() {
                 label={p.name}
                 price={formatBRL(p.priceMonthCents)}
                 period="30 dias"
-                extra={[p.priceWeekCents > 0 && `${formatBRL(p.priceWeekCents)}/7 dias`, p.priceFortnightCents > 0 && `${formatBRL(p.priceFortnightCents)}/15 dias`].filter(Boolean).join(" · ") || undefined}
                 features={planFeatures(p.limits).filter((f) => !f.startsWith("Sem "))}
                 highlight={p.slug === "ilimitado"}
               />

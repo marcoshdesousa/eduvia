@@ -5,28 +5,11 @@ import { z } from "zod";
 import { AiUnavailableError, AiUserError, callStructured, checkGeminiKey, isMockAi } from "@/lib/ai/client";
 import { db } from "@/lib/db";
 import { allowAttempt } from "@/lib/rate-limit";
-import { checkExtraKey, EXTRA_PROVIDERS, IA_EXTRA_XP, type ExtraProvider } from "@/lib/ai/extra";
-import { addXp } from "@/lib/gamification";
+import { checkExtraKey } from "@/lib/ai/extra";
+import { providerLabel, setProviderEnabled, type AiProvider } from "@/lib/ai/providers";
 import { sealSecret } from "@/lib/secret-box";
 import { requireUser } from "@/lib/session";
 import type { FormState } from "./account";
-
-/** Conecta (ou troca) a chave do Gemini do aluno. `next` = para onde ir depois (ex.: /inicio). */
-export async function connectAiAction(next: string | null, _: FormState, f: FormData): Promise<FormState> {
-  const user = await requireUser();
-  const key = String(f.get("geminiKey") ?? "").trim();
-  if (!key) return { error: "Cole a chave da sua IA do Gemini." };
-  if (!(await allowAttempt(`aikey:${user.id}`, 10, 15))) return { error: "Muitas tentativas. Aguarde 15 minutos." };
-  const check = await checkGeminiKey(key);
-  if (!check.ok) return { error: check.error };
-  await db.user.update({
-    where: { id: user.id },
-    data: { geminiKey: sealSecret(key), geminiKeyHint: key.slice(-4), geminiConnectedAt: new Date(), aiPausedUntil: null },
-  });
-  if (next) redirect(next);
-  revalidatePath("/perfil");
-  return { ok: true, message: "IA conectada! ✅" };
-}
 
 export type AiTestResult = { ok: true; text: string; ms: number; models: string[] } | { ok: false; error: string; details?: string };
 
@@ -53,34 +36,51 @@ export async function testAiAction(): Promise<AiTestResult> {
   }
 }
 
-/** Conecta (ou troca) a chave de uma IA extra (Groq ou Cerebras). Na primeira vez, ganha XP. */
-export async function connectExtraAiAction(provider: ExtraProvider, _: FormState, f: FormData): Promise<FormState> {
+const KEY_FIELDS = {
+  gemini: { key: "geminiKey", hint: "geminiKeyHint" },
+  groq: { key: "groqKey", hint: "groqKeyHint" },
+  cerebras: { key: "cerebrasKey", hint: "cerebrasKeyHint" },
+  openrouter: { key: "openrouterKey", hint: "openrouterKeyHint" },
+} as const;
+
+/** Conecta (ou troca) a chave de uma das 4 IAs. Salva na hora: o aluno não perde o que já conectou. */
+export async function connectExtraAiAction(provider: AiProvider, _: FormState, f: FormData): Promise<FormState> {
   const user = await requireUser();
   const key = String(f.get("key") ?? "").trim();
-  const label = EXTRA_PROVIDERS[provider].label;
+  const label = providerLabel(provider);
   if (!key) return { error: `Cole a chave da ${label}.` };
   if (!(await allowAttempt(`aikey-${provider}:${user.id}`, 10, 15))) return { error: "Muitas tentativas. Aguarde 15 minutos." };
-  const check = await checkExtraKey(provider, key);
+  const check = provider === "gemini" ? await checkGeminiKey(key) : await checkExtraKey(provider, key);
   if (!check.ok) return { error: check.error };
-  const first = provider === "groq" ? !user.groqKey : !user.cerebrasKey;
+  const fields = KEY_FIELDS[provider];
+  const had = !!user[fields.key];
   await db.user.update({
     where: { id: user.id },
-    data: provider === "groq" ? { groqKey: sealSecret(key), groqKeyHint: key.slice(-4) } : { cerebrasKey: sealSecret(key), cerebrasKeyHint: key.slice(-4) },
+    data: {
+      [fields.key]: sealSecret(key),
+      [fields.hint]: key.slice(-4),
+      ...(provider === "gemini" ? { geminiConnectedAt: new Date(), aiPausedUntil: null } : {}),
+    },
   });
-  if (first && !(await db.xpEvent.findFirst({ where: { userId: user.id, reason: "ia-extra", refId: provider } }))) {
-    await addXp(user.id, IA_EXTRA_XP, "ia-extra", provider);
-  }
+  revalidatePath("/conectar-ia");
   revalidatePath("/minha-ia");
   revalidatePath("/inicio");
-  return { ok: true, message: first ? `${label} conectada! ⚡ +${IA_EXTRA_XP} XP` : `${label} atualizada! ✅` };
+  return { ok: true, message: had ? `${label} atualizada! ✅` : `${label} conectada! ✅` };
 }
 
-export async function removeExtraAiAction(provider: ExtraProvider) {
+export async function removeExtraAiAction(provider: AiProvider) {
   const user = await requireUser();
-  await db.user.update({
-    where: { id: user.id },
-    data: provider === "groq" ? { groqKey: null, groqKeyHint: null } : { cerebrasKey: null, cerebrasKeyHint: null },
-  });
+  if (provider === "gemini") return;
+  const fields = KEY_FIELDS[provider];
+  await db.user.update({ where: { id: user.id }, data: { [fields.key]: null, [fields.hint]: null } });
   revalidatePath("/minha-ia");
   revalidatePath("/inicio");
+}
+
+/** Admin: liga ou desliga uma IA no sistema (desligada, sai do cadastro e não é usada). */
+export async function toggleProviderAction(provider: AiProvider, enabled: boolean) {
+  const user = await requireUser();
+  if (!user.isAdmin) return;
+  await setProviderEnabled(provider, enabled);
+  revalidatePath("/admin");
 }
