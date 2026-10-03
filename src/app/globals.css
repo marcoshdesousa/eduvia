@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --border: #e3e6eb;
+  --foreground: #11151c;
+  --muted: #5d6675;
+  --primary: #c2410c;
+  --primary-foreground: #ffffff;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --ring: #ea580c;
+}
+
+.dark {
+  --background: #0b0d12;
+  --surface: #12151c;
+  --surface-2: #1a1e27;
+  --border: #252a35;
+  --foreground: #e8eaf0;
+  --muted: #8b93a3;
+  --primary: #fb923c;
+  --primary-foreground: #0b0d12;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #f87171;
+  --ring: #fb923c;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Texto de estudo (markdown) */
+.prose-study h2 { font-size: 1.25rem; font-weight: 700; margin: 1.5rem 0 0.5rem; }
+.prose-study h3 { font-size: 1.05rem; font-weight: 600; margin: 1.25rem 0 0.4rem; }
+.prose-study { overflow-wrap: break-word; max-width: 100%; }
+.prose-study p { margin: 0.6rem 0; line-height: 1.75; }
+.prose-study ul, .prose-study ol { margin: 0.6rem 0 0.6rem 1.25rem; line-height: 1.7; }
+.prose-study ul { list-style: disc; }
+.prose-study ol { list-style: decimal; }
+.prose-study strong { color: var(--foreground); font-weight: 650; }
+.prose-study blockquote { border-left: 3px solid var(--primary); padding-left: 0.75rem; color: var(--muted); margin: 0.75rem 0; }
+.prose-study code { background: var(--surface-2); padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
+.prose-study table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+.prose-study th, .prose-study td { border: 1px solid var(--border); padding: 0.4rem 0.5rem; text-align: left; }
+
+/* Teste rápido: bonequinho em pixel art (pequeno, sem fundo) */
+@keyframes px-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes px-jump {
+  0% { transform: translateY(0) scale(1.1, 0.9); }
+  40% { transform: translateY(-22px) scale(0.95, 1.05); }
+  60% { transform: translateY(-22px); }
+  100% { transform: translateY(0); }
+}
+@keyframes px-fall {
+  0% { transform: translateY(0) rotate(0); opacity: 1; }
+  30% { transform: translateY(-8px) rotate(0); opacity: 1; }
+  100% { transform: translateY(18px) rotate(90deg); opacity: 0; }
+}
+@keyframes px-pop { 0% { transform: scale(0.5); opacity: 0; } 40% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+.px-idle { animation: px-idle 0.5s steps(2) infinite; }
+.px-jump { animation: px-jump 0.7s ease-out 2; }
+.px-fall { animation: px-fall 0.9s ease-in forwards; }
+.px-pop { display: inline-block; animation: px-pop 0.35s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .px-idle, .px-jump, .px-fall { animation: none; }
+}
+
+/* Robozinho narrador da aula */
+@keyframes robot-mouth { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(2.2); } }
+@keyframes robot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes robot-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.robot-mouth { transform-box: fill-box; transform-origin: center; }
+.robot-mouth-talk { animation: robot-mouth 0.28s ease-in-out infinite; }
+.robot-talk { animation: robot-bob 0.6s ease-in-out infinite; }
+.robot-blink { animation: robot-blink 0.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .robot-mouth-talk, .robot-talk, .robot-blink { animation: none; } }
+
+/* foguinho da sequência */
+@keyframes streak-flicker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.06, 0.97) rotate(-2deg); }
+}
+.streak-flame { transform-origin: 50% 90%; animation: streak-flicker 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .streak-flame { animation: none; } }
+
+/* Professor IA pensando: cada mensagem entra suave */
+@keyframes thinking-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.thinking-msg { animation: thinking-in 0.35s ease-out; }
+
+
+/* marcação de fonte no texto ("p.3"): bem pequena, clicável, abre a página do PDF */
+.source-mark { font-size: 0.62em; vertical-align: super; line-height: 0; margin-left: 1px; color: var(--primary); text-decoration: none; opacity: 0.85; white-space: nowrap; }
+.source-mark:hover { text-decoration: underline; opacity: 1; }

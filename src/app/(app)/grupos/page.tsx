@@ -1,0 +1,78 @@
+import Link from "next/link";
+import { BellRing, Users } from "lucide-react";
+import { db } from "@/lib/db";
+import { requireReadyUser } from "@/lib/session";
+import { groupAccessError, groupCreateError } from "@/lib/billing";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardTitle } from "@/components/ui/card";
+import { CreateGroupForm, InviteResponse, JoinByCodeForm } from "./forms";
+
+export const metadata = { title: "Grupos" };
+
+const ROLE = { OWNER: "Dono", ADMIN: "Admin", MEMBER: "Membro" } as const;
+
+export default async function Page() {
+  const user = await requireReadyUser();
+  const [groups, invites, createBlocked, accessBlocked] = await Promise.all([
+    db.groupMember.findMany({
+      where: { userId: user.id },
+      include: { group: { include: { _count: { select: { members: true, shares: true } } } } },
+      orderBy: { joinedAt: "desc" },
+    }),
+    db.groupInvite.findMany({ where: { inviteeId: user.id, status: "PENDING" }, include: { group: true, inviter: { select: { handle: true } } }, orderBy: { createdAt: "desc" } }),
+    groupCreateError(user),
+    groupAccessError(user),
+  ]);
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Grupos de estudo</h1>
+        <p className="text-sm text-muted">Estude com amigos: compartilhem materiais, resumos e simulados, conversem no mural e disputem o ranking.</p>
+      </div>
+
+      {accessBlocked && (
+        <Card className="border-warning/40 bg-warning/10 text-sm">
+          {accessBlocked} Seus grupos ficam guardados e voltam quando você assinar. <Link href="/assinatura" className="font-semibold text-primary">Ver planos</Link>
+        </Card>
+      )}
+      {invites.length > 0 && (
+        <Card className="space-y-3 border-primary bg-primary/5">
+          <CardTitle className="flex items-center gap-2"><BellRing size={18} className="text-primary" /> Você foi convidado{invites.length > 1 ? ` (${invites.length})` : ""}</CardTitle>
+          {invites.map((i) => (
+            <div key={i.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-3 text-sm">
+              <span><strong>@{i.inviter.handle}</strong> convidou você para o grupo <strong>{i.group.name}</strong></span>
+              <InviteResponse inviteId={i.id} />
+            </div>
+          ))}
+        </Card>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {groups.map(({ group, role }) => (
+          <Link key={group.id} href={`/grupos/${group.id}`}>
+            <Card className="h-full transition-colors hover:border-primary/50">
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="font-semibold">{group.name}</h2>
+                <Badge tone={role === "MEMBER" ? "neutral" : "primary"}>{ROLE[role]}</Badge>
+              </div>
+              {group.description && <p className="mt-1 line-clamp-2 text-sm text-muted">{group.description}</p>}
+              <p className="mt-3 inline-flex items-center gap-1 text-xs text-muted"><Users size={13} /> {group._count.members} membro(s) · {group._count.shares} compartilhado(s)</p>
+            </Card>
+          </Link>
+        ))}
+        {!groups.length && <Card className="text-sm text-muted sm:col-span-2">Você ainda não está em nenhum grupo.</Card>}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="space-y-3">
+          <CardTitle>Entrar em um grupo</CardTitle>
+          {!accessBlocked ? <JoinByCodeForm /> : <p className="text-sm text-muted">{accessBlocked} <Link href="/assinatura" className="font-semibold text-primary">Ver planos</Link></p>}
+        </Card>
+        <Card className="space-y-3">
+          <CardTitle>Criar grupo</CardTitle>
+          {!createBlocked ? <CreateGroupForm /> : <p className="text-sm text-muted">{createBlocked} <Link href="/assinatura" className="font-semibold text-primary">Ver planos</Link></p>}
+        </Card>
+      </div>
+    </div>
+  );
+}

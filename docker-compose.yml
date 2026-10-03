@@ -1,0 +1,16 @@
+# Serviços de apoio para desenvolvimento local: Postgres com pgvector e captura de e-mails.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: eduvia
+    ports: ["5432:5432"]
+    volumes: [eduvia-db:/var/lib/postgresql/data]
+  mail:
+    # interface web em http://localhost:8025 — use SMTP_URL="smtp://localhost:1025"
+    image: axllent/mailpit
+    ports: ["1025:1025", "8025:8025"]
+volumes:
+  eduvia-db:

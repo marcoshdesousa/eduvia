@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+.data
+.env
+.env*.local
+src/generated
+*.tsbuildinfo
+next-env.d.ts
+coverage
+test-results
+playwright-report
+public/pdf.worker.min.mjs
+
+# voz do robô (instalada no deploy)
+/vendor

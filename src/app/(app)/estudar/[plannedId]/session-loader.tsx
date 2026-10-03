@@ -1,0 +1,73 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import { startSessionAction } from "@/app/actions/study";
+import Link from "next/link";
+import { Button, buttonClass } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { isRestMessage } from "@/components/ui/form";
+
+const STEPS = ["Lendo os trechos do seu material", "Escrevendo o texto de estudo", "Separando os pontos-chave", "Criando as perguntas"];
+
+export function SessionLoader({ plannedId, header, minutes }: { plannedId: string; header: { topic: string; subject: string; label: string }; minutes?: number }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [upgrade, setUpgrade] = useState(false);
+  const [step, setStep] = useState(0);
+  const started = useRef(false);
+
+  const start = async () => {
+    setError(null);
+    const res = await startSessionAction(plannedId, minutes);
+    if ("error" in res) {
+      setError(res.error);
+      setUpgrade(!!res.upgrade);
+    }
+    else {
+      try {
+        sessionStorage.setItem("eduvia:session-fresh", "1");
+      } catch {}
+      router.refresh();
+    }
+  };
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    start();
+    const t = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 6000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="mx-auto max-w-2xl">
+      <p className="text-sm text-muted">{header.subject} · {header.label}</p>
+      <h1 className="text-2xl font-bold">{header.topic}</h1>
+      <Card className="mt-6 text-center">
+        {error ? (
+          <>
+            <p className={upgrade || isRestMessage(error) ? "" : "text-danger"}>{isRestMessage(error) ? "🌿 " : ""}{error}</p>
+            {isRestMessage(error) ? (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Link href="/descanse" className={buttonClass("primary")}>Ver sugestões para descansar</Link>
+                {/Assine/.test(error) && <Link href="/assinatura" className={buttonClass("outline")}>Assinar</Link>}
+              </div>
+            ) : upgrade ? (
+              <Link href="/assinatura" className={buttonClass("primary", "md", "mt-4")}>Assinar plano</Link>
+            ) : (
+              <Button className="mt-4" onClick={start}>Tentar de novo</Button>
+            )}
+          </>
+        ) : (
+          <>
+            <Loader2 className="mx-auto animate-spin text-primary" size={28} />
+            <p className="mt-3 font-medium">Preparando sua sessão...</p>
+            <p className="mt-1 text-sm text-muted">{STEPS[step]}</p>
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
