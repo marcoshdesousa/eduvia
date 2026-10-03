@@ -83,3 +83,15 @@ export async function toggleProviderAction(provider: AiProvider, enabled: boolea
   await setProviderEnabled(provider, enabled);
   revalidatePath("/admin");
 }
+
+export type VoiceTestResult = { ok: true; voice: string; ms: number; seconds: number; memoryMb: number } | { ok: false; error: string; memoryMb: number };
+
+/** Admin: testa a voz do robô (Piper) de verdade e mostra o motivo se falhar. */
+export async function testVoiceAction(): Promise<VoiceTestResult> {
+  const user = await requireUser();
+  const memoryMb = Math.round(process.memoryUsage().rss / 1_048_576);
+  if (!user.isAdmin) return { ok: false, error: "Só para administradores.", memoryMb };
+  const { piperStatus } = await import("@/lib/ai/piper");
+  const r = await piperStatus();
+  return r.ok ? { ...r, memoryMb } : { ok: false, error: [r.error, r.lastError].filter(Boolean).join(" · "), memoryMb };
+}

@@ -1,6 +1,8 @@
 // Voz do robô: Piper (código aberto), rodando no próprio servidor. Grátis, sem limite e sempre em português.
-// O programa e a voz são baixados uma vez para o disco do servidor (na primeira vez que precisar).
-import { spawn } from "node:child_process";
+// O programa e a voz vêm instalados no deploy (vendor/piper, via scripts/setup-piper.ts); se faltar,
+// são baixados uma vez para o disco. O Piper fica LIGADO (um processo só, com a voz carregada): cada
+// frase sai em menos de 1 segundo, sem carregar a voz de novo a cada pedido.
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { access, chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -22,7 +24,12 @@ const VOICES = [
 ] as const;
 /** Fala um pouco mais devagar que o normal do Piper: mais pausada e fácil de acompanhar. */
 const LENGTH_SCALE = process.env.PIPER_LENGTH_SCALE || "1.1";
+/** Tempo máximo de uma frase: passou disso, o Piper é reiniciado (nunca trava a fila). */
+const LINE_TIMEOUT_MS = 45_000;
 
+/** Pasta instalada no deploy (dentro do app). */
+export const vendorPiperDir = () => path.resolve(/*turbopackIgnore: true*/ process.cwd(), "vendor/piper");
+/** Pasta de reserva no disco (se o deploy não conseguiu instalar). */
 export const piperDir = () =>
   path.resolve(
     /*turbopackIgnore: true*/ process.env.PIPER_DIR || path.join(path.dirname(process.env.STORAGE_LOCAL_DIR || ".data/uploads"), "piper"),
@@ -42,31 +49,18 @@ async function download(url: string, to: string) {
   await rename(tmp, to);
 }
 
-function run(cmd: string, args: string[], opts: { input?: string; cwd?: string; env?: NodeJS.ProcessEnv } = {}) {
-  return new Promise<string>((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env, stdio: ["pipe", "pipe", "pipe"] });
+function run(cmd: string, args: string[]) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(/*turbopackIgnore: true*/ cmd, args, { stdio: ["ignore", "ignore", "pipe"] });
     let err = "";
-    child.stderr.on("data", (d) => (err = (err + d).slice(-4000)));
-    child.stdout.on("data", () => {});
+    child.stderr.on("data", (d) => (err = (err + d).slice(-2000)));
     child.on("error", reject);
-    child.on("close", (code) => (code === 0 ? resolve(err) : reject(new Error(`${cmd} saiu com ${code}: ${err.slice(-800)}`))));
-    child.stdin.end(opts.input ?? "");
+    child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} saiu com ${code}: ${err}`))));
   });
 }
 
-let installing: Promise<{ bin: string; model: string }> | null = null;
-
-/** Garante o programa e uma voz no disco (baixa só na primeira vez). */
-export function ensurePiper() {
-  installing ??= install().catch((e) => {
-    installing = null; // tenta de novo na próxima vez
-    throw e;
-  });
-  return installing;
-}
-
-async function install() {
-  const dir = piperDir();
+/** Instala o programa e uma voz numa pasta (usado no deploy e, se faltar, na primeira vez). */
+export async function installPiper(dir: string): Promise<{ bin: string; model: string; voice: string }> {
   await mkdir(dir, { recursive: true });
   const bin = path.join(dir, "piper", "piper");
   if (!(await exists(bin))) {
@@ -80,7 +74,7 @@ async function install() {
   for (const v of VOICES) {
     const vdir = path.join(dir, "voices", v.id);
     const model = path.join(vdir, `${v.id}.onnx`);
-    if (await exists(path.join(vdir, "ok"))) return { bin, model };
+    if (await exists(path.join(vdir, "ok"))) return { bin, model, voice: v.id };
     try {
       await mkdir(vdir, { recursive: true });
       if ("tarball" in v) {
@@ -93,13 +87,33 @@ async function install() {
       }
       if (!(await exists(model)) || !(await exists(`${model}.json`))) throw new Error("arquivos da voz incompletos");
       await writeFile(path.join(vdir, "ok"), new Date().toISOString());
-      console.log(`[voz] Piper pronto com a voz ${v.id}`);
-      return { bin, model };
+      console.log(`[voz] Piper pronto com a voz ${v.id} em ${dir}`);
+      return { bin, model, voice: v.id };
     } catch (e) {
       errors.push(`${v.id}: ${(e as Error).message}`);
     }
   }
   throw new Error(`nenhuma voz do Piper baixou: ${errors.join(" | ")}`);
+}
+
+let installing: Promise<{ bin: string; model: string; voice: string }> | null = null;
+
+/** Garante o Piper: o do deploy (vendor/piper) ou, se não houver, baixa uma vez para o disco. */
+export function ensurePiper() {
+  installing ??= (async () => {
+    const vendor = vendorPiperDir();
+    if (await exists(path.join(vendor, "piper", "piper"))) {
+      for (const v of VOICES) {
+        const model = path.join(vendor, "voices", v.id, `${v.id}.onnx`);
+        if (await exists(path.join(vendor, "voices", v.id, "ok"))) return { bin: path.join(vendor, "piper", "piper"), model, voice: v.id };
+      }
+    }
+    return installPiper(piperDir());
+  })().catch((e) => {
+    installing = null; // tenta de novo na próxima vez
+    throw e;
+  });
+  return installing;
 }
 
 /** WAV (PCM 16 bits mono) → amostras e taxa. */
@@ -116,27 +130,110 @@ export function readWav(buf: Buffer): { pcm: Buffer; rate: number } {
   throw new Error("WAV sem áudio");
 }
 
-// um áudio de cada vez: o servidor tem pouca CPU e o site precisa continuar rápido
+// ───────────── Piper ligado (um processo só) ─────────────
+
+type Waiting = { file: string; resolve: () => void; reject: (e: Error) => void; timer: NodeJS.Timeout };
+let proc: ChildProcessWithoutNullStreams | null = null;
+let starting: Promise<ChildProcessWithoutNullStreams> | null = null;
+const waiting: Waiting[] = [];
+let lastError: string | null = null;
+
+function stop(reason: string) {
+  lastError = reason;
+  const p = proc;
+  proc = null;
+  starting = null;
+  for (const w of waiting.splice(0)) {
+    clearTimeout(w.timer);
+    w.reject(new Error(reason));
+  }
+  p?.kill("SIGKILL");
+}
+
+async function start(): Promise<ChildProcessWithoutNullStreams> {
+  if (proc) return proc;
+  starting ??= (async () => {
+    const { bin, model } = await ensurePiper();
+    const pdir = path.dirname(bin);
+    const env = { ...process.env, LD_LIBRARY_PATH: [pdir, process.env.LD_LIBRARY_PATH].filter(Boolean).join(":") };
+    const args = ["--model", model, "--json-input", "--length_scale", LENGTH_SCALE, "--espeak_data", path.join(pdir, "espeak-ng-data")];
+    // stdbuf: o Piper avisa (uma linha) assim que cada frase fica pronta; nice: o site responde primeiro
+    const tryCmds: [string, string[]][] = [
+      ["nice", ["-n", "10", "stdbuf", "-oL", bin, ...args]],
+      ["stdbuf", ["-oL", bin, ...args]],
+    ];
+    let child: ChildProcessWithoutNullStreams | null = null;
+    for (const [cmd, a] of tryCmds) {
+      const c = spawn(/*turbopackIgnore: true*/ cmd, a, { env });
+      const ok = await new Promise<boolean>((res) => {
+        c.once("error", () => res(false));
+        c.once("spawn", () => res(true));
+      });
+      if (ok) {
+        child = c;
+        break;
+      }
+    }
+    if (!child) throw new Error("não foi possível iniciar o Piper (stdbuf/nice ausentes)");
+    let buf = "";
+    child.stdout.on("data", (d: Buffer) => {
+      buf += d.toString();
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        const k = waiting.findIndex((w) => w.file === line);
+        if (k >= 0) {
+          const [w] = waiting.splice(k, 1);
+          clearTimeout(w.timer);
+          w.resolve();
+        }
+      }
+    });
+    let err = "";
+    child.stderr.on("data", (d: Buffer) => (err = (err + d).slice(-2000)));
+    child.on("close", (code) => {
+      if (proc === child) stop(`Piper parou (código ${code}): ${err.slice(-300)}`);
+    });
+    child.stdin.on("error", () => {});
+    proc = child;
+    return child;
+  })().catch((e) => {
+    starting = null;
+    lastError = (e as Error).message;
+    throw e;
+  });
+  return starting;
+}
+
+/** Fala uma frase e espera o arquivo WAV ficar pronto. */
+async function speakLine(text: string, file: string) {
+  const p = await start();
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => stop("Piper demorou demais numa frase; reiniciando"), LINE_TIMEOUT_MS);
+    waiting.push({ file, resolve, reject, timer });
+    p.stdin.write(JSON.stringify({ text, output_file: file }) + "\n");
+  });
+}
+
+// uma frase de cada vez (o Piper fala uma de cada vez de qualquer jeito)
 let queue: Promise<unknown> = Promise.resolve();
 
 /** Fala cada linha separadamente (uma frase por linha) e devolve o áudio de cada uma. */
 export function piperSpeak(lines: string[]): Promise<{ rate: number; pcms: Buffer[] }> {
   const job = queue.then(async () => {
-    const { bin, model } = await ensurePiper();
     const out = await mkdtemp(path.join(tmpdir(), "voz-"));
     try {
-      const input = lines.map((text, i) => JSON.stringify({ text, output_file: path.join(out, `${i}.wav`) })).join("\n") + "\n";
-      const pdir = path.dirname(bin);
-      const env = { ...process.env, LD_LIBRARY_PATH: [pdir, process.env.LD_LIBRARY_PATH].filter(Boolean).join(":") };
-      const args = ["--model", model, "--json-input", "--length_scale", LENGTH_SCALE, "--espeak_data", path.join(pdir, "espeak-ng-data")];
-      // prioridade baixa: o site responde primeiro, a voz usa a CPU que sobrar
-      await run("nice", ["-n", "10", bin, ...args], { input, env }).catch((e: Error & { code?: string }) =>
-        e.code === "ENOENT" ? run(bin, args, { input, env }) : Promise.reject(e),
-      );
       let rate = 22050;
       const pcms: Buffer[] = [];
-      for (let i = 0; i < lines.length; i++) {
-        const wav = readWav(await readFile(path.join(out, `${i}.wav`)));
+      for (const [i, line] of lines.entries()) {
+        const file = path.join(out, `${i}.wav`);
+        try {
+          await speakLine(line, file);
+        } catch {
+          await speakLine(line, file); // o Piper reiniciou: tenta a frase mais uma vez
+        }
+        const wav = readWav(await readFile(file));
         rate = wav.rate;
         pcms.push(Buffer.from(wav.pcm));
       }
@@ -147,4 +244,16 @@ export function piperSpeak(lines: string[]): Promise<{ rate: number; pcms: Buffe
   });
   queue = job.catch(() => {});
   return job;
+}
+
+/** Situação da voz (para o painel do admin). */
+export async function piperStatus() {
+  const t0 = Date.now();
+  try {
+    const { voice } = await ensurePiper();
+    const { pcms, rate } = await piperSpeak(["Olá! A voz do Eduvia está funcionando."]);
+    return { ok: true as const, voice, ms: Date.now() - t0, seconds: Math.round((pcms[0].length / 2 / rate) * 10) / 10 };
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message, lastError };
+  }
 }

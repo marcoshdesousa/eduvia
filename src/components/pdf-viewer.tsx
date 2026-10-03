@@ -11,6 +11,21 @@ function reportViewerError(e: unknown) {
   } catch {}
 }
 
+/** Busca com novas tentativas (o servidor pode estar ocupado por alguns segundos). */
+async function fetchRetry(url: string, retryOn: (status: number) => boolean, tries = 3): Promise<Response> {
+  let last: Response | null = null;
+  for (let i = 0; i < tries; i++) {
+    try {
+      last = await fetch(url);
+      if (last.ok || !retryOn(last.status)) return last;
+    } catch (e) {
+      if (i === tries - 1) throw e;
+    }
+    await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+  }
+  return last!;
+}
+
 const norm = (s: string) =>
   s
     .normalize("NFD")
@@ -65,13 +80,14 @@ export function PdfPageViewer({ materialId, page: initialPage, quote }: { materi
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [textPage, setTextPage] = useState<{ text: string; total: number } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const markRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let alive = true;
     setInfo(null);
     setLoaded(false);
-    fetch(`/api/materials/${materialId}/view?p=${page}`)
+    fetchRetry(`/api/materials/${materialId}/view?p=${page}`, (st) => st !== 404)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`view ${r.status}`))))
       .then((j: PageInfo) => alive && setInfo(j))
       .catch((e) => {
@@ -82,7 +98,7 @@ export function PdfPageViewer({ materialId, page: initialPage, quote }: { materi
     return () => {
       alive = false;
     };
-  }, [materialId, page]);
+  }, [materialId, page, attempt]);
 
   const marks = useMemo(() => {
     if (!info || !quote || page !== initialPage) return [];
@@ -96,11 +112,11 @@ export function PdfPageViewer({ materialId, page: initialPage, quote }: { materi
 
   useEffect(() => {
     if (error !== "texto") return;
-    fetch(`/api/materials/${materialId}/page?p=${page}`)
+    fetchRetry(`/api/materials/${materialId}/page?p=${page}`, () => true)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((j: { text: string; total: number }) => setTextPage(j))
-      .catch(() => setError("Não foi possível abrir o material agora. Tente de novo em instantes."));
-  }, [error, materialId, page]);
+      .catch(() => setError("Não foi possível abrir o material agora."));
+  }, [error, materialId, page, attempt]);
 
   const total = info?.total ?? textPage?.total;
   const nav = (
@@ -121,7 +137,23 @@ export function PdfPageViewer({ materialId, page: initialPage, quote }: { materi
       </div>
     );
   }
-  if (error) return <p className="p-6 text-center text-sm text-danger">{error}</p>;
+  if (error) {
+    return (
+      <div className="space-y-3 p-6 text-center">
+        <p className="text-sm text-danger">{error}</p>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setError(null);
+            setTextPage(null);
+            setAttempt((n) => n + 1);
+          }}
+        >
+          Tentar de novo
+        </Button>
+      </div>
+    );
+  }
   return (
     <div className="min-w-0 space-y-3">
       {nav}

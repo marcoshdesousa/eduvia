@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { warmLesson } from "@/lib/ai/tts";
+import { warmPages } from "@/lib/materials/page-image";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { getOwnedPlanned, lessonBlocker, nearestSessionMinutes, SESSION_MINUTES } from "@/lib/study";
@@ -85,7 +86,9 @@ export default async function Page({ params }: { params: Promise<{ plannedId: st
   if (text?.content) {
     const { content } = text;
     const labels = (text.sourceRefs as SourceRef[]).map((r) => r.label);
-    after(() => warmLesson(content, labels));
+    const refs = text.sourceRefs as SourceRef[];
+    // a voz e as páginas citadas ("p.3") ficam prontas antes de o aluno tocar nelas
+    after(() => Promise.all([warmPages(refs), warmLesson(content, labels)]));
   }
 
   const byId = new Map(questions.map((q) => [q.id, q]));

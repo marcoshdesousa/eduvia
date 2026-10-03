@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/copy-pdf-worker.mjs && prisma generate && next build",
+    "build": "node scripts/copy-pdf-worker.mjs && tsx scripts/setup-piper.ts && prisma generate && next build",
     "start": "next start -p ${PORT:-3000}",
     "worker": "tsx src/worker/index.ts",
     "typecheck": "tsc --noEmit",

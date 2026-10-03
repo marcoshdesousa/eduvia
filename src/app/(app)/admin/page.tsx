@@ -22,6 +22,7 @@ import { markUserMessagesRead, staffTickets, supportUnreadForStaff, ticketFor } 
 import { CloseTicketButton } from "./close-ticket-button";
 import { ALL_PROVIDERS, disabledProviders, hasKey, providerLabel } from "@/lib/ai/providers";
 import { toggleProviderAction } from "@/app/actions/ai";
+import { VoiceTest } from "./voice-test";
 
 export const metadata = { title: "Admin" };
 
@@ -192,6 +193,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
             );
           })}
         </ul>
+        <div className="border-t border-border pt-3">
+          <p className="mb-2 text-sm font-medium">Voz do robô (Piper, no servidor)</p>
+          <VoiceTest />
+        </div>
       </Card>
     );
     const [byTask, byUser] = await Promise.all([
