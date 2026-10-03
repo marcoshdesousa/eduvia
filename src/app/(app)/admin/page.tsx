@@ -20,7 +20,7 @@ import { Avatar } from "@/components/avatar";
 import { replySupportAction } from "@/app/actions/support";
 import { markUserMessagesRead, staffTickets, supportUnreadForStaff, ticketFor } from "@/lib/support";
 import { CloseTicketButton } from "./close-ticket-button";
-import { ALL_PROVIDERS, disabledProviders, providerLabel } from "@/lib/ai/providers";
+import { ALL_PROVIDERS, disabledProviders, hasKey, providerLabel } from "@/lib/ai/providers";
 import { toggleProviderAction } from "@/app/actions/ai";
 
 export const metadata = { title: "Admin" };
@@ -253,6 +253,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
         ],
       }
     : {};
+  const aiOff = await disabledProviders();
   const list = await db.user.findMany({
     where: { ...where, cpf: { not: null } },
     include: { subscriptions: { where: { status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: now } }, include: { plan: true }, orderBy: { currentPeriodEnd: "desc" }, take: 1 } },
@@ -286,7 +287,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
                   ) : (
                     <Badge tone="warning">Grátis</Badge>
                   )}
-                  {u.geminiKey && u.cerebrasKey && u.groqKey && u.openrouterKey ? <Badge tone="primary">4 IAs conectadas</Badge> : <Badge tone="danger">IAs incompletas</Badge>}
+                  {ALL_PROVIDERS.every((p) => aiOff.includes(p) || hasKey(u, p)) ? <Badge tone="primary">IAs conectadas</Badge> : <Badge tone="danger">IAs incompletas</Badge>}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-muted">
                   <span>CPF {formatCpf(u.cpf!)}</span>

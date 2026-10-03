@@ -5,7 +5,7 @@ import { AI_KEYS, connectAis, generateLessons, signUp, sql } from "./helpers";
 const uid = Date.now().toString(36);
 
 // Requer BILLING_ENFORCED diferente de "false" e AI_MODE=mock no servidor.
-test("teste grátis → admin libera o Pro; 4 IAs obrigatórias", async ({ page, browser }) => {
+test("teste grátis → admin libera o Pro; 3 IAs obrigatórias", async ({ page, browser }) => {
   const handle = `aluno.pago.${uid}`;
   await signUp(page, { name: "Aluno Pagante", handle, plan: "gratis" });
 
@@ -28,7 +28,7 @@ test("teste grátis → admin libera o Pro; 4 IAs obrigatórias", async ({ page,
 
   // Minhas IAs: as 4 conectadas (só o final da chave aparece)
   await page.goto("/minha-ia");
-  await expect(page.getByText(/Conectada \(…/)).toHaveCount(4);
+  await expect(page.getByText(/Conectada \(…/)).toHaveCount(3);
   await expect(page.getByText(`Conectada (…${AI_KEYS.gemini.slice(-4)})`)).toBeVisible();
 
   // faltando uma IA, o app leva para "Conecte suas IAs"
@@ -70,7 +70,7 @@ test("teste grátis → admin libera o Pro; 4 IAs obrigatórias", async ({ page,
   await signUp(admin, { name: "Admin Teste", handle: `admin.${uid}` });
   await sql(`UPDATE "user" SET "isAdmin" = true WHERE handle = $1`, [`admin.${uid}`]);
   await admin.goto(`/admin?q=${handle}`);
-  await expect(admin.getByText("4 IAs conectadas", { exact: true })).toBeVisible();
+  await expect(admin.getByText("IAs conectadas", { exact: true })).toBeVisible();
   admin.on("dialog", (d) => d.accept());
   await admin.getByLabel("Período").selectOption("MONTH");
   await admin.getByRole("button", { name: "Liberar" }).click();
@@ -80,7 +80,8 @@ test("teste grátis → admin libera o Pro; 4 IAs obrigatórias", async ({ page,
   await admin.goto("/admin?aba=ia");
   await expect(admin.getByText("Alunos que mais usaram")).toBeVisible();
   await expect(admin.getByText("IAs do sistema")).toBeVisible();
-  await expect(admin.getByRole("button", { name: "Desligar" })).toHaveCount(4);
+  await expect(admin.getByRole("button", { name: "Desligar" })).toHaveCount(3);
+  await expect(admin.getByRole("button", { name: "Ligar", exact: true })).toHaveCount(1); // Cerebras: passou a exigir cartão
 
   // redes sociais: o admin cadastra e o botão aparece no rodapé da página inicial
   await admin.goto("/admin?aba=site");

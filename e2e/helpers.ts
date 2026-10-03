@@ -24,7 +24,7 @@ export async function signUp(page: Page, opts: { name: string; handle: string; p
   await page.getByLabel("Senha", { exact: true }).fill(PASSWORD);
   await page.getByLabel("Confirme a senha").fill(PASSWORD);
   await page.locator('input[name="terms"]').check();
-  // passo 1 cria a conta; passo 2: conectar as 4 IAs
+  // passo 1 cria a conta; passo 2: conectar as IAs (Gemini, Groq e OpenRouter)
   await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page).toHaveURL(/\/conectar-ia/);
   await connectAis(page);
