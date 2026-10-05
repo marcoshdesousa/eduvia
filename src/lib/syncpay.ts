@@ -1,11 +1,13 @@
 // Pagamento por Pix com a SyncPay: o site cria a cobrança, mostra o QR Code e libera o plano quando o Pix cai.
+// Mesmo jeito que já funciona na Acolia: cria em /api/partner/v1/cash-in e confere em /api/partner/v2/transactions/{id}.
 // Configuração (Render → Environment): SYNCPAY_CLIENT_ID e SYNCPAY_CLIENT_SECRET (obrigatórias)
-// e, se a SyncPay indicar outro endereço, SYNCPAY_API_BASE.
+// e, se a SyncPay indicar outro endereço, SYNCPAY_API_BASE (ou SYNCPAY_BASE_URL).
+// No painel da SyncPay, autorize os IPs de saída do Render (Render → Connect → Outbound).
 // Segurança: o aviso (webhook) da SyncPay nunca libera o plano sozinho; o site sempre confere o status
 // da cobrança direto na API antes de liberar.
 import { createHmac } from "node:crypto";
 
-const base = () => (process.env.SYNCPAY_API_BASE || "https://api.syncpayments.com.br").replace(/\/+$/, "");
+const base = () => (process.env.SYNCPAY_API_BASE || process.env.SYNCPAY_BASE_URL || "https://api.syncpayments.com.br").replace(/\/+$/, "");
 
 export function syncpayConfigured() {
   return !!(process.env.SYNCPAY_CLIENT_ID?.trim() && process.env.SYNCPAY_CLIENT_SECRET?.trim());
@@ -37,7 +39,7 @@ async function accessToken(): Promise<string> {
   return value;
 }
 
-async function call(path: string, init: { method: "GET" | "POST"; body?: unknown }) {
+async function call(path: string, init: { method: "GET" | "POST"; body?: unknown }, opts: { soft?: boolean } = {}) {
   const send = async () =>
     fetch(`${base()}${path}`, {
       method: init.method,
@@ -51,6 +53,7 @@ async function call(path: string, init: { method: "GET" | "POST"; body?: unknown
     res = await send();
   }
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (opts.soft) return { ...body, __status: res.status };
   if (!res.ok) throw new Error(`SyncPay ${path}: ${res.status} ${JSON.stringify(body).slice(0, 300)}`);
   return body;
 }
@@ -83,7 +86,12 @@ export async function createPix(input: {
       amount: Math.round(input.valueCents) / 100,
       description: input.description,
       webhook_url: input.webhookUrl,
-      client: { name: input.client.name, cpf: input.client.cpf, email: input.client.email, phone: input.client.phone },
+      client: {
+        name: input.client.name,
+        cpf: input.client.cpf.replace(/\D/g, ""),
+        email: input.client.email,
+        phone: input.client.phone.replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, ""), // sem o 55 do Brasil
+      },
     },
   });
   const id = pick(body, ["identifier", "id", "transaction_id", "reference_id"]);
@@ -96,19 +104,35 @@ export type PixStatus = "paid" | "pending" | "failed";
 
 /** Situação da cobrança, direto na API (é o que vale para liberar o plano). */
 export async function pixStatus(id: string): Promise<PixStatus> {
-  const body = await call(`/api/partner/v1/transaction/${encodeURIComponent(id)}`, { method: "GET" });
-  return normalizeStatus(pick(body, ["status", "situation", "state"]));
+  const body = await call(`/api/partner/v2/transactions/${encodeURIComponent(id)}`, { method: "GET" }, { soft: true });
+  if (body.__status !== 200) return "pending"; // não respondeu direito: confere de novo depois
+  const data = (body.data ?? {}) as Record<string, unknown>;
+  const t = ((data.transaction ?? data) || {}) as Record<string, unknown>;
+  if (t.refunded_at) return "failed";
+  if (t.paid_at) return "paid";
+  return normalizeStatus(typeof t.status === "string" ? t.status : pick(body, ["status", "situation", "state"]));
 }
 
 export function normalizeStatus(raw: string | null): PixStatus {
   const s = (raw ?? "").toLowerCase();
   if (/^(completed|paid|approved|confirmed|success|succeeded|paid_out|concluido|concluída|pago|aprovado)$/.test(s)) return "paid";
-  if (/(fail|cancel|expired|refund|chargeback|med|recus|estorn)/.test(s)) return "failed";
+  if (/(fail|cancel|expired|refund|refused|chargeback|med|recus|estorn)/.test(s)) return "failed";
   return "pending";
 }
 
-/** Identificador da cobrança num aviso (webhook) da SyncPay. */
-export function webhookChargeId(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  return pick(payload as Record<string, unknown>, ["identifier", "id", "transaction_id", "reference_id", "idTransaction"]);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Cobranças citadas num aviso (webhook) da SyncPay: os campos conhecidos e qualquer identificador no formato deles. */
+export function webhookChargeIds(payload: unknown): string[] {
+  if (!payload || typeof payload !== "object") return [];
+  const ids = new Set<string>();
+  const known = pick(payload as Record<string, unknown>, ["identifier", "id", "transaction_id", "reference_id", "idTransaction"]);
+  if (known) ids.add(known);
+  const walk = (v: unknown, depth: number) => {
+    if (depth > 5 || v == null) return;
+    if (typeof v === "string" && UUID.test(v)) ids.add(v);
+    else if (typeof v === "object") Object.values(v as object).slice(0, 50).forEach((x) => walk(x, depth + 1));
+  };
+  walk(payload, 0);
+  return [...ids].slice(0, 10);
 }

@@ -23,10 +23,12 @@ beforeAll(async () => {
         const b = JSON.parse(body);
         expect(b.amount).toBe(9.9);
         expect(b.client.cpf).toBe("12345678909");
+        expect(b.client.phone).toBe("11999999999"); // sem o 55
         expect(b.webhook_url).toContain("token=");
         return res.end(JSON.stringify({ message: "ok", pix_code: "00020126PIXCOPIAECOLA", identifier: "tx-1" }));
       }
-      if (req.url === "/api/partner/v1/transaction/tx-1") return res.end(JSON.stringify({ data: { reference_id: "tx-1", status } }));
+      if (req.url === "/api/partner/v2/transactions/tx-1")
+        return res.end(JSON.stringify({ data: { transaction: { id: "tx-1", status, paid_at: status === "completed" ? "2026-10-05T12:00:00Z" : null } } }));
       res.writeHead(404).end("{}");
     });
   });
@@ -46,7 +48,7 @@ describe("SyncPay (Pix)", () => {
       valueCents: 990,
       description: "Eduvia - plano Pro",
       webhookUrl: `https://eduvia.app/api/webhooks/syncpay?token=${sp.webhookToken()}`,
-      client: { name: "Ana", cpf: "12345678909", phone: "11999999999", email: "aluno@eduvia.com.br" },
+      client: { name: "Ana", cpf: "12345678909", phone: "+55 (11) 99999-9999", email: "aluno@eduvia.com.br" },
     });
     expect(pix).toEqual({ id: "tx-1", pixCode: "00020126PIXCOPIAECOLA" });
     expect(await sp.pixStatus("tx-1")).toBe("pending");
@@ -62,8 +64,10 @@ describe("SyncPay (Pix)", () => {
     expect(sp.normalizeStatus("pending")).toBe("pending");
     expect(sp.normalizeStatus("failed")).toBe("failed");
     expect(sp.normalizeStatus("refunded")).toBe("failed");
-    expect(sp.webhookChargeId({ data: { id: "tx-9", status: "completed" } })).toBe("tx-9");
-    expect(sp.webhookChargeId({ identifier: "tx-8" })).toBe("tx-8");
-    expect(sp.webhookChargeId(null)).toBeNull();
+    expect(sp.webhookChargeIds({ data: { id: "tx-9", status: "completed" } })).toEqual(["tx-9"]);
+    expect(sp.webhookChargeIds({ identifier: "tx-8" })).toEqual(["tx-8"]);
+    const uuid = "0d6f4a5e-1b2c-4d3e-8f90-123456789abc";
+    expect(sp.webhookChargeIds({ event: "cashin.update", data: { transaction: { identifier: uuid } } })).toEqual([uuid]);
+    expect(sp.webhookChargeIds(null)).toEqual([]);
   });
 });
