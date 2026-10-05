@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { makeStudyPdf } from "./fixtures";
-import { AI_KEYS, connectAis, generateLessons, signUp, sql } from "./helpers";
+import { AI_KEYS, connectAis, generateLessons, PASSWORD, signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
 
@@ -148,4 +148,39 @@ test("teste grátis → admin libera o Pro; 3 IAs obrigatórias", async ({ page,
   await sql(`UPDATE "user" SET "isAdmin" = false WHERE handle = $1`, [handle]);
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/inicio/);
+});
+
+test("plano vencendo: aviso e janela toda vez; vencido: entra e vai direto para pagar", async ({ page, browser }) => {
+  const handle = `aluno.vence.${uid}`;
+  await signUp(page, { name: "Aluno Vence", handle });
+  // vence amanhã: aviso no topo e janela para renovar
+  await sql(`UPDATE "Subscription" SET "currentPeriodEnd" = now() + interval '1 day' WHERE "userId" = (SELECT id FROM "user" WHERE handle = $1)`, [handle]);
+  await page.goto("/inicio");
+  await expect(page.getByText(/Seu plano Pro vence amanhã/).first()).toBeVisible();
+  const popup = page.getByRole("dialog", { name: "Renovar plano" });
+  await expect(popup).toBeVisible();
+  await popup.getByRole("button", { name: "Lembrar depois" }).click();
+  await expect(popup).toHaveCount(0);
+  // na mesma visita não aparece de novo; o aviso no topo continua
+  await page.goto("/revisoes");
+  await expect(page.getByRole("status").filter({ hasText: /vence amanhã/ })).toBeVisible();
+  await expect(popup).toHaveCount(0);
+  // abriu o site de novo (outra visita): a janela volta
+  const again = await page.context().newPage();
+  await again.goto("/inicio");
+  await expect(again.getByRole("dialog", { name: "Renovar plano" })).toBeVisible();
+  await again.close();
+
+  // venceu: entra normalmente e cai direto na tela de pagar
+  await sql(`UPDATE "Subscription" SET "currentPeriodEnd" = now() - interval '1 hour' WHERE "userId" = (SELECT id FROM "user" WHERE handle = $1)`, [handle]);
+  const device = await (await browser.newContext()).newPage();
+  await device.goto("/entrar");
+  await device.getByLabel("CPF ou @").fill(`@${handle}`);
+  await device.getByLabel("Senha").fill(PASSWORD);
+  await device.getByRole("button", { name: "Entrar" }).click();
+  await expect(device).toHaveURL(/\/assinatura/);
+  await expect(device.getByText(/Seu plano Pro venceu/).first()).toBeVisible();
+  await expect(device.getByText("Vencido", { exact: true })).toBeVisible();
+  await device.goto("/inicio");
+  await expect(device).toHaveURL(/\/assinatura/);
 });

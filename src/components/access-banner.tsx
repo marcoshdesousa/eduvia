@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Lock, Sparkles } from "lucide-react";
-import type { Access } from "@/lib/billing";
+import { daysLeft, renewSoon, type Access } from "@/lib/billing";
+import { formatDay } from "@/lib/core/dates";
 
 function timeLeft(until: Date) {
   const h = Math.max(0, Math.floor((until.getTime() - Date.now()) / 3_600_000));
@@ -9,18 +10,25 @@ function timeLeft(until: Date) {
   return d === 1 ? "1 dia" : `${d} dias`;
 }
 
-/** Aviso fixo no topo: plano Grátis ou assinatura perto de vencer. */
-export function AccessBanner({ access }: { access: Access }) {
+/** "vence hoje", "vence amanhã", "vence em 2 dias" (pelo calendário do aluno). */
+export function dueText(until: Date, tz?: string) {
+  const d = daysLeft(until, tz);
+  const day = formatDay(until, { day: "2-digit", month: "2-digit" });
+  return d <= 0 ? `vence hoje (${day})` : d === 1 ? `vence amanhã (${day})` : `vence em ${d} dias (${day})`;
+}
+
+/** Aviso fixo no topo de todas as telas: teste grátis, plano perto de vencer (2 dias antes) ou plano vencido. */
+export function AccessBanner({ access, tz }: { access: Access; tz?: string }) {
   if (access.reason === "dev") return null;
   if (access.reason === "subscription") {
-    const soon = access.until.getTime() - Date.now() < 2 * 86_400_000;
-    if (!soon) return null;
-    return (
-      <Bar tone="warning" icon={<Sparkles size={15} />} text={`Seu plano ${access.planName} vence em ${timeLeft(access.until)}.`} cta="Renovar" />
-    );
+    if (!renewSoon(access, tz)) return null;
+    return <Bar tone="warning" icon={<Sparkles size={15} />} text={`Seu plano ${access.planName} ${dueText(access.until, tz)}. Pague o próximo mês para não parar.`} cta="Pagar agora" />;
   }
   if (access.reason === "trial") {
     return <Bar tone="warning" icon={<Sparkles size={15} />} text={`Teste grátis: faltam ${timeLeft(access.until)}. Assine e continue estudando.`} cta="Assinar" />;
+  }
+  if (access.ended) {
+    return <Bar tone="danger" icon={<Lock size={15} />} text={`Seu plano ${access.ended.planName} venceu. Pague o próximo mês e volte a estudar na hora.`} cta="Pagar agora" />;
   }
   return <Bar tone="danger" icon={<Lock size={15} />} text="Seu teste grátis acabou. Assine um plano para continuar estudando." cta="Assinar" />;
 }

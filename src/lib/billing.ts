@@ -2,7 +2,7 @@
 // Planos mensais (Pro, Avançado e Ilimitado) e o teste grátis de 3 dias. Depois do teste, só assinando.
 // Arquivos e páginas não têm limite em nenhum plano.
 import { db } from "@/lib/db";
-import { addDays, today } from "@/lib/core/dates";
+import { addDays, diffDays, today } from "@/lib/core/dates";
 import { DEFAULT_PLANS, intervalInfo, isUnlimited, normalizeLimits, PAID_PLAN, PERIOD_DAYS, priceFor, TRIAL_DAYS, type Interval, type PlanLimits, type PlanSlug } from "@/lib/plans";
 
 type UserLike = { id: string; timezone?: string; isAdmin?: boolean; createdAt?: Date; trialEndsAt?: Date | null };
@@ -62,8 +62,21 @@ export type Access = { planSlug: PlanSlug; planName: string; limits: PlanLimits 
   | { mode: "full"; reason: "subscription"; until: Date; interval: Interval }
   | { mode: "full"; reason: "dev" }
   | { mode: "limited"; reason: "trial"; since: Date; until: Date }
-  | { mode: "limited"; reason: "expired" }
+  | { mode: "limited"; reason: "expired"; ended?: { planName: string; at: Date } }
 );
+
+/** Aviso de renovação: começa 2 dias antes do vencimento (pelo calendário do aluno). */
+export const RENEW_NOTICE_DAYS = 2;
+
+/** Quantos dias do calendário faltam até o vencimento (0 = vence hoje). */
+export function daysLeft(until: Date, tz = "America/Sao_Paulo", now = new Date()) {
+  return diffDays(today(tz, until), today(tz, now));
+}
+
+/** Plano pago perto de vencer (mostra o aviso para pagar). */
+export function renewSoon(a: Access, tz?: string) {
+  return a.reason === "subscription" && daysLeft(a.until, tz) <= RENEW_NOTICE_DAYS;
+}
 
 /** Fim do teste grátis: o que ficou gravado no cadastro (ou 3 dias depois de criar a conta). */
 async function trialWindow(user: UserLike) {
@@ -95,6 +108,15 @@ export async function getAccess(user: UserLike): Promise<Access> {
   if (!billingEnforced() || user.isAdmin) {
     const p = plan(PAID_PLAN);
     return { mode: "full", reason: "dev", planSlug: p.slug as PlanSlug, planName: p.name, limits: p.limits };
+  }
+  // já teve plano pago que venceu: a conta continua, só falta pagar o próximo mês (o teste grátis já foi usado)
+  const last = await db.subscription.findFirst({
+    where: { userId: user.id, status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { lte: new Date() } },
+    include: { plan: true },
+    orderBy: { currentPeriodEnd: "desc" },
+  });
+  if (last) {
+    return { mode: "limited", reason: "expired", ended: { planName: last.plan.name, at: last.currentPeriodEnd }, planSlug: "gratis", planName: `${last.plan.name} (vencido)`, limits: EXPIRED_LIMITS };
   }
   const free = plan("gratis");
   const trial = await trialWindow(user);
@@ -151,7 +173,7 @@ export async function usage(user: UserLike) {
 const over = (used: number, max: number) => !isUnlimited(max) && used >= max;
 
 function upgradeHint(a: Access) {
-  if (a.reason === "expired") return " Seu teste grátis acabou: assine um plano para continuar.";
+  if (a.reason === "expired") return a.ended ? " Seu plano venceu: pague o próximo mês para continuar." : " Seu teste grátis acabou: assine um plano para continuar.";
   if (a.reason === "trial") return " Assine um plano para liberar mais.";
   return a.planSlug !== "ilimitado" && a.reason === "subscription" ? " Um plano maior libera mais." : "";
 }

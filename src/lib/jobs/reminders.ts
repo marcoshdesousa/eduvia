@@ -1,7 +1,8 @@
 // Lembretes: no horário de estudo de cada preparação e avisos de teste/plano acabando.
 import { db } from "@/lib/db";
 import { notify } from "@/lib/notifications";
-import { keyFromDay, nowHHMM, today, weekday } from "@/lib/core/dates";
+import { keyFromDay, nowHHMM, today, todayKey, weekday } from "@/lib/core/dates";
+import { daysLeft, RENEW_NOTICE_DAYS } from "@/lib/billing";
 import { formatMinutes } from "@/lib/utils";
 
 const WINDOW_MIN = 5;
@@ -35,19 +36,42 @@ export async function sendStudyReminders(now = new Date()) {
   return sent;
 }
 
-/** Diário: plano vencendo em até 2 dias. */
+/**
+ * A cada 5 minutos (sai uma vez por dia, a partir das 9h do aluno): aviso para pagar.
+ * - plano vencendo: todo dia, a partir de 2 dias antes do vencimento;
+ * - plano vencido: todo dia, por 7 dias (a conta continua salva; pagou, libera na hora).
+ */
 export async function sendBillingReminders(now = new Date()) {
-  const subs = await db.subscription.findMany({ where: { status: "ACTIVE", currentPeriodEnd: { gt: now, lte: new Date(now.getTime() + 2 * 86_400_000) } }, include: { plan: true } });
+  const subs = await db.subscription.findMany({
+    where: {
+      status: { in: ["ACTIVE", "PAST_DUE"] },
+      currentPeriodEnd: { gt: new Date(now.getTime() - 7 * 86_400_000), lte: new Date(now.getTime() + (RENEW_NOTICE_DAYS + 1) * 86_400_000) },
+    },
+    include: { plan: true, user: { select: { timezone: true } } },
+  });
+  let sent = 0;
   for (const s of subs) {
-    await notify(s.userId, {
+    const tz = s.user.timezone;
+    if (minutesOf(nowHHMM(tz, now)) < 9 * 60) continue;
+    // já pagou o próximo mês (ou trocou de plano): nada a avisar
+    const newer = await db.subscription.count({ where: { userId: s.userId, id: { not: s.id }, status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: s.currentPeriodEnd } } });
+    if (newer) continue;
+    const left = daysLeft(s.currentPeriodEnd, tz, now);
+    const ended = s.currentPeriodEnd <= now;
+    if (!ended && left > RENEW_NOTICE_DAYS) continue;
+    const when = left <= 0 ? "vence hoje" : left === 1 ? "vence amanhã" : `vence em ${left} dias`;
+    const n = await notify(s.userId, {
       type: "PLAN_EXPIRING",
-      title: `Seu plano ${s.plan.name} vence em breve`,
-      body: "Renove pelo WhatsApp para não voltar ao plano Grátis.",
+      title: ended ? `Seu plano ${s.plan.name} venceu` : `Seu plano ${s.plan.name} ${when}`,
+      body: ended
+        ? "Seus estudos estão guardados. Pague o próximo mês pelo Pix e volte a estudar na hora."
+        : "Pague o próximo mês pelo Pix e continue estudando sem parar. Os 30 dias novos somam ao final do plano.",
       href: "/assinatura",
-      dedupeKey: `plano:${s.id}:${s.currentPeriodEnd.toISOString().slice(0, 10)}`,
+      dedupeKey: `plano:${s.id}:${s.currentPeriodEnd.toISOString().slice(0, 10)}:${todayKey(tz, now)}`,
     });
+    if (n) sent++;
   }
-  return subs.length;
+  return sent;
 }
 
 // ───────────── Chamadas do dia (para o aluno voltar ao app) ─────────────

@@ -9,8 +9,10 @@ import { ThemeToggle } from "@/components/theme";
 import { requireReadyUser } from "@/lib/session";
 import { levelFromXp } from "@/lib/gamification";
 import { isMockAi } from "@/lib/ai/client";
-import { getAccess } from "@/lib/billing";
-import { AccessBanner } from "@/components/access-banner";
+import { getAccess, renewSoon } from "@/lib/billing";
+import { RenewPopup } from "@/components/renew-popup";
+import { syncpayConfigured } from "@/lib/syncpay";
+import { AccessBanner, dueText } from "@/components/access-banner";
 import { unreadCount } from "@/lib/notifications";
 import { db } from "@/lib/db";
 import { EnableNotificationsBanner, RegisterServiceWorker } from "@/components/push-settings";
@@ -18,7 +20,7 @@ import { vapidPublicKey } from "@/lib/notifications";
 import { NotificationBell } from "@/components/notification-bell";
 import { PdfViewerHost } from "@/components/pdf-viewer";
 
-/** Páginas liberadas com o teste encerrado: assinar, falar com o suporte e os ajustes da conta (sair). */
+/** Páginas liberadas com o teste encerrado ou o plano vencido: assinar, falar com o suporte e os ajustes da conta (sair). */
 const EXPIRED_ALLOWED = ["/assinatura", "/suporte", "/configuracoes", "/mais", "/notificacoes"];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -30,7 +32,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db.groupInvite.count({ where: { inviteeId: user.id, status: "PENDING" } }),
     db.supportMessage.count({ where: { fromStaff: true, readAt: null, ticket: { userId: user.id } } }),
   ]);
-  // teste grátis acabou e sem assinatura: a conta continua salva, mas ao entrar vai direto para assinar
+  // teste grátis acabou ou o plano venceu: a conta continua salva e o aluno entra normalmente,
+  // mas vai direto para a tela de pagar (pagou, libera na hora)
   if (access.reason === "expired") {
     const path = (await headers()).get("x-pathname") ?? "";
     if (!EXPIRED_ALLOWED.some((p) => path === p || path.startsWith(`${p}/`))) redirect("/assinatura");
@@ -71,7 +74,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link href="/perfil" aria-label="Meu perfil"><Avatar id={user.avatar} name={user.name} size={28} /></Link>
           </div>
         </header>
-        <AccessBanner access={access} />
+        <AccessBanner access={access} tz={user.timezone} />
+        {access.reason === "subscription" && renewSoon(access, user.timezone) && (
+          <RenewPopup
+            planSlug={access.planSlug}
+            planName={access.planName}
+            due={dueText(access.until, user.timezone)}
+            pix={syncpayConfigured()}
+            stateKey={`${access.until.toISOString().slice(0, 10)}`}
+          />
+        )}
         <EnableNotificationsBanner vapidKey={await vapidPublicKey()} />
         {isMockAi() && (
           <div className="border-b border-warning/30 bg-warning/10 px-4 py-2 text-center text-xs text-warning">

@@ -91,13 +91,14 @@ export async function startWorker({ handleSignals }: { handleSignals: boolean })
     if (nudges) console.log(`[worker] ${nudges} chamada(s) do dia`);
     await recoverStuckMaterials();
     await reconcilePix().catch((e) => console.error("[syncpay] conferência", e));
+    const bills = await sendBillingReminders().catch((e) => (console.error("[worker] avisos de pagamento", e), 0));
+    if (bills) console.log(`[worker] ${bills} aviso(s) de pagamento`);
   });
 
   await boss.work(QUEUES.dailyMaintenance, async () => {
     const preps = await db.preparation.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
     for (const p of preps) await generatePlan(p.id);
     console.log(`[worker] replanejamento diário: ${preps.length} preparação(ões)`);
-    await sendBillingReminders();
   });
 
   await boss.schedule(QUEUES.reminders, "*/5 * * * *");

@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { checkHandleAvailable } from "@/lib/handles";
 import { requireUser } from "@/lib/session";
 import { TRIAL_DAYS } from "@/lib/plans";
+import { getAccess } from "@/lib/billing";
 import { TERMS_VERSION } from "@/lib/terms";
 import { isValidCpf, onlyDigits } from "@/lib/core/cpf";
 import { normalizePhone } from "@/lib/core/phone";
@@ -89,7 +90,7 @@ export async function signInAction(_: FormState, f: FormData): Promise<FormState
   const key = byCpf ? digits : identifier.replace(/^@/, "").toLowerCase();
   if (!(await allowAttempt(`login:${key}`, 10, 15))) return { error: "Muitas tentativas. Aguarde 15 minutos ou redefina a senha." };
 
-  const user = await db.user.findUnique({ where: byCpf ? { cpf: digits } : { handle: key }, select: { email: true } });
+  const user = await db.user.findUnique({ where: byCpf ? { cpf: digits } : { handle: key }, select: { id: true, email: true, isAdmin: true, createdAt: true, trialEndsAt: true } });
   const fail = { error: "CPF/@ ou senha incorretos." };
   if (!user) return fail;
   try {
@@ -99,7 +100,9 @@ export async function signInAction(_: FormState, f: FormData): Promise<FormState
     throw e;
   }
   await clearAttempts(`login:${key}`);
-  redirect("/inicio");
+  // plano vencido (ou teste encerrado): entra direto na tela de pagar (pagou, libera na hora)
+  const access = await getAccess(user).catch(() => null);
+  redirect(access?.reason === "expired" ? "/assinatura" : "/inicio");
 }
 
 /**

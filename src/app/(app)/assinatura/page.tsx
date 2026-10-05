@@ -47,17 +47,19 @@ export default async function Page() {
           ) : access.reason === "dev" ? (
             <Badge>Liberado</Badge>
           ) : (
-            <Badge tone="warning">{access.reason === "trial" ? `Teste até ${formatDay(access.until, { day: "2-digit", month: "short" })}` : "Teste encerrado"}</Badge>
+            <Badge tone="warning">{access.reason === "trial" ? `Teste até ${formatDay(access.until, { day: "2-digit", month: "short" })}` : access.ended ? "Vencido" : "Teste encerrado"}</Badge>
           )}
         </div>
         <p className="text-sm text-muted">
           {access.reason === "subscription"
-            ? `Plano ${intervalInfo(access.interval).adjective} (${intervalInfo(access.interval).label}) válido até ${longDate(access.until)}. Para continuar depois disso, é só renovar pelo WhatsApp.`
+            ? `Plano ${intervalInfo(access.interval).adjective} (${intervalInfo(access.interval).label}) válido até ${longDate(access.until)}. ${pixEnabled ? "Para continuar, pague o próximo mês com Pix aqui embaixo (os 30 dias novos somam ao final do plano)." : "Para continuar depois disso, é só renovar pelo WhatsApp."}`
             : access.reason === "dev"
               ? "Tudo liberado (conta de administrador ou cobrança desativada)."
               : access.reason === "trial"
                 ? `Você está no teste grátis de 3 dias (até ${longDate(access.until)}), com arquivos à vontade e 1 redação, 1 simulado e 1 teste rápido para experimentar. Escolha um plano abaixo para continuar depois.`
-                : "Seu teste grátis acabou. Seus estudos continuam guardados: escolha um plano abaixo para continuar."}
+                : access.ended
+                  ? `Seu plano ${access.ended.planName} venceu em ${longDate(access.ended.at)}. Seus estudos continuam guardados: pague o próximo mês abaixo e tudo volta na hora.`
+                  : "Seu teste grátis acabou. Seus estudos continuam guardados: escolha um plano abaixo para continuar."}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {meters.map((m) => (
@@ -79,7 +81,7 @@ export default async function Page() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {paidPlans.map((p) => {
-            const current = subscribed && access.planSlug === p.slug;
+            const current = (subscribed && access.planSlug === p.slug) || (access.reason === "expired" && access.ended?.planName === p.name);
             const best = p.slug === "ilimitado";
             const opts = INTERVALS.filter((i) => priceFor(p, i.key) > 0).map((i) => ({ key: i.key, label: i.adjective, days: i.days, price: priceFor(p, i.key) }));
             return (
