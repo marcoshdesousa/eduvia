@@ -2,7 +2,11 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/session";
+import { requireAdmin, requireReadyUser } from "@/lib/session";
+import QRCode from "qrcode";
+import { createPlanPix } from "@/lib/pix-billing";
+import { syncpayConfigured } from "@/lib/syncpay";
+import { allowAttempt } from "@/lib/rate-limit";
 import { addPeriod, getPlan } from "@/lib/billing";
 import { LIMIT_FIELDS, PERIOD_DAYS, priceFor, type Interval, type PlanLimits } from "@/lib/plans";
 import { today } from "@/lib/core/dates";
@@ -85,4 +89,21 @@ export async function updatePlanAction(slug: string, _: unknown, f: FormData) {
   revalidatePath("/admin");
   revalidatePath("/assinatura");
   return { ok: true, message: `Plano ${name} atualizado.` };
+}
+
+export type PixResult = { ok: true; paymentId: string; pixCode: string; qr: string; valueCents: number; planName: string } | { ok: false; error: string };
+
+/** Aluno escolhe o plano mensal: cria o Pix na SyncPay e devolve o QR Code e o "copia e cola". */
+export async function createPixAction(planSlug: string): Promise<PixResult> {
+  const user = await requireReadyUser();
+  if (!syncpayConfigured()) return { ok: false, error: "Pagamento por Pix ainda não está disponível. Fale com a gente pelo WhatsApp." };
+  if (!(await allowAttempt(`pix:${user.id}`, 10, 30))) return { ok: false, error: "Muitas tentativas. Aguarde alguns minutos." };
+  try {
+    const r = await createPlanPix(user, planSlug);
+    const qr = await QRCode.toDataURL(r.pixCode, { margin: 1, width: 280 });
+    return { ok: true, ...r, qr };
+  } catch (e) {
+    console.error("[syncpay] criar Pix", e);
+    return { ok: false, error: "Não foi possível gerar o Pix agora. Tente de novo em instantes." };
+  }
 }

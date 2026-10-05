@@ -709,6 +709,8 @@ model Payment {
   dueDate           DateTime      @db.Date
   paidAt            DateTime?
   invoiceUrl        String?
+  /// Pix "copia e cola" (SyncPay).
+  pixCode           String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 

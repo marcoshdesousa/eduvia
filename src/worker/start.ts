@@ -4,6 +4,8 @@ import { ensurePiper } from "@/lib/ai/piper";
 import { enqueue, getBoss, QUEUES, type JobPayloads } from "@/lib/queue";
 import { processMaterial } from "@/lib/materials/process";
 import { generateLessons } from "@/lib/materials/lessons";
+import { confirmPix } from "@/lib/pix-billing";
+import { syncpayConfigured } from "@/lib/syncpay";
 import { generatePlan } from "@/lib/plan";
 import { db } from "@/lib/db";
 import { sendBillingReminders, sendDailyNudges, sendStudyReminders } from "@/lib/jobs/reminders";
@@ -33,6 +35,17 @@ async function recoverStuckMaterials() {
     await db.preparation.update({ where: { id: p.id }, data: { lessonsStep: "Retomando a geração das aulas..." } });
     await enqueue(QUEUES.generateLessons, { preparationId: p.id }, { singletonKey: `lessons:${p.id}:recover:${Math.floor(Date.now() / 600_000)}` });
   }
+}
+
+/** Pix ainda pendentes das últimas 24 h: confere na SyncPay (se o aviso não chegou, o plano libera mesmo assim). */
+async function reconcilePix() {
+  if (!syncpayConfigured()) return;
+  const pending = await db.payment.findMany({
+    where: { status: "PENDING", billingType: "PIX", providerPaymentId: { startsWith: "syncpay_" }, createdAt: { gt: new Date(Date.now() - 24 * 3600_000) } },
+    select: { id: true },
+    take: 50,
+  });
+  for (const p of pending) await confirmPix(p.id).catch(() => {});
 }
 
 /** Limpeza única dos arquivos no disco depois de "recomeçar do zero" (marcada no banco pela migração 19). */
@@ -77,6 +90,7 @@ export async function startWorker({ handleSignals }: { handleSignals: boolean })
     const nudges = await sendDailyNudges().catch((e) => (console.error("[worker] chamadas do dia", e), 0));
     if (nudges) console.log(`[worker] ${nudges} chamada(s) do dia`);
     await recoverStuckMaterials();
+    await reconcilePix().catch((e) => console.error("[syncpay] conferência", e));
   });
 
   await boss.work(QUEUES.dailyMaintenance, async () => {

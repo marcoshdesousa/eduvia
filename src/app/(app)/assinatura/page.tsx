@@ -3,6 +3,8 @@ import { requireReadyUser } from "@/lib/session";
 import { formatBRL, getAccess, listPlans, subscribeMessage, usage, whatsappLink } from "@/lib/billing";
 import { formatLimit, INTERVALS, intervalInfo, isUnlimited, planFeatures, priceFor } from "@/lib/plans";
 import { formatDay } from "@/lib/core/dates";
+import { PixCheckout } from "@/components/pix-checkout";
+import { syncpayConfigured } from "@/lib/syncpay";
 import { Check, MessageCircle } from "lucide-react";
 import { Badge, Progress } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
@@ -32,6 +34,7 @@ export default async function Page() {
     { label: "Testes rápidos hoje", used: used.gamesToday, max: l.gamesPerDay },
   ];
   const subscribed = access.reason === "subscription";
+  const pixEnabled = syncpayConfigured();
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Assinatura</h1>
@@ -98,6 +101,7 @@ export default async function Page() {
                   ))}
                 </ul>
                 <div className="grid gap-2">
+                  {pixEnabled && <PixCheckout planSlug={p.slug} label={`${current ? "Renovar" : "Assinar"} ${p.name} com Pix`} />}
                   {opts.map((o) => (
                     <a
                       key={o.key}
@@ -105,9 +109,9 @@ export default async function Page() {
                       target="_blank"
                       rel="noreferrer"
                       aria-label={`${current ? "Renovar" : "Assinar"} ${p.name} ${o.label} pelo WhatsApp`}
-                      className={buttonClass(o.key === "MONTH" ? "primary" : "outline", "md", "w-full")}
+                      className={buttonClass(o.key === "MONTH" && !pixEnabled ? "primary" : "outline", "md", "w-full")}
                     >
-                      <MessageCircle size={16} /> {o.days} dias por {formatBRL(o.price)}
+                      <MessageCircle size={16} /> {pixEnabled ? "Ou combinar pelo WhatsApp" : `${o.days} dias por ${formatBRL(o.price)}`}
                     </a>
                   ))}
                 </div>
@@ -127,9 +131,15 @@ export default async function Page() {
       <Card className="space-y-2 text-sm">
         <CardTitle>Como funciona</CardTitle>
         <ol className="list-decimal space-y-1 pl-5 text-muted">
-          <li>Escolha o plano mensal: a mensagem com o plano e o seu @ já vai pronta no WhatsApp.</li>
-          <li>Combine o pagamento por lá (Pix).</li>
-          <li>Assim que o pagamento for confirmado, liberamos o plano na sua conta. Não há cobrança automática: quando vencer, é só renovar.</li>
+          <li>{pixEnabled ? "Escolha o plano mensal e toque em \"Pagar com Pix\": o plano libera sozinho assim que o Pix cair." : "Escolha o plano mensal: a mensagem com o plano e o seu @ já vai pronta no WhatsApp."}</li>
+          {pixEnabled ? (
+            <li>Pague pelo app do seu banco (QR Code ou Pix Copia e Cola). Não há cobrança automática: quando vencer, é só pagar o próximo mês.</li>
+          ) : (
+            <>
+              <li>Combine o pagamento por lá (Pix).</li>
+              <li>Assim que o pagamento for confirmado, liberamos o plano na sua conta. Não há cobrança automática: quando vencer, é só renovar.</li>
+            </>
+          )}
         </ol>
       </Card>
 
