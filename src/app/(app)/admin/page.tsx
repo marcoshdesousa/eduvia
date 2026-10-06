@@ -261,7 +261,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
   const aiOff = await disabledProviders();
   const list = await db.user.findMany({
     where: { ...where, cpf: { not: null } },
-    include: { subscriptions: { where: { status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: now } }, include: { plan: true }, orderBy: { currentPeriodEnd: "desc" }, take: 1 } },
+    include: {
+      subscriptions: {
+        where: { status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: now } },
+        include: { plan: true, payments: { where: { status: "PAID" }, orderBy: { paidAt: "desc" }, take: 1, select: { billingType: true } } },
+        orderBy: { currentPeriodEnd: "desc" },
+        take: 1,
+      },
+    },
     orderBy: { createdAt: "desc" },
     take: 30,
   });
@@ -288,7 +295,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
                   <span className="font-semibold">{u.name}</span>
                   <span className="text-sm text-muted">@{u.handle}</span>
                   {sub ? (
-                    <Badge tone="success">{sub.plan.name} {intervalInfo(sub.interval).adjective} até {formatDay(sub.currentPeriodEnd, { day: "2-digit", month: "short" })}</Badge>
+                    <>
+                      <Badge tone="success">{sub.plan.name} {intervalInfo(sub.interval).adjective} até {formatDay(sub.currentPeriodEnd, { day: "2-digit", month: "short" })}</Badge>
+                      {/* como foi o último pagamento: Pix pela SyncPay (sozinho) ou liberado aqui pelo admin */}
+                      {sub.payments[0]?.billingType === "PIX" ? <Badge tone="primary">Pix automático</Badge> : <Badge>Pix próprio</Badge>}
+                    </>
                   ) : (
                     <Badge tone="warning">Grátis</Badge>
                   )}

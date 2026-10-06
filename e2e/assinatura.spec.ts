@@ -75,6 +75,12 @@ test("teste grátis → admin libera o Pro; 3 IAs obrigatórias", async ({ page,
   await admin.getByLabel("Período").selectOption("MONTH");
   await admin.getByRole("button", { name: "Liberar" }).click();
   await expect(admin.getByText(/Pro mensal até/)).toBeVisible();
+  // liberado pelo admin: "Pix próprio"; pago pela SyncPay: "Pix automático"
+  await expect(admin.getByText("Pix próprio", { exact: true })).toBeVisible();
+  await sql(`UPDATE "Payment" SET "billingType" = 'PIX' WHERE "subscriptionId" IN (SELECT s.id FROM "Subscription" s JOIN "user" u ON u.id = s."userId" WHERE u.handle = $1)`, [handle]);
+  await admin.goto(`/admin?q=${handle}`);
+  await expect(admin.getByText("Pix automático", { exact: true })).toBeVisible();
+  await sql(`UPDATE "Payment" SET "billingType" = 'MANUAL' WHERE "subscriptionId" IN (SELECT s.id FROM "Subscription" s JOIN "user" u ON u.id = s."userId" WHERE u.handle = $1)`, [handle]);
   await admin.goto("/admin?aba=planos");
   await expect(admin.getByRole("button", { name: "Salvar" }).first()).toBeVisible();
   await admin.goto("/admin?aba=ia");
