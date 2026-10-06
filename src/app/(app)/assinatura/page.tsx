@@ -104,16 +104,17 @@ export default async function Page() {
                 </ul>
                 <div className="grid gap-2">
                   {pixEnabled && <PixCheckout planSlug={p.slug} label={`${current ? "Renovar" : "Assinar"} ${p.name} com Pix`} />}
-                  {opts.map((o) => (
+                  {/* com o Pix automático ligado, só o Pix (sem WhatsApp); sem ele, o WhatsApp é o jeito de assinar */}
+                  {!pixEnabled && opts.map((o) => (
                     <a
                       key={o.key}
                       href={whatsappLink(subscribeMessage(p, o.key, user))}
                       target="_blank"
                       rel="noreferrer"
                       aria-label={`${current ? "Renovar" : "Assinar"} ${p.name} ${o.label} pelo WhatsApp`}
-                      className={buttonClass(o.key === "MONTH" && !pixEnabled ? "primary" : "outline", "md", "w-full")}
+                      className={buttonClass(o.key === "MONTH" ? "primary" : "outline", "md", "w-full")}
                     >
-                      <MessageCircle size={16} /> {pixEnabled ? "Ou combinar pelo WhatsApp" : `${o.days} dias por ${formatBRL(o.price)}`}
+                      <MessageCircle size={16} /> {`${o.days} dias por ${formatBRL(o.price)}`}
                     </a>
                   ))}
                 </div>
