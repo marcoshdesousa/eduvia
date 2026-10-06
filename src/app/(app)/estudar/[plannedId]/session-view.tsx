@@ -4,7 +4,8 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { LessonNarrator } from "@/components/lesson-narrator";
 import { ContentReadyToast, finishMessage, StudyTimer } from "./study-timer";
-import { BookOpen, Brain, CheckCircle2, Lightbulb, PartyPopper, RotateCcw, XCircle } from "lucide-react";
+import { BookOpen, Brain, CheckCircle2, Clock, Lightbulb, PartyPopper, RotateCcw, XCircle } from "lucide-react";
+import { MinutesPicker } from "./minutes-picker";
 import { completeSessionAction, retakeSessionAction, studyPulseAction } from "@/app/actions/study";
 import { useRouter } from "next/navigation";
 import { QuestionCard, SourceLinks, type QuestionData, type SourceRef } from "@/components/question-card";
@@ -30,7 +31,9 @@ export function SessionView({
   text,
   questions,
   grade,
+  minuteOptions,
 }: {
+  minuteOptions?: { options: readonly number[]; suggested: number };
   header: Header;
   sessionId: string;
   startedAt: string;
@@ -164,9 +167,10 @@ export function SessionView({
               isLesson={header.kind === "STUDY"}
               comfort={comfort}
               pending={pending}
-              onRetake={() =>
+              minuteOptions={minuteOptions}
+              onRetake={(minutes) =>
                 start(async () => {
-                  await retakeSessionAction(sessionId);
+                  await retakeSessionAction(sessionId, minutes);
                   router.refresh();
                 })
               }
@@ -205,14 +209,32 @@ function FinishCard({
   comfort,
   pending,
   onRetake,
+  minuteOptions,
 }: {
   summary: { correct: number; total: number; score: number; passed: boolean; best: number; nextHref: string | null } | null;
   grade: Grade;
   isLesson: boolean;
   comfort: string | null;
   pending: boolean;
-  onRetake: () => void;
+  onRetake: (minutes?: number) => void;
+  minuteOptions?: { options: readonly number[]; suggested: number };
 }) {
+  // refazer: na preparação do aluno, escolhe o tempo de novo (o cronômetro mostra o tempo escolhido)
+  const [picking, setPicking] = useState(false);
+  const [minutes, setMinutes] = useState(minuteOptions?.suggested ?? 15);
+  const retake = () => (minuteOptions ? setPicking(true) : onRetake());
+  if (picking && minuteOptions) {
+    return (
+      <div className="space-y-3 text-left">
+        <p className="flex items-center gap-2 font-semibold"><Clock size={18} className="text-primary" /> Quanto tempo você tem para refazer?</p>
+        <MinutesPicker options={minuteOptions.options} value={minutes} onChange={setMinutes} />
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={pending} onClick={() => onRetake(minutes)}>{pending ? "Abrindo..." : `Refazer em ${minutes} min`}</Button>
+          <Button variant="ghost" onClick={() => setPicking(false)}>Voltar</Button>
+        </div>
+      </div>
+    );
+  }
   const score = summary?.score ?? grade?.last ?? null;
   const passed = summary ? summary.passed : !isLesson || !!grade?.passed;
   const best = summary?.best ?? grade?.best ?? null;
@@ -238,12 +260,12 @@ function FinishCard({
       {comfort && passed && <p className="mx-auto max-w-md text-sm">{comfort}</p>}
       <div className="flex flex-wrap justify-center gap-2 pt-1">
         {isLesson && !passed && (
-          <Button disabled={pending} onClick={onRetake}><RotateCcw size={16} /> Reestudar e refazer a aula</Button>
+          <Button disabled={pending} onClick={retake}><RotateCcw size={16} /> Reestudar e refazer a aula</Button>
         )}
         {passed && next && <Link href={next} className={buttonClass("primary")}>{next.startsWith("/enem/aula/") || next.startsWith("/estudar/") ? "Próxima aula" : "Voltar à matéria"}</Link>}
         {passed && !next && <Link href="/inicio" className={buttonClass("primary")}>Voltar ao início</Link>}
         {isLesson && passed && (
-          <Button variant="outline" disabled={pending} onClick={onRetake}><RotateCcw size={16} /> Refazer para melhorar a nota</Button>
+          <Button variant="outline" disabled={pending} onClick={retake}><RotateCcw size={16} /> Refazer para melhorar a nota</Button>
         )}
       </div>
     </div>

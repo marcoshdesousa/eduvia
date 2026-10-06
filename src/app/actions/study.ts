@@ -18,10 +18,10 @@ export async function startSessionAction(plannedId: string, minutes?: number): P
   if (planned?.kind === "STUDY" && !planned.studySession) {
     const limit = await sessionLimitError(user);
     if (limit) return { error: limit, upgrade: true };
-    // o aluno escolhe quanto tempo tem agora (5 a 45 min)
-    if (minutes && (SESSION_MINUTES as readonly number[]).includes(minutes) && minutes !== planned.durationMin) {
-      await db.plannedSession.update({ where: { id: planned.id }, data: { durationMin: minutes } });
-    }
+  }
+  // o aluno escolhe quanto tempo tem agora (5 a 45 min), em aula ou revisão
+  if (planned && !planned.studySession && validMinutes(minutes) && minutes !== planned.durationMin) {
+    await db.plannedSession.update({ where: { id: planned.id }, data: { durationMin: minutes } });
   }
   try {
     const s = await openSession(plannedId, user.id);
@@ -70,9 +70,19 @@ export async function completeSessionAction(sessionId: string) {
   return { ...r, nextHref: next ? `/estudar/${next.id}` : null };
 }
 
-/** Refazer a aula (para passar ou para melhorar a nota). */
-export async function retakeSessionAction(sessionId: string) {
+const validMinutes = (m?: number): m is number => !!m && (SESSION_MINUTES as readonly number[]).includes(m);
+
+/**
+ * Refazer a aula (para passar ou para melhorar a nota) ou retomar uma aula aberta há muito tempo:
+ * o aluno escolhe de novo quanto tempo tem, e o cronômetro começa do zero.
+ */
+export async function retakeSessionAction(sessionId: string, minutes?: number) {
   const user = await requireReadyUser();
+  const s = await db.studySession.findFirst({ where: { id: sessionId, userId: user.id }, select: { plannedSessionId: true } });
+  if (validMinutes(minutes)) {
+    if (s?.plannedSessionId) await db.plannedSession.update({ where: { id: s.plannedSessionId }, data: { durationMin: minutes } });
+    else if (s) await db.studySession.update({ where: { id: sessionId }, data: { chosenMinutes: minutes } });
+  }
   await retakeSession(sessionId, user.id);
   revalidatePath("/inicio");
   return { ok: true };

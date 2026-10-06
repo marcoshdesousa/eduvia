@@ -467,6 +467,8 @@ model StudySession {
   /// Minutos já contados nesta tentativa (1 por minuto com a aula aberta); a sequência vale com 5 min no dia.
   roundPulses      Int             @default(0)
   lastPulseAt      DateTime?
+  /// Tempo escolhido pelo aluno (aulas sem plano, como o Estudar ENEM); nas outras vale o do plano.
+  chosenMinutes    Int?
 
   @@index([userId, startedAt])
 }

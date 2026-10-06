@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { isRichQuestion, QuestionText } from "@/components/rich-text";
+import { imageUrls, isRichQuestion, QuestionText } from "@/components/rich-text";
 import { Clock } from "lucide-react";
 import { saveAnswersAction, submitAttemptAction } from "@/app/actions/exams";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,14 @@ export function ExamRunner({ attemptId, title, deadline, initialAnswers, questio
   }, [attemptId, answers]);
 
   const q = questions[current];
+  // já carrega as imagens da próxima questão (e da anterior): ao trocar, aparecem na hora
+  useEffect(() => {
+    for (const n of [current + 1, current - 1]) {
+      const nq = questions[n];
+      if (!nq) continue;
+      for (const url of [nq.statement, ...nq.options].flatMap(imageUrls)) new Image().src = url;
+    }
+  }, [current, questions]);
   const answered = Object.keys(answers).length;
   const hh = Math.max(0, Math.floor(left / 3_600_000));
   const mm = Math.max(0, Math.floor((left % 3_600_000) / 60000));

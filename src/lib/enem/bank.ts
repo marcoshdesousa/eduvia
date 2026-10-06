@@ -145,32 +145,37 @@ function shuffle<T>(arr: T[]) {
   return a;
 }
 
-/** Questões do ENEM que o aluno já respondeu (para não repetir com frequência). */
+/** Questões do ENEM que o aluno já viu e quando foi a última vez (para não repetir; e, se repetir, as mais antigas). */
 async function seenIds(userId: string) {
-  const rows = await db.attempt.findMany({ where: { userId, questionId: { startsWith: "enem-" } }, select: { questionId: true }, distinct: ["questionId"] });
-  return new Set(rows.map((r) => r.questionId));
+  const rows = await db.attempt.groupBy({ by: ["questionId"], where: { userId, questionId: { startsWith: "enem-" } }, _max: { createdAt: true } });
+  const seen = new Map(rows.map((r) => [r.questionId, r._max.createdAt?.getTime() ?? 0]));
+  // as que estão numa aula aberta ou num simulado em andamento também contam como vistas
+  const [sessions, exams] = await Promise.all([
+    db.studySession.findMany({ where: { userId, completedAt: null, topicId: { startsWith: "enem-" } }, select: { questionIds: true } }),
+    db.examAttempt.findMany({ where: { userId, finishedAt: null, exam: { preparationId: "enem" } }, select: { exam: { select: { questionIds: true } } } }),
+  ]);
+  const now = Date.now();
+  for (const id of [...sessions.flatMap((x) => x.questionIds), ...exams.flatMap((x) => x.exam.questionIds)]) seen.set(id, now);
+  return seen;
 }
 
 /**
  * Sorteia `count` questões: primeiro as que o aluno nunca viu (das preferidas, depois das outras);
- * se acabarem, completa com as já vistas. Assim quase nunca repete.
+ * só quando acabarem todas, repete — começando pelas que ele viu há mais tempo. Assim quase nunca repete.
  */
-function draw(pool: BankQuestion[], count: number, seen: Set<string>, prefer?: (q: BankQuestion) => boolean, exclude = new Set<string>()) {
+function draw(pool: BankQuestion[], count: number, seen: Map<string, number>, prefer?: (q: BankQuestion) => boolean, exclude = new Set<string>()) {
   const avail = pool.filter((q) => !exclude.has(q.id));
-  const tiers = [
-    avail.filter((q) => !seen.has(q.id) && (!prefer || prefer(q))),
-    avail.filter((q) => !seen.has(q.id) && prefer && !prefer(q)),
-    avail.filter((q) => seen.has(q.id) && (!prefer || prefer(q))),
-    avail.filter((q) => seen.has(q.id) && prefer && !prefer(q)),
-  ];
+  const fresh = (want: boolean) => shuffle(avail.filter((q) => !seen.has(q.id) && (!prefer || prefer(q) === want)));
+  const oldest = avail.filter((q) => seen.has(q.id)).sort((a, b) => seen.get(a.id)! - seen.get(b.id)!);
+  const tiers = [fresh(true), prefer ? fresh(false) : [], oldest];
   const out: BankQuestion[] = [];
   for (const t of tiers) {
-    for (const q of shuffle(t)) {
+    for (const q of t) {
       if (out.length >= count) break;
       out.push(q);
     }
   }
-  return out;
+  return shuffle(out);
 }
 
 /** 10 questões do ENEM para a aula de uma matéria: da área dela, de preferência da própria matéria. */

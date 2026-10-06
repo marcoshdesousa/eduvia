@@ -25,13 +25,17 @@ export function toSpeech(markdown: string, labels: string[] = []): string[] {
   return parts.filter((p) => /[\p{L}\p{N}]/u.test(p));
 }
 
+/** Os primeiros pedaços são menores: o primeiro fica pronto em poucos segundos e o robô já começa a falar. */
+export const FIRST_BLOCKS = [260, 600];
+
 /** Junta frases em blocos para a voz natural (poucos pedidos). Guarda quais frases estão em cada bloco. */
-export function toBlocks(parts: string[], max = BLOCK_CHARS): { text: string; from: number; to: number }[] {
+export function toBlocks(parts: string[], max = BLOCK_CHARS, first: number[] = FIRST_BLOCKS): { text: string; from: number; to: number }[] {
   const blocks: { text: string; from: number; to: number }[] = [];
   let cur = "";
   let from = 0;
+  const limit = () => Math.min(max, first[blocks.length] ?? max);
   parts.forEach((p, i) => {
-    if (cur && cur.length + p.length + 1 > max) {
+    if (cur && cur.length + p.length + 1 > limit()) {
       blocks.push({ text: cur, from, to: i - 1 });
       cur = "";
       from = i;
@@ -41,4 +45,3 @@ export function toBlocks(parts: string[], max = BLOCK_CHARS): { text: string; fr
   if (cur) blocks.push({ text: cur, from, to: parts.length - 1 });
   return blocks;
 }
-

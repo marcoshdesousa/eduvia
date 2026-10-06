@@ -12,6 +12,7 @@ import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SessionView, type SessionQuestion } from "../../../estudar/[plannedId]/session-view";
 import { StartLesson } from "./start-lesson";
+import { nearestSessionMinutes, SESSION_MINUTES } from "@/lib/study";
 
 export async function generateMetadata({ params }: { params: Promise<{ topicId: string }> }) {
   const f = findLesson((await params).topicId);
@@ -59,7 +60,10 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
   }
 
   const session = await enemSession(user.id, topicId);
-  if (!session) {
+  const minutes = session?.chosenMinutes ?? 20;
+  // aula aberta há muito tempo e não terminada: escolhe o tempo de novo e recomeça
+  const stale = !!session && !session.completedAt && Date.now() - session.roundStartedAt.getTime() > (minutes + 60) * 60_000;
+  if (!session || stale) {
     return (
       <div className="mx-auto max-w-xl space-y-4">
         {title}
@@ -70,7 +74,7 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
             <li>Responda {LESSON_QUESTIONS} questões reais do ENEM de {materia.name}. Elas são do conteúdo geral da matéria, como na prova.</li>
             <li>Com 75% ou mais, a próxima aula é liberada. Pode refazer quantas vezes quiser.</li>
           </ol>
-          <StartLesson topicId={topicId} />
+          <StartLesson topicId={topicId} options={SESSION_MINUTES} suggested={nearestSessionMinutes(minutes)} resume={stale} />
         </Card>
       </div>
     );
@@ -105,8 +109,9 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
   return (
     <SessionView
       key={session.roundStartedAt.toISOString()}
+      minuteOptions={{ options: SESSION_MINUTES, suggested: nearestSessionMinutes(minutes) }}
       grade={{ tries: session.tries, best: session.bestScore, last: session.lastScore, passed: !!session.passedAt }}
-      header={header}
+      header={{ ...header, minutes }}
       sessionId={session.id}
       startedAt={session.roundStartedAt.toISOString()}
       completed={!!session.completedAt}

@@ -227,12 +227,13 @@ function rankVoice(v: SpeechSynthesisVoice, gender: "f" | "m") {
 /** Atraso entre o tempo do tocador e o som que se ouve (codificação do MP3 + saída de áudio do celular). */
 const SOUND_LAG = 0.12;
 
-type Prepared = { url: string; words: { s: number; t: number }[] };
+/** Um pedaço de áudio pronto: o MP3 e o momento de cada palavra (k = número da palavra na aula, s = frase). */
+type Chunk = { url: string; words: { k: number; s: number; t: number }[] };
 type State = "idle" | "loading" | "playing" | "paused";
 
 /**
- * Robô que lê a aula em voz alta. Voz Piper (grátis e sem limite, gerada no servidor): baixa o áudio da aula
- * INTEIRO antes de começar (com porcentagem), junta num áudio só e toca sem travar entre os trechos.
+ * Robô que lê a aula em voz alta. Voz Piper (grátis e sem limite, gerada no servidor): começa a falar assim
+ * que o primeiro pedaço (pequeno) fica pronto e baixa os próximos enquanto fala.
  * Enquanto lê, a frase atual fica marcada em laranja no texto. Se a voz do servidor falhar, usa a voz do aparelho.
  */
 export function LessonNarrator({ text, labels = [], targetRef }: { text: string; labels?: string[]; targetRef?: RefObject<HTMLElement | null> }) {
@@ -259,7 +260,9 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
   const [mode, setMode] = useState<"natural" | "device">("natural");
   const [note, setNote] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
-  const prepared = useRef(new Map<string, Prepared>());
+  const chunks = useRef<(Promise<Chunk> | undefined)[]>([]);
+  const urls = useRef<string[]>([]);
+  const playing = useRef<Chunk | null>(null);
   const highlighter = useRef<ReturnType<typeof makeHighlighter> | null>(null);
   const raf = useRef(0);
   const current = useRef(-1);
@@ -267,14 +270,14 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
   const run = useRef(0);
 
   useEffect(() => {
-    const cache = prepared.current;
+    const made = urls.current;
     return () => {
       stopped.current = true;
       cancelAnimationFrame(raf.current);
       audio.current?.pause();
       highlighter.current?.destroy();
       if ("speechSynthesis" in window) speechSynthesis.cancel();
-      for (const p of cache.values()) URL.revokeObjectURL(p.url);
+      for (const u of made) URL.revokeObjectURL(u);
     };
   }, []);
 
@@ -289,7 +292,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
       ticks++;
       setShown((s) => {
         if (s < progress) return s + 1; // trecho pronto: alcança logo, contando de 1 em 1
-        const cap = progress >= 100 ? 100 : Math.min(99, progress + Math.floor((100 / Math.max(1, blocks.length)) * 0.9));
+        const cap = progress >= 100 ? 100 : 95;
         if (s >= cap) return s;
         const near = (s - progress) / Math.max(1, cap - progress); // 0 = acabou de chegar, 1 = no limite
         const every = 1 + Math.floor(near * near * 25);
@@ -297,7 +300,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
       });
     }, 70);
     return () => clearInterval(id);
-  }, [state, progress, blocks.length]);
+  }, [state, progress]);
 
   /** Marca a palavra k (lista de todas as palavras) e mostra em qual frase está. */
   const markWord = (k: number, sentenceIndex: number) => {
@@ -317,96 +320,117 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     setState("idle");
   };
 
-  /** Baixa todos os trechos (2 de cada vez), mostrando a porcentagem, e junta num MP3 só. */
-  const prepare = async (myRun: number): Promise<Prepared> => {
-    const key = gender;
-    const hit = prepared.current.get(key);
-    if (hit) return hit;
-    const chunks: ArrayBuffer[] = new Array(blocks.length);
-    const seconds: number[] = new Array(blocks.length).fill(0);
-    const measured: (number[] | null)[] = new Array(blocks.length).fill(null);
-    let done = 0;
-    let next = 0;
-    setProgress(0);
-    setShown(0);
-    const worker = async () => {
-      while (next < blocks.length) {
-        const i = next++;
-        let lastError: Error | null = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          if (stopped.current || run.current !== myRun) throw new Error("cancelado");
-          const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: blocks[i].text }) }).catch(
-            (e: Error) => e,
-          );
-          if (r instanceof Response && r.ok) {
-            chunks[i] = await r.arrayBuffer();
-            seconds[i] = Number(r.headers.get("x-audio-seconds")) || chunks[i].byteLength / 6000;
-            measured[i] = decodeTimes(r.headers.get("x-word-times"));
-            lastError = null;
-            break;
-          }
-          lastError = r instanceof Response ? new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "voz indisponível") : r;
-          if (r instanceof Response && r.status !== 503 && r.status < 500) break;
-          await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
+  /**
+   * Baixa um pedaço do áudio (com até 3 tentativas) e calcula o tempo de cada palavra dele.
+   * Fica guardado: tocar de novo não baixa outra vez.
+   */
+  const fetchBlock = (i: number): Promise<Chunk> | null => {
+    if (i >= blocks.length) return null;
+    const have = chunks.current[i];
+    if (have) return have;
+    const b = blocks[i];
+    const job = (async () => {
+      let lastError: Error | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (stopped.current) throw new Error("cancelado");
+        const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: b.text }) }).catch((e: Error) => e);
+        if (r instanceof Response && r.ok) {
+          const mp3 = await r.arrayBuffer();
+          const seconds = Number(r.headers.get("x-audio-seconds")) || mp3.byteLength / 6000;
+          const measured = decodeTimes(r.headers.get("x-word-times"));
+          const own = parts.slice(b.from, b.to + 1);
+          const estimate = wordTimeline(own, sentenceTimeline(own, [{ from: 0, to: own.length - 1 }], [seconds]), seconds);
+          const words = estimate.map((w, j) => ({ k: wordOffset[b.from] + j, s: b.from + w.s, t: measured && measured.length === estimate.length ? measured[j] : w.t }));
+          const url = URL.createObjectURL(new Blob([mp3], { type: "audio/mpeg" }));
+          urls.current.push(url);
+          return { url, words };
         }
-        if (lastError) throw lastError;
-        done++;
-        setProgress(Math.round((done / blocks.length) * 100));
+        lastError = r instanceof Response ? new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "voz indisponível") : r;
+        if (r instanceof Response && r.status !== 503 && r.status < 500) break;
+        await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
       }
-    };
-    await Promise.all([worker(), worker()]);
-    const url = URL.createObjectURL(new Blob(chunks, { type: "audio/mpeg" }));
-    const starts = sentenceTimeline(parts, blocks, seconds);
-    const estimate = wordTimeline(parts, starts, seconds.reduce((x, y) => x + y, 0));
-    const p = { url, words: mergeWordTimes(parts, blocks, seconds, measured, estimate) };
-    prepared.current.set(key, p);
-    return p;
+      throw lastError ?? new Error("voz indisponível");
+    })();
+    chunks.current[i] = job;
+    job.catch(() => {
+      if (chunks.current[i] === job) chunks.current[i] = undefined; // deu erro: tenta de novo na próxima vez
+    });
+    return job;
   };
 
-  const follow = (p: Prepared, a: HTMLAudioElement, myRun: number) => {
+  const follow = (c: Chunk, a: HTMLAudioElement, myRun: number) => {
     const tick = () => {
       if (run.current !== myRun || stopped.current) return;
       // o som sai do alto-falante um pouquinho depois do tempo do tocador: a marcação espera esse instante
       const t = a.currentTime - SOUND_LAG;
-      // palavra falada agora (busca binária na lista de palavras)
+      // palavra falada agora (busca binária nas palavras deste pedaço)
       let lo = 0;
-      let hi = p.words.length - 1;
+      let hi = c.words.length - 1;
       while (lo < hi) {
         const mid = (lo + hi + 1) >> 1;
-        if (p.words[mid].t <= t) lo = mid;
+        if (c.words[mid].t <= t) lo = mid;
         else hi = mid - 1;
       }
-      if (p.words.length && current.current !== lo) markWord(lo, p.words[lo].s);
+      const w = c.words[lo];
+      if (w && current.current !== w.k) markWord(w.k, w.s);
       raf.current = requestAnimationFrame(tick);
     };
     cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(tick);
   };
 
-  const playNatural = async () => {
+  /**
+   * Toca o pedaço i e já vai baixando os próximos: o robô começa a falar assim que o primeiro pedaço
+   * (pequeno) fica pronto, sem esperar a aula inteira. No fim de cada pedaço, emenda o próximo.
+   */
+  const playBlock = async (i: number, myRun: number) => {
+    const a = audio.current;
+    if (!a || run.current !== myRun || stopped.current) return;
+    if (i >= blocks.length) return finish();
+    void fetchBlock(i + 1)?.catch(() => {});
+    void fetchBlock(i + 2)?.catch(() => {});
+    const job = fetchBlock(i)!;
+    let ready = false;
+    void job.then(() => (ready = true), () => {});
+    await Promise.resolve();
+    if (!ready) {
+      setProgress(0);
+      setShown(0);
+      setState("loading");
+    }
+    let c: Chunk;
+    try {
+      c = await job;
+    } catch (e) {
+      if (stopped.current || run.current !== myRun || (e as Error).message === "cancelado") return;
+      // voz do robô indisponível agora: continua com a voz do aparelho, de onde parou
+      setMode("device");
+      setNote(`${(e as Error).message} Usando a voz do aparelho.`);
+      return playDevice(blocks[i].from);
+    }
+    if (stopped.current || run.current !== myRun) return;
+    setProgress(100);
+    playing.current = c;
+    a.src = c.url;
+    a.currentTime = 0;
+    a.playbackRate = rate;
+    a.onended = () => run.current === myRun && void playBlock(i + 1, myRun);
+    try {
+      await a.play();
+    } catch {
+      return; // o navegador bloqueou (ex.: saiu da página)
+    }
+    setState("playing");
+    follow(c, a, myRun);
+  };
+
+  const playNatural = () => {
     const myRun = ++run.current;
     // cria o tocador já no toque (o iPhone só libera áudio iniciado por um toque)
     const a = audio.current ?? (audio.current = new Audio());
     a.preload = "auto";
     (a as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
-    setState("loading");
-    try {
-      const p = await prepare(myRun);
-      if (stopped.current || run.current !== myRun) return;
-      if (a.src !== p.url) a.src = p.url;
-      a.currentTime = 0;
-      a.playbackRate = rate;
-      a.onended = () => run.current === myRun && finish();
-      await a.play();
-      setState("playing");
-      follow(p, a, myRun);
-    } catch (e) {
-      if (stopped.current || run.current !== myRun || (e as Error).message === "cancelado") return;
-      // voz do robô indisponível agora: usa a voz do aparelho, sem travar a aula
-      setMode("device");
-      setNote(`${(e as Error).message} Usando a voz do aparelho.`);
-      playDevice(0);
-    }
+    void playBlock(0, myRun);
   };
 
   const playDevice = (i: number) => {
@@ -444,16 +468,13 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     stopped.current = false;
     if (state === "paused") {
       if (mode === "natural") {
-        audio.current?.play();
-        if (audio.current) {
-          const p = prepared.current.get(gender);
-          if (p) follow(p, audio.current, run.current);
-        }
+        void audio.current?.play();
+        if (audio.current && playing.current) follow(playing.current, audio.current, run.current);
       } else speechSynthesis.resume();
       setState("playing");
       return;
     }
-    if (mode === "natural") void playNatural();
+    if (mode === "natural") playNatural();
     else {
       speechSynthesis.cancel();
       playDevice(Math.max(0, sentence));

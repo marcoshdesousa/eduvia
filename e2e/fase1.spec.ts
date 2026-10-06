@@ -62,6 +62,9 @@ test("fluxo completo: cadastro, preparação, material, plano, sessão, banco de
 
   // refaz a aula e acerta → aprovada e a próxima aula libera
   await page.getByRole("button", { name: /Reestudar e refazer a aula/ }).click();
+  // escolhe de novo quanto tempo tem para refazer
+  await page.getByRole("radio", { name: "10 min" }).click();
+  await page.getByRole("button", { name: "Refazer em 10 min" }).click();
   await expect(page.getByRole("button", { name: /Já li|Continuar/ })).toBeVisible();
   await expect(page.getByText(/Sei que pode parecer muito ou pouco tempo/)).toBeVisible();
   // a sequência só vale com 5 minutos de estudo no dia: simula 4 min já estudados hoje (a aula completa os 5)

@@ -13,7 +13,6 @@ import { restAdvice, restSuggestions } from "@/lib/rest";
 import { RestCard } from "@/components/rest-card";
 import { SessionStart } from "./session-start";
 import type { SourceRef } from "@/components/question-card";
-import { SessionLoader } from "./session-loader";
 import { SessionView, type SessionQuestion } from "./session-view";
 
 export const metadata = { title: "Estudar" };
@@ -57,8 +56,14 @@ export default async function Page({ params }: { params: Promise<{ plannedId: st
   }
 
   const session = planned.studySession;
+  // aula aberta há muito tempo e não terminada (ex.: aula atrasada): escolhe o tempo de novo e recomeça
+  const stale = session && !session.completedAt && Date.now() - session.roundStartedAt.getTime() > (planned.durationMin + 60) * 60_000;
+  if (stale) {
+    return <SessionStart plannedId={plannedId} header={header} options={SESSION_MINUTES} suggested={nearestSessionMinutes(planned.durationMin)} rest={null} resume={{ sessionId: session.id }} />;
+  }
   if (!session) {
-    if (planned.kind !== "STUDY") return <SessionLoader plannedId={plannedId} header={header} />;
+    // aula do dia, atrasada ou revisão: o aluno sempre escolhe quanto tempo tem
+    if (planned.kind !== "STUDY") return <SessionStart plannedId={plannedId} header={header} options={SESSION_MINUTES} suggested={nearestSessionMinutes(planned.durationMin)} rest={null} />;
     const advice = await restAdvice(user);
     const rest = advice ? (
       <RestCard
@@ -113,6 +118,7 @@ export default async function Page({ params }: { params: Promise<{ plannedId: st
   return (
     <SessionView
       key={session.roundStartedAt.toISOString()}
+      minuteOptions={{ options: SESSION_MINUTES, suggested: nearestSessionMinutes(planned.durationMin) }}
       grade={planned.kind === "STUDY" ? { tries: session.tries, best: session.bestScore, last: session.lastScore, passed: !!session.passedAt } : null}
       header={header}
       sessionId={session.id}

@@ -36,7 +36,7 @@ test("Estudar ENEM: preparação fixa, aulas com 75%, refazer e simulado do 2º 
 
   // aula 1: texto + 10 questões reais; errando tudo, não passa
   await page.getByRole("link", { name: "Começar" }).first().click();
-  await page.getByRole("button", { name: "Começar aula" }).click();
+  await page.getByRole("button", { name: /Começar aula/ }).click();
   await expect(page.getByRole("heading", { name: "Interpretação de texto: como o ENEM pergunta" })).toBeVisible();
   await expect(page.getByText("Ler é a habilidade mais cobrada do ENEM")).toBeVisible();
   await page.getByRole("button", { name: "Continuar" }).click();
@@ -49,6 +49,7 @@ test("Estudar ENEM: preparação fixa, aulas com 75%, refazer e simulado do 2º 
 
   // refazer: vêm outras 10 questões; acertando tudo, passa e libera a próxima
   await page.getByRole("button", { name: /Reestudar e refazer a aula/ }).click();
+  await page.getByRole("button", { name: /Refazer em \d+ min/ }).click();
   await page.getByRole("button", { name: "Continuar" }).click();
   const second = await answerAll(page, handle);
   expect(second.filter((id) => first.includes(id)).length).toBeLessThan(3);

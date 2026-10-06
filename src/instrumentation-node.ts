@@ -23,3 +23,9 @@ if (process.env.RUN_WORKER_IN_WEB === "true") {
   if (process.env.WORKER_MODE === "inline") void startInline();
   else startWorkerProcess(startInline);
 }
+
+// Voz do começo das aulas do Estudar ENEM: preparada no processo do site (o mesmo que entrega o áudio),
+// só quando ninguém está usando a voz.
+if (process.env.AI_MODE !== "mock" && process.env.NODE_ENV === "production") {
+  void import("./lib/enem/audio").then((m) => m.prewarmEnemAudio()).catch((e) => console.error("[voz] pré-preparo ENEM", e));
+}

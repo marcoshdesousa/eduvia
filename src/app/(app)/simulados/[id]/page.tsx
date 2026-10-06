@@ -12,7 +12,8 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardTitle, Stat } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ExamRunner } from "./exam-runner";
-import { ENEM_PREP_ID } from "@/lib/enem/catalog";
+import { ENEM_EXAMS, ENEM_PREP_ID } from "@/lib/enem/catalog";
+import { StartEnemExam } from "../enem/enem-exam-picker";
 import { isRichQuestion, QuestionText } from "@/components/rich-text";
 import { canAccessExam, examRanking } from "@/lib/groups";
 
@@ -45,6 +46,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   }
 
   const result = attempts.find((a) => a.id === resultado && a.finishedAt) ?? attempts.find((a) => a.finishedAt);
+  const enemKind = exam.preparationId === ENEM_PREP_ID ? (Object.entries(ENEM_EXAMS).find(([, d]) => d.title === exam.title)?.[0] ?? null) : null;
   const header = (
     <div>
       <Link href="/simulados" className="text-sm text-muted hover:text-foreground">← Simulados</Link>
@@ -106,7 +108,12 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       </Card>
 
       <div className="flex flex-wrap gap-2">
-        <form action={startAttemptAction.bind(null, exam.id)}><Button variant="outline">Refazer este simulado</Button></form>
+        {enemKind ? (
+          // Simulado ENEM: em vez de repetir as mesmas questões, monta outro com questões que o aluno ainda não viu
+          <StartEnemExam kind={enemKind} label="Fazer outro com questões novas" variant="outline" />
+        ) : (
+          <form action={startAttemptAction.bind(null, exam.id)}><Button variant="outline">Refazer este simulado</Button></form>
+        )}
         <Link href={exam.preparationId === ENEM_PREP_ID ? "/simulados/enem" : "/simulados/novo"} className={buttonClass("primary")}>Novo simulado</Link>
         <a href={`/api/exams/attempts/${result.id}/pdf`} target="_blank" rel="noreferrer" className={buttonClass("outline")}><Printer size={16} /> PDF para imprimir</a>
         {result.correct! < result.total! && <Link href="/revisoes?filtro=erros" className={buttonClass("ghost")}>Treinar os erros</Link>}

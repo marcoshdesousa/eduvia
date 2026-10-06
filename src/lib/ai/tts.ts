@@ -2,7 +2,7 @@
 // O áudio de cada trecho fica guardado: ouvir de novo é instantâneo.
 import { createHash } from "node:crypto";
 import { isMockAi } from "@/lib/ai/client";
-import { piperSpeak } from "@/lib/ai/piper";
+import { piperSpeak, type Priority } from "@/lib/ai/piper";
 import { readObject, writeObject } from "@/lib/storage";
 import { Mp3Encoder } from "@breezystack/lamejs";
 import { alignLevels, frameLevels } from "@/lib/speech-align";
@@ -159,17 +159,22 @@ const pauseAfterLine = (line: string) => (/[.!?]["”')\]]*$/.test(line) ? 0.45 
  */
 const inflight = new Map<string, Promise<Spoken>>();
 
-export function speak(text: string): Promise<Spoken> {
+export function speak(text: string, priority: Priority = "high"): Promise<Spoken> {
   const clean = text.trim().slice(0, TTS_MAX_CHARS);
   const hash = createHash("sha256").update(`${CACHE_VERSION}:${clean}`).digest("hex");
   // o mesmo trecho pedido duas vezes ao mesmo tempo (ex.: o servidor já está preparando): gera uma vez só
   let job = inflight.get(hash);
-  if (!job) {
-    job = speakNow(clean, hash).finally(() => inflight.delete(hash));
-    inflight.set(hash, job);
+  if (job) {
+    // estava sendo preparado em segundo plano e agora alguém quer ouvir: passa para a frente da fila
+    if (priority === "high" && !isMockAi()) void piperSpeak(speechLines(clean), "high").catch(() => {});
+    return job;
   }
+  job = speakNow(clean, hash, priority).finally(() => inflight.delete(hash));
+  inflight.set(hash, job);
   return job;
 }
+
+const speechLines = (clean: string) => clean.split("\n").map((l) => l.trim()).filter(Boolean);
 
 /**
  * Prepara o áudio da aula inteira em segundo plano (quando o aluno abre a aula),
@@ -178,7 +183,7 @@ export function speak(text: string): Promise<Spoken> {
 export async function warmLesson(markdown: string, labels: string[]) {
   for (const b of toBlocks(toSpeech(markdown, labels))) {
     try {
-      await speak(b.text);
+      await speak(b.text, "low");
     } catch (e) {
       console.error("[voz] preparar aula", e);
       return;
@@ -186,7 +191,7 @@ export async function warmLesson(markdown: string, labels: string[]) {
   }
 }
 
-async function speakNow(clean: string, hash: string): Promise<Spoken> {
+async function speakNow(clean: string, hash: string, priority: Priority): Promise<Spoken> {
   const mp3Key = `tts/${hash}.mp3`;
   const timesKey = `tts/${hash}.json`;
   try {
@@ -196,13 +201,13 @@ async function speakNow(clean: string, hash: string): Promise<Spoken> {
       .catch(() => null);
     return { mp3, times };
   } catch {}
-  const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = speechLines(clean);
   let rate = 22050;
   let pcms: Buffer[];
   if (isMockAi()) {
     rate = 24000;
     pcms = lines.map((l) => mockSpeech(l, rate));
-  } else ({ rate, pcms } = await piperSpeak(lines));
+  } else ({ rate, pcms } = await piperSpeak(lines, priority));
   const pieces: Buffer[] = [];
   const times: number[] = [];
   let at = 0;

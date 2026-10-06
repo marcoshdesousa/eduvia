@@ -66,12 +66,13 @@ async function localImage(url, year, qdir) {
   if (ext === ".svg") {
     await copyFile(src, path.join(dir, `${base}.svg`));
     imgCount++;
-    return `/enem/${year}/${qdir}/${base}.svg`;
+    return { url: `/enem/${year}/${qdir}/${base}.svg`, alt: "" };
   }
   try {
-    await sharp(src).flatten({ background: "#ffffff" }).resize({ width: 900, withoutEnlargement: true }).webp({ quality: 70 }).toFile(path.join(dir, `${base}.webp`));
+    const info = await sharp(src).flatten({ background: "#ffffff" }).resize({ width: 900, withoutEnlargement: true }).webp({ quality: 70 }).toFile(path.join(dir, `${base}.webp`));
     imgCount++;
-    return `/enem/${year}/${qdir}/${base}.webp`;
+    // largura x altura no texto alternativo: a tela reserva o espaço da imagem antes de ela carregar
+    return { url: `/enem/${year}/${qdir}/${base}.webp`, alt: `${info.width}x${info.height}` };
   } catch {
     return null;
   }
@@ -98,7 +99,7 @@ async function rewrite(text, year, qdir) {
   for (const m of [...text.matchAll(IMG_RE)]) {
     const local = await localImage(m[1], year, qdir);
     if (!local) ok = false;
-    out = out.replace(m[0], local ? `![](${local})` : "");
+    out = out.replace(m[0], local ? `![${local.alt}](${local.url})` : "");
   }
   return { text: out.trim(), ok };
 }
@@ -127,7 +128,7 @@ for (const year of (await readdir(SRC)).filter((y) => /^\d{4}$/.test(y)).sort())
       if (a.file) {
         const local = await localImage(a.file, d.year, qdir);
         if (!local) ok = false;
-        else text = `${text ? `${text}\n\n` : ""}![](${local})`;
+        else text = `${text ? `${text}\n\n` : ""}![${local.alt}](${local.url})`;
       }
       if (!text) ok = false;
       options.push(text);

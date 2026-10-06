@@ -50,8 +50,8 @@ export const isEnemQuestion = (questionId: string) => questionId.startsWith("ene
 
 /** Perguntas por aula (questões do ENEM da matéria, não só do que foi estudado). */
 export const LESSON_QUESTIONS = 10;
-/** Tempo estimado de cada aula (texto + 10 questões). */
-export const LESSON_MINUTES = 25;
+/** Tempo sugerido de cada aula (o aluno escolhe; texto + 10 questões). */
+export const LESSON_MINUTES = 20;
 
 // ───────────── Simulado ENEM: como a prova real ─────────────
 

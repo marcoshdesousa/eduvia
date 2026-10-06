@@ -216,35 +216,75 @@ async function speakLine(text: string, file: string) {
   });
 }
 
-// uma frase de cada vez (o Piper fala uma de cada vez de qualquer jeito)
-let queue: Promise<unknown> = Promise.resolve();
+// Fila do Piper (ele fala uma coisa de cada vez): quem está esperando para ouvir ("alta") passa na frente
+// do áudio preparado em segundo plano ("baixa"). Um pedido igual que já está na fila é reaproveitado.
+export type Priority = "high" | "low";
+type Job = { key: string; lines: string[]; priority: Priority; waiters: { resolve: (r: Spoken) => void; reject: (e: Error) => void }[] };
+type Spoken = { rate: number; pcms: Buffer[] };
+const pending: Job[] = [];
+let working = false;
+
+async function synth(lines: string[]): Promise<Spoken> {
+  const out = await mkdtemp(path.join(tmpdir(), "voz-"));
+  try {
+    let rate = 22050;
+    const pcms: Buffer[] = [];
+    for (const [i, line] of lines.entries()) {
+      const file = path.join(out, `${i}.wav`);
+      try {
+        await speakLine(line, file);
+      } catch {
+        await speakLine(line, file); // o Piper reiniciou: tenta a frase mais uma vez
+      }
+      const wav = readWav(await readFile(file));
+      rate = wav.rate;
+      pcms.push(Buffer.from(wav.pcm));
+    }
+    return { rate, pcms };
+  } finally {
+    await rm(out, { recursive: true, force: true });
+  }
+}
+
+async function work() {
+  if (working) return;
+  working = true;
+  try {
+    while (pending.length) {
+      const i = pending.findIndex((j) => j.priority === "high");
+      const [job] = pending.splice(i >= 0 ? i : 0, 1);
+      try {
+        const r = await synth(job.lines);
+        job.waiters.forEach((w) => w.resolve(r));
+      } catch (e) {
+        job.waiters.forEach((w) => w.reject(e as Error));
+      }
+    }
+  } finally {
+    working = false;
+  }
+}
 
 /** Fala cada linha separadamente (uma frase por linha) e devolve o áudio de cada uma. */
-export function piperSpeak(lines: string[]): Promise<{ rate: number; pcms: Buffer[] }> {
-  const job = queue.then(async () => {
-    const out = await mkdtemp(path.join(tmpdir(), "voz-"));
-    try {
-      let rate = 22050;
-      const pcms: Buffer[] = [];
-      for (const [i, line] of lines.entries()) {
-        const file = path.join(out, `${i}.wav`);
-        try {
-          await speakLine(line, file);
-        } catch {
-          await speakLine(line, file); // o Piper reiniciou: tenta a frase mais uma vez
-        }
-        const wav = readWav(await readFile(file));
-        rate = wav.rate;
-        pcms.push(Buffer.from(wav.pcm));
-      }
-      return { rate, pcms };
-    } finally {
-      await rm(out, { recursive: true, force: true });
-    }
+let lastHighAt = 0;
+/** Alguém pediu áudio para ouvir agora há pouco? (o pré-preparo em segundo plano espera a vez) */
+export const piperRecentlyUsed = (ms = 90_000) => Date.now() - lastHighAt < ms;
+
+export function piperSpeak(lines: string[], priority: Priority = "high"): Promise<Spoken> {
+  const key = lines.join("\n");
+  if (priority === "high") lastHighAt = Date.now();
+  return new Promise<Spoken>((resolve, reject) => {
+    const same = pending.find((j) => j.key === key);
+    if (same) {
+      same.waiters.push({ resolve, reject });
+      if (priority === "high") same.priority = "high";
+    } else pending.push({ key, lines, priority, waiters: [{ resolve, reject }] });
+    void work();
   });
-  queue = job.catch(() => {});
-  return job;
 }
+
+/** Quantos pedidos estão esperando na fila do Piper (o pré-preparo em segundo plano espera a fila esvaziar). */
+export const piperBusy = () => pending.length > 0 || working;
 
 /** Situação da voz (para o painel do admin). */
 export async function piperStatus() {
