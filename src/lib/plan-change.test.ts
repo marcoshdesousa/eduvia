@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { quotePlan } from "./plan-change";
+import { planOption, quotePlan } from "./plan-change";
 
 const now = new Date("2026-10-06T12:00:00Z");
 const daysLeft = (d: number) => new Date(now.getTime() + d * 86_400_000 + 3_600_000); // + 1 h (dia em andamento)
@@ -24,5 +24,20 @@ describe("troca de plano (desconto por dia)", () => {
     const q = quotePlan({ slug: "eduvia", name: "Pro", priceCents: 990 }, { planSlug: "ilimitado", planName: "Ilimitado", priceCents: 4490, currentPeriodEnd: daysLeft(29) }, now);
     // crédito 44,90 ÷ 30 × 29 = 43,40; paga 1,00 (8,90 de desconto); sobram 34,50 = 104 dias de Pro a mais
     expect(q).toMatchObject({ payCents: 100, creditCents: 890, days: 134 });
+  });
+});
+
+describe("o que dá para comprar com um plano ativo", () => {
+  const cur = { planSlug: "avancado", priceCents: 1990, currentPeriodEnd: daysLeft(20) };
+  it("sem plano: compra qualquer um", () => {
+    expect(planOption({ slug: "eduvia", priceCents: 990 }, null, false, now)).toEqual({ kind: "buy" });
+  });
+  it("o próprio plano: só renova perto de vencer", () => {
+    expect(planOption({ slug: "avancado", priceCents: 1990 }, cur, false, now)).toEqual({ kind: "current", until: cur.currentPeriodEnd });
+    expect(planOption({ slug: "avancado", priceCents: 1990 }, cur, true, now)).toEqual({ kind: "renew" });
+  });
+  it("plano maior: troca com desconto; plano menor: só quando o atual acabar", () => {
+    expect(planOption({ slug: "ilimitado", priceCents: 4490 }, cur, false, now)).toEqual({ kind: "upgrade" });
+    expect(planOption({ slug: "eduvia", priceCents: 990 }, cur, false, now)).toEqual({ kind: "lower", availableAt: cur.currentPeriodEnd });
   });
 });

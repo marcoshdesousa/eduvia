@@ -1,34 +1,50 @@
 // Assinatura paga por Pix (SyncPay): cria a cobrança do plano e, quando o Pix é confirmado, libera 30 dias.
 import { db } from "@/lib/db";
 import { appUrl } from "@/lib/app-url";
-import { addPeriod, getPlan } from "@/lib/billing";
+import { addPeriod, daysLeft, getPlan, RENEW_NOTICE_DAYS } from "@/lib/billing";
 import { priceFor } from "@/lib/plans";
 import { today } from "@/lib/core/dates";
 import { createPix, pixStatus, webhookToken } from "@/lib/syncpay";
-import { quotePlan } from "@/lib/plan-change";
+import { planOption, quotePlan } from "@/lib/plan-change";
 export type { PlanQuote } from "@/lib/plan-change";
 
-type Payer = { id: string; name: string; cpf: string | null; phone: string | null; handle: string | null };
+type Payer = { id: string; name: string; cpf: string | null; phone: string | null; handle: string | null; timezone?: string };
+
+/** Plano que o aluno não pode comprar agora (a mensagem vai direto para a tela). */
+export class PlanNotAvailable extends Error {}
 
 /** Orçamento do plano para este aluno, olhando o plano que ele tem agora. */
-export async function quoteForUser(userId: string, plan: { slug: string; name: string; priceMonthCents: number }) {
-  const current = await db.subscription.findFirst({
+/** Plano ativo do aluno agora (com o preço mensal), ou nada. */
+async function currentPlanOf(userId: string) {
+  const sub = await db.subscription.findFirst({
     where: { userId, status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: new Date() } },
     orderBy: { currentPeriodEnd: "desc" },
   });
-  const currentPlan = current ? await getPlan(current.planSlug) : null;
-  return quotePlan(
-    { slug: plan.slug, name: plan.name, priceCents: plan.priceMonthCents },
-    current && currentPlan ? { planSlug: current.planSlug, planName: currentPlan.name, priceCents: priceFor(currentPlan, "MONTH"), currentPeriodEnd: current.currentPeriodEnd } : null,
-  );
+  const plan = sub ? await getPlan(sub.planSlug) : null;
+  return sub && plan ? { planSlug: sub.planSlug, planName: plan.name, priceCents: priceFor(plan, "MONTH"), currentPeriodEnd: sub.currentPeriodEnd } : null;
 }
 
+/** Para cada plano: o que o aluno pode fazer (assinar, subir, renovar, já é o dele, indisponível) e quanto paga. */
+export async function planOffers(user: { id: string; timezone?: string }, plans: { slug: string; name: string; priceMonthCents: number }[]) {
+  const current = await currentPlanOf(user.id);
+  const renewOpen = !!current && daysLeft(current.currentPeriodEnd, user.timezone) <= RENEW_NOTICE_DAYS;
+  return new Map(
+    plans.map((p) => {
+      const plan = { slug: p.slug, name: p.name, priceCents: p.priceMonthCents };
+      return [p.slug, { option: planOption(plan, current, renewOpen), quote: quotePlan(plan, current) }] as const;
+    }),
+  );
+}
 /** Cria (ou reaproveita, se ainda estiver aberta) a cobrança Pix do plano mensal. */
 export async function createPlanPix(user: Payer, planSlug: string) {
   const plan = await getPlan(planSlug);
   if (!plan || plan.slug === "gratis" || !plan.active) throw new Error("Plano inválido.");
   if (priceFor(plan, "MONTH") <= 0) throw new Error("Plano sem preço.");
-  const quote = await quoteForUser(user.id, { slug: plan.slug, name: plan.name, priceMonthCents: priceFor(plan, "MONTH") });
+  const offer = (await planOffers(user, [{ slug: plan.slug, name: plan.name, priceMonthCents: priceFor(plan, "MONTH") }])).get(plan.slug)!;
+  // com plano ativo: só subir de plano ou renovar o mesmo perto de vencer
+  if (offer.option.kind === "current") throw new PlanNotAvailable("Este já é o seu plano. A renovação abre 2 dias antes de vencer.");
+  if (offer.option.kind === "lower") throw new PlanNotAvailable("Plano mais barato só fica disponível quando o seu plano atual acabar.");
+  const quote = offer.quote;
   const valueCents = quote.payCents;
 
   // Pix do mesmo plano e mesmo valor criado há menos de 20 minutos e ainda não pago: mostra o mesmo

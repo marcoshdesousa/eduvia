@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin, requireReadyUser } from "@/lib/session";
 import QRCode from "qrcode";
-import { createPlanPix } from "@/lib/pix-billing";
+import { createPlanPix, PlanNotAvailable } from "@/lib/pix-billing";
 import { syncpayConfigured } from "@/lib/syncpay";
 import { allowAttempt } from "@/lib/rate-limit";
 import { addPeriod, getPlan } from "@/lib/billing";
@@ -103,6 +103,7 @@ export async function createPixAction(planSlug: string): Promise<PixResult> {
     const qr = await QRCode.toDataURL(r.pixCode, { margin: 1, width: 280 });
     return { ok: true, ...r, qr };
   } catch (e) {
+    if (e instanceof PlanNotAvailable) return { ok: false, error: e.message };
     console.error("[syncpay] criar Pix", e);
     return { ok: false, error: "Não foi possível gerar o Pix agora. Tente de novo em instantes." };
   }

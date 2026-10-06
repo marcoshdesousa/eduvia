@@ -1,12 +1,12 @@
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { formatBRL, getAccess, listPlans, usage } from "@/lib/billing";
-import { quoteForUser } from "@/lib/pix-billing";
+import { planOffers } from "@/lib/pix-billing";
 import { formatLimit, intervalInfo, isUnlimited, planFeatures } from "@/lib/plans";
 import { formatDay } from "@/lib/core/dates";
 import { PixCheckout } from "@/components/pix-checkout";
 import { syncpayConfigured } from "@/lib/syncpay";
-import { ArrowRightLeft, Check } from "lucide-react";
+import { ArrowRightLeft, CalendarClock, Check, CheckCircle2 } from "lucide-react";
 import { Badge, Progress } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 
@@ -35,7 +35,7 @@ export default async function Page() {
   ];
   const subscribed = access.reason === "subscription";
   const pixEnabled = syncpayConfigured();
-  const quotes = new Map(await Promise.all(paidPlans.map(async (p) => [p.slug, await quoteForUser(user.id, p)] as const)));
+  const offers = await planOffers(user, paidPlans);
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Assinatura</h1>
@@ -84,7 +84,7 @@ export default async function Page() {
           {paidPlans.map((p) => {
             const current = (subscribed && access.planSlug === p.slug) || (access.reason === "expired" && access.ended?.planName === p.name);
             const best = p.slug === "ilimitado";
-            const q = quotes.get(p.slug)!;
+            const { option, quote: q } = offers.get(p.slug)!;
             return (
               <Card key={p.slug} className={`flex flex-col gap-3 ${current ? "border-primary bg-primary/5" : best ? "border-primary" : ""}`}>
                 <div className="flex items-center justify-between gap-2">
@@ -100,7 +100,7 @@ export default async function Page() {
                     <li key={f} className="flex items-start gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success" />{f}</li>
                   ))}
                 </ul>
-                {q.change && (
+                {option.kind === "upgrade" && q.change && (
                   <div className="space-y-1 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm" aria-label={`Troca para o plano ${p.name}`}>
                     <p className="flex items-center gap-1.5 font-semibold"><ArrowRightLeft size={15} className="text-primary" /> Trocar do {q.change.fromName} para o {p.name}</p>
                     <p className="flex justify-between text-muted"><span>Plano {p.name} (30 dias)</span><span>{formatBRL(q.priceCents)}</span></p>
@@ -114,8 +114,19 @@ export default async function Page() {
                     </p>
                   </div>
                 )}
-                {pixEnabled ? (
-                  <PixCheckout planSlug={p.slug} label={`${current ? "Renovar" : q.change ? "Trocar para o" : "Assinar"} ${p.name} com Pix`} />
+                {option.kind === "current" ? (
+                  <p className="flex items-center justify-center gap-1.5 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-center text-sm font-semibold text-success">
+                    <CheckCircle2 size={16} /> Seu plano · até {formatDay(option.until, { day: "2-digit", month: "2-digit" })}
+                  </p>
+                ) : option.kind === "lower" ? (
+                  <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-center text-sm" aria-label={`${p.name} indisponível`}>
+                    <p className="font-semibold text-muted">Indisponível</p>
+                    <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
+                      <CalendarClock size={14} /> Disponível para trocar de plano em {formatDay(option.availableAt, { day: "2-digit", month: "2-digit" })}
+                    </p>
+                  </div>
+                ) : pixEnabled ? (
+                  <PixCheckout planSlug={p.slug} label={`${option.kind === "renew" || current ? "Renovar" : option.kind === "upgrade" ? "Trocar para o" : "Assinar"} ${p.name} com Pix`} />
                 ) : (
                   <p className="rounded-lg border border-border px-3 py-2 text-center text-sm text-muted">Pagamento por Pix indisponível no momento. Tente de novo em alguns minutos.</p>
                 )}
@@ -137,7 +148,8 @@ export default async function Page() {
         <ol className="list-decimal space-y-1 pl-5 text-muted">
           <li>Escolha o plano e toque em &quot;Pagar com Pix&quot;. Pague pelo app do seu banco (QR Code ou Pix Copia e Cola): o plano libera sozinho assim que o Pix cair.</li>
           <li>Cada pagamento vale 30 dias. Renovou antes de vencer? Os 30 dias novos somam ao final. Não há cobrança automática.</li>
-          <li>Quer trocar de plano? O plano novo vale 30 dias a partir do pagamento e você ganha desconto pelos dias que não usou do plano atual.</li>
+          <li>Quer um plano maior? Troque quando quiser: o plano novo vale 30 dias a partir do pagamento e você ganha desconto pelos dias que não usou do plano atual. Um plano mais barato fica disponível quando o seu plano atual acabar.</li>
+          <li>O seu próprio plano pode ser renovado a partir de 2 dias antes de vencer.</li>
         </ol>
       </Card>
 

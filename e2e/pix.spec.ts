@@ -39,6 +39,11 @@ test("Pix: admin, aluno no teste (iPhone), conta antiga vencida (computador) e r
   await ip.reload();
   await expect(ip.getByText(/Ativo até/)).toBeVisible();
   await expect(ip.getByText("Seu plano: Pro")).toBeVisible();
+  // com plano ativo: o próprio plano não aparece para pagar (só "Seu plano"); os maiores dá para trocar
+  await expect(ip.getByText(/Seu plano · até/)).toBeVisible();
+  await expect(ip.getByRole("button", { name: /Pro com Pix/ })).toHaveCount(0);
+  await expect(ip.getByRole("button", { name: "Trocar para o Avançado com Pix" })).toBeVisible();
+  await expect(ip.getByRole("button", { name: "Trocar para o Ilimitado com Pix" })).toBeVisible();
 
   // conta antiga (criada há 2 meses, plano venceu): entra no computador, paga e volta a estudar
   const oldHandle = `aluno.antigo.${uid}`;
@@ -83,6 +88,11 @@ test("Pix: admin, aluno no teste (iPhone), conta antiga vencida (computador) e r
   await payPix(ip2, /Trocar para o Avançado com Pix/);
   await ip2.reload();
   await expect(ip2.getByText("Seu plano: Avançado")).toBeVisible();
+  // agora o Pro (mais barato) fica indisponível até o Avançado acabar
+  const proCard = ip2.getByLabel("Pro indisponível");
+  await expect(proCard.getByText("Indisponível")).toBeVisible();
+  await expect(proCard.getByText(/Disponível para trocar de plano em \d{2}\/\d{2}/)).toBeVisible();
+  await expect(ip2.getByRole("button", { name: /Pro com Pix/ })).toHaveCount(0);
   const subs = await sql<{ planSlug: string; days: number }>(
     `SELECT "planSlug", round(extract(epoch from ("currentPeriodEnd" - now())) / 86400) AS days FROM "Subscription" WHERE "userId" = (SELECT id FROM "user" WHERE handle = $1) AND status = 'ACTIVE'`,
     [`aluno.iphone.${uid}`],

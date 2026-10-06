@@ -39,3 +39,26 @@ export function quotePlan(
   return { priceCents: price, creditCents: used, payCents: pay, days: 30 + Math.max(0, extraDays), change: { fromName: current.planName, unusedDays } };
 }
 
+
+export type PlanOption =
+  | { kind: "buy" } // sem plano ativo: compra normal
+  | { kind: "upgrade" } // plano mais caro que o atual: troca com desconto
+  | { kind: "renew" } // o próprio plano, nos dias antes de vencer
+  | { kind: "current"; until: Date } // o próprio plano, longe de vencer: nada a pagar
+  | { kind: "lower"; availableAt: Date }; // plano mais barato: só depois que o atual acabar
+
+/**
+ * O que o aluno pode fazer com cada plano: com um plano ativo, só dá para subir de plano (com desconto)
+ * ou renovar o mesmo perto de vencer. Plano mais barato fica indisponível até o atual acabar.
+ */
+export function planOption(
+  plan: { slug: string; priceCents: number },
+  current: { planSlug: string; priceCents: number; currentPeriodEnd: Date } | null,
+  renewOpen: boolean,
+  now = new Date(),
+): PlanOption {
+  if (!current || current.currentPeriodEnd <= now) return { kind: "buy" };
+  if (current.planSlug === plan.slug) return renewOpen ? { kind: "renew" } : { kind: "current", until: current.currentPeriodEnd };
+  if (plan.priceCents > current.priceCents) return { kind: "upgrade" };
+  return { kind: "lower", availableAt: current.currentPeriodEnd };
+}
