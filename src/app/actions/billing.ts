@@ -12,7 +12,7 @@ import { LIMIT_FIELDS, PERIOD_DAYS, priceFor, type Interval, type PlanLimits } f
 import { today } from "@/lib/core/dates";
 
 /**
- * Admin confirma o pagamento (recebido pelo WhatsApp) e libera o plano por 1 semana ou 1 mês.
+ * Admin confirma o pagamento (recebido por fora) ou dá o plano de graça e libera o plano por 1 semana ou 1 mês.
  * Mesmo plano ainda ativo: o período é somado ao final. Troca de plano: vale a partir de agora.
  */
 export async function grantPlanAction(userId: string, planSlug: string, interval: Interval) {
@@ -91,12 +91,12 @@ export async function updatePlanAction(slug: string, _: unknown, f: FormData) {
   return { ok: true, message: `Plano ${name} atualizado.` };
 }
 
-export type PixResult = { ok: true; paymentId: string; pixCode: string; qr: string; valueCents: number; planName: string } | { ok: false; error: string };
+export type PixResult = { ok: true; paymentId: string; pixCode: string; qr: string; valueCents: number; planName: string; days: number; creditCents: number } | { ok: false; error: string };
 
 /** Aluno escolhe o plano mensal: cria o Pix na SyncPay e devolve o QR Code e o "copia e cola". */
 export async function createPixAction(planSlug: string): Promise<PixResult> {
   const user = await requireReadyUser();
-  if (!syncpayConfigured()) return { ok: false, error: "Pagamento por Pix ainda não está disponível. Fale com a gente pelo WhatsApp." };
+  if (!syncpayConfigured()) return { ok: false, error: "Pagamento por Pix indisponível no momento. Tente de novo em alguns minutos." };
   if (!(await allowAttempt(`pix:${user.id}`, 10, 30))) return { ok: false, error: "Muitas tentativas. Aguarde alguns minutos." };
   try {
     const r = await createPlanPix(user, planSlug);

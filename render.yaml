@@ -42,8 +42,6 @@ services:
         value: local
       - key: STORAGE_LOCAL_DIR
         value: /var/data/uploads
-      - key: WHATSAPP_NUMBER
-        value: "5562992097369"
       - key: BILLING_ENFORCED
         value: "true" # sem assinatura, a conta fica no plano Grátis (limitado)
       # IA: Google Gemini com a chave de cada aluno (informada no cadastro). Nada a configurar aqui.

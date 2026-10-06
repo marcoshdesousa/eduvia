@@ -71,4 +71,25 @@ test("Pix: admin, aluno no teste (iPhone), conta antiga vencida (computador) e r
     [`aluno.iphone.${uid}`],
   )) as unknown as { days: number }[];
   expect(Number(row.days)).toBe(31);
+
+  // troca de plano: usou 10 dias do Pro (sobram 20) e troca para o Avançado com desconto por dia
+  await sql(`UPDATE "Subscription" SET "currentPeriodEnd" = now() + interval '20 days 1 hour' WHERE "userId" = (SELECT id FROM "user" WHERE handle = $1) AND status = 'ACTIVE'`, [`aluno.iphone.${uid}`]);
+  await ip2.goto("/assinatura");
+  const box = ip2.getByLabel("Troca para o plano Avançado");
+  await expect(box.getByText("Trocar do Pro para o Avançado")).toBeVisible();
+  await expect(box.getByText(/Desconto: 20 dias não usados do Pro/)).toBeVisible();
+  await expect(box.getByText(/6,60/)).toBeVisible(); // 9,90 ÷ 30 × 20
+  await expect(box.getByText(/13,30/)).toBeVisible(); // 19,90 − 6,60
+  await payPix(ip2, /Trocar para o Avançado com Pix/);
+  await ip2.reload();
+  await expect(ip2.getByText("Seu plano: Avançado")).toBeVisible();
+  const subs = await sql<{ planSlug: string; days: number }>(
+    `SELECT "planSlug", round(extract(epoch from ("currentPeriodEnd" - now())) / 86400) AS days FROM "Subscription" WHERE "userId" = (SELECT id FROM "user" WHERE handle = $1) AND status = 'ACTIVE'`,
+    [`aluno.iphone.${uid}`],
+  );
+  expect(subs).toHaveLength(1);
+  expect(subs[0].planSlug).toBe("avancado");
+  expect(Number(subs[0].days)).toBe(30);
+  const [last] = await sql<{ valueCents: number; creditCents: number }>(`SELECT "valueCents", "creditCents" FROM "Payment" WHERE "billingType" = 'PIX' ORDER BY "createdAt" DESC LIMIT 1`);
+  expect(last).toMatchObject({ valueCents: 1330, creditCents: 660 });
 });

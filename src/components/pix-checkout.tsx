@@ -60,12 +60,13 @@ export function PixCheckout({ planSlug, label }: { planSlug: string; label: stri
               <div className="space-y-2 py-6">
                 <CheckCircle2 size={48} className="mx-auto text-success" />
                 <p className="text-lg font-semibold">Pagamento confirmado!</p>
-                <p className="text-sm text-muted">Seu plano {pix.planName} está liberado por 30 dias. Bons estudos!</p>
+                <p className="text-sm text-muted">Seu plano {pix.planName} está liberado por {pix.days} dias. Bons estudos!</p>
               </div>
             ) : status === "failed" ? (
               <p className="py-6 text-sm text-danger">Este Pix expirou ou foi cancelado. Feche e gere um novo.</p>
             ) : (
               <>
+                {pix.creditCents > 0 && <p className="text-xs text-success">Já com {brl(pix.creditCents)} de desconto pelos dias não usados do seu plano atual.</p>}
                 <p className="text-sm text-muted">Abra o app do seu banco, escolha <strong>Pix → Ler QR Code</strong> ou use o <strong>Pix Copia e Cola</strong>.</p>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={pix.qr} alt="QR Code do Pix" className="mx-auto size-56 rounded-lg bg-white p-2" />

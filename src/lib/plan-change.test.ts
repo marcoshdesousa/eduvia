@@ -1,0 +1,28 @@
+import { describe, expect, it } from "vitest";
+import { quotePlan } from "./plan-change";
+
+const now = new Date("2026-10-06T12:00:00Z");
+const daysLeft = (d: number) => new Date(now.getTime() + d * 86_400_000 + 3_600_000); // + 1 h (dia em andamento)
+const pro = { planSlug: "eduvia", planName: "Pro", priceCents: 990 };
+const avancado = { slug: "avancado", name: "Avançado", priceCents: 1990 };
+
+describe("troca de plano (desconto por dia)", () => {
+  it("sem plano ou mesmo plano: preço cheio e 30 dias", () => {
+    expect(quotePlan(avancado, null, now)).toMatchObject({ payCents: 1990, creditCents: 0, days: 30, change: null });
+    expect(quotePlan({ slug: "eduvia", name: "Pro", priceCents: 990 }, { ...pro, currentPeriodEnd: daysLeft(20) }, now)).toMatchObject({ payCents: 990, change: null });
+  });
+  it("usou 10 dias do Pro e troca para o Avançado: desconto dos 20 dias que sobraram", () => {
+    // 9,90 ÷ 30 = 0,33 por dia × 20 = 6,60 de desconto → paga 19,90 − 6,60 = 13,30
+    expect(quotePlan(avancado, { ...pro, currentPeriodEnd: daysLeft(20) }, now)).toEqual({
+      priceCents: 1990, creditCents: 660, payCents: 1330, days: 30, change: { fromName: "Pro", unusedDays: 20 },
+    });
+  });
+  it("usou 29 dias: desconto pequeno", () => {
+    expect(quotePlan(avancado, { ...pro, currentPeriodEnd: daysLeft(1) }, now)).toMatchObject({ creditCents: 33, payCents: 1957, days: 30 });
+  });
+  it("troca para um plano mais barato com muito crédito: paga o mínimo e o resto vira dias", () => {
+    const q = quotePlan({ slug: "eduvia", name: "Pro", priceCents: 990 }, { planSlug: "ilimitado", planName: "Ilimitado", priceCents: 4490, currentPeriodEnd: daysLeft(29) }, now);
+    // crédito 44,90 ÷ 30 × 29 = 43,40; paga 1,00 (8,90 de desconto); sobram 34,50 = 104 dias de Pro a mais
+    expect(q).toMatchObject({ payCents: 100, creditCents: 890, days: 134 });
+  });
+});

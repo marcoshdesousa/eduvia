@@ -1,4 +1,4 @@
-// Assinatura manual: o aluno paga pelo WhatsApp e um admin libera o plano em /admin.
+// Assinatura: o aluno paga pelo Pix (SyncPay, libera sozinho) ou o admin libera o plano em /admin.
 // Planos mensais (Pro, Avançado e Ilimitado) e o teste grátis de 3 dias. Depois do teste, só assinando.
 // Arquivos e páginas não têm limite em nenhum plano.
 import { db } from "@/lib/db";
@@ -24,25 +24,6 @@ export async function listPlans(): Promise<PlanRow[]> {
 
 export async function getPlan(slug: string): Promise<PlanRow | null> {
   return (await listPlans()).find((p) => p.slug === slug) ?? null;
-}
-
-/** Número de WhatsApp que recebe os pedidos de assinatura (DDI + DDD + número, só dígitos). */
-export function whatsappNumber() {
-  return (process.env.WHATSAPP_NUMBER || "5562992097369").replace(/\D/g, "");
-}
-
-export function whatsappLink(message: string) {
-  return `https://wa.me/${whatsappNumber()}?text=${encodeURIComponent(message)}`;
-}
-
-export function subscribeMessage(
-  plan: { name: string; priceWeekCents: number; priceFortnightCents: number; priceMonthCents: number },
-  interval: Interval,
-  user: { name: string; handle: string | null },
-) {
-  const info = intervalInfo(interval);
-  const period = `${info.adjective} (${info.label}) por ${formatBRL(priceFor(plan, interval))}`;
-  return `Olá! Quero assinar o plano ${plan.name} ${period}.\nNome: ${user.name}\nUsuário: @${user.handle}`;
 }
 
 /** Com BILLING_ENFORCED=false (só para desenvolvimento) todo mundo tem o plano pago. */

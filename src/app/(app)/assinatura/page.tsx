@@ -1,13 +1,13 @@
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
-import { formatBRL, getAccess, listPlans, subscribeMessage, usage, whatsappLink } from "@/lib/billing";
-import { formatLimit, INTERVALS, intervalInfo, isUnlimited, planFeatures, priceFor } from "@/lib/plans";
+import { formatBRL, getAccess, listPlans, usage } from "@/lib/billing";
+import { quoteForUser } from "@/lib/pix-billing";
+import { formatLimit, intervalInfo, isUnlimited, planFeatures } from "@/lib/plans";
 import { formatDay } from "@/lib/core/dates";
 import { PixCheckout } from "@/components/pix-checkout";
 import { syncpayConfigured } from "@/lib/syncpay";
-import { Check, MessageCircle } from "lucide-react";
+import { ArrowRightLeft, Check } from "lucide-react";
 import { Badge, Progress } from "@/components/ui/badge";
-import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 
 export const metadata = { title: "Assinatura" };
@@ -35,6 +35,7 @@ export default async function Page() {
   ];
   const subscribed = access.reason === "subscription";
   const pixEnabled = syncpayConfigured();
+  const quotes = new Map(await Promise.all(paidPlans.map(async (p) => [p.slug, await quoteForUser(user.id, p)] as const)));
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Assinatura</h1>
@@ -52,7 +53,7 @@ export default async function Page() {
         </div>
         <p className="text-sm text-muted">
           {access.reason === "subscription"
-            ? `Plano ${intervalInfo(access.interval).adjective} (${intervalInfo(access.interval).label}) válido até ${longDate(access.until)}. ${pixEnabled ? "Para continuar, pague o próximo mês com Pix aqui embaixo (os 30 dias novos somam ao final do plano)." : "Para continuar depois disso, é só renovar pelo WhatsApp."}`
+            ? `Plano ${intervalInfo(access.interval).adjective} (${intervalInfo(access.interval).label}) válido até ${longDate(access.until)}. ${pixEnabled ? "Para continuar, pague o próximo mês com Pix aqui embaixo (os 30 dias novos somam ao final do plano)." : "Para continuar, renove pelo Pix aqui embaixo."}`
             : access.reason === "dev"
               ? "Tudo liberado (conta de administrador ou cobrança desativada)."
               : access.reason === "trial"
@@ -83,7 +84,7 @@ export default async function Page() {
           {paidPlans.map((p) => {
             const current = (subscribed && access.planSlug === p.slug) || (access.reason === "expired" && access.ended?.planName === p.name);
             const best = p.slug === "ilimitado";
-            const opts = INTERVALS.filter((i) => priceFor(p, i.key) > 0).map((i) => ({ key: i.key, label: i.adjective, days: i.days, price: priceFor(p, i.key) }));
+            const q = quotes.get(p.slug)!;
             return (
               <Card key={p.slug} className={`flex flex-col gap-3 ${current ? "border-primary bg-primary/5" : best ? "border-primary" : ""}`}>
                 <div className="flex items-center justify-between gap-2">
@@ -93,31 +94,31 @@ export default async function Page() {
                 <div>
                   <span className="text-3xl font-bold">{formatBRL(p.priceMonthCents)}</span>
                   <span className="text-sm text-muted"> / 30 dias</span>
-                  <div className="text-sm text-muted">
-                    {opts.filter((o) => o.key !== "MONTH").map((o) => `${formatBRL(o.price)} por ${o.days} dias`).join(" · ")}
-                  </div>
                 </div>
                 <ul className="flex-1 space-y-1.5 text-sm">
                   {planFeatures(p.limits).map((f) => (
                     <li key={f} className="flex items-start gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success" />{f}</li>
                   ))}
                 </ul>
-                <div className="grid gap-2">
-                  {pixEnabled && <PixCheckout planSlug={p.slug} label={`${current ? "Renovar" : "Assinar"} ${p.name} com Pix`} />}
-                  {/* com o Pix automático ligado, só o Pix (sem WhatsApp); sem ele, o WhatsApp é o jeito de assinar */}
-                  {!pixEnabled && opts.map((o) => (
-                    <a
-                      key={o.key}
-                      href={whatsappLink(subscribeMessage(p, o.key, user))}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={`${current ? "Renovar" : "Assinar"} ${p.name} ${o.label} pelo WhatsApp`}
-                      className={buttonClass(o.key === "MONTH" ? "primary" : "outline", "md", "w-full")}
-                    >
-                      <MessageCircle size={16} /> {`${o.days} dias por ${formatBRL(o.price)}`}
-                    </a>
-                  ))}
-                </div>
+                {q.change && (
+                  <div className="space-y-1 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm" aria-label={`Troca para o plano ${p.name}`}>
+                    <p className="flex items-center gap-1.5 font-semibold"><ArrowRightLeft size={15} className="text-primary" /> Trocar do {q.change.fromName} para o {p.name}</p>
+                    <p className="flex justify-between text-muted"><span>Plano {p.name} (30 dias)</span><span>{formatBRL(q.priceCents)}</span></p>
+                    <p className="flex justify-between text-success">
+                      <span>Desconto: {q.change.unusedDays} {q.change.unusedDays === 1 ? "dia não usado" : "dias não usados"} do {q.change.fromName}</span>
+                      <span>− {formatBRL(q.creditCents)}</span>
+                    </p>
+                    <p className="flex justify-between border-t border-border pt-1 font-semibold"><span>Você paga</span><span>{formatBRL(q.payCents)}</span></p>
+                    <p className="text-xs text-muted">
+                      O {p.name} vale {q.days} dias a partir do pagamento{q.days > 30 ? " (o crédito que sobrou virou dias a mais)" : ""}. O {q.change.fromName} acaba na hora da troca.
+                    </p>
+                  </div>
+                )}
+                {pixEnabled ? (
+                  <PixCheckout planSlug={p.slug} label={`${current ? "Renovar" : q.change ? "Trocar para o" : "Assinar"} ${p.name} com Pix`} />
+                ) : (
+                  <p className="rounded-lg border border-border px-3 py-2 text-center text-sm text-muted">Pagamento por Pix indisponível no momento. Tente de novo em alguns minutos.</p>
+                )}
               </Card>
             );
           })}
@@ -134,15 +135,9 @@ export default async function Page() {
       <Card className="space-y-2 text-sm">
         <CardTitle>Como funciona</CardTitle>
         <ol className="list-decimal space-y-1 pl-5 text-muted">
-          <li>{pixEnabled ? "Escolha o plano mensal e toque em \"Pagar com Pix\": o plano libera sozinho assim que o Pix cair." : "Escolha o plano mensal: a mensagem com o plano e o seu @ já vai pronta no WhatsApp."}</li>
-          {pixEnabled ? (
-            <li>Pague pelo app do seu banco (QR Code ou Pix Copia e Cola). Não há cobrança automática: quando vencer, é só pagar o próximo mês.</li>
-          ) : (
-            <>
-              <li>Combine o pagamento por lá (Pix).</li>
-              <li>Assim que o pagamento for confirmado, liberamos o plano na sua conta. Não há cobrança automática: quando vencer, é só renovar.</li>
-            </>
-          )}
+          <li>Escolha o plano e toque em &quot;Pagar com Pix&quot;. Pague pelo app do seu banco (QR Code ou Pix Copia e Cola): o plano libera sozinho assim que o Pix cair.</li>
+          <li>Cada pagamento vale 30 dias. Renovou antes de vencer? Os 30 dias novos somam ao final. Não há cobrança automática.</li>
+          <li>Quer trocar de plano? O plano novo vale 30 dias a partir do pagamento e você ganha desconto pelos dias que não usou do plano atual.</li>
         </ol>
       </Card>
 

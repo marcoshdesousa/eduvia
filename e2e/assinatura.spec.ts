@@ -9,20 +9,13 @@ test("teste grátis → admin libera o Pro; 3 IAs obrigatórias", async ({ page,
   const handle = `aluno.pago.${uid}`;
   await signUp(page, { name: "Aluno Pagante", handle, plan: "gratis" });
 
-  // teste grátis de 3 dias: aviso no topo e link do WhatsApp com a mensagem pronta (só plano mensal)
+  // teste grátis de 3 dias: aviso no topo; planos mensais pagos só por Pix (nada de WhatsApp)
   await expect(page.getByText(/Teste grátis: faltam 3 dias/)).toBeVisible();
   await page.getByRole("link", { name: "Assinar", exact: true }).click();
   await expect(page).toHaveURL(/\/assinatura/);
-  const month = decodeURIComponent((await page.getByRole("link", { name: /Assinar Pro mensal pelo WhatsApp/ }).getAttribute("href"))!);
-  expect(month).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
-  expect(month).toContain("plano Pro mensal (30 dias)");
-  expect(month).toContain("9,90");
-  expect(month).toContain(`@${handle}`);
-  await expect(page.getByRole("link", { name: /semanal|quinzenal/ })).toHaveCount(0);
-  const ilimitado = decodeURIComponent((await page.getByRole("link", { name: /Assinar Ilimitado mensal/ }).getAttribute("href"))!);
-  expect(ilimitado).toContain("44,90");
-  const avancado = decodeURIComponent((await page.getByRole("link", { name: /Assinar Avançado mensal/ }).getAttribute("href"))!);
-  expect(avancado).toContain("19,90");
+  for (const price of [/^R\$\s9,90$/, /^R\$\s19,90$/, /^R\$\s44,90$/]) await expect(page.getByText(price)).toBeVisible();
+  await expect(page.getByText(/WhatsApp/)).toHaveCount(0);
+  await expect(page.locator('a[href*="wa.me"]')).toHaveCount(0);
   await expect(page.getByText("Teste grátis (3 dias)")).toBeVisible();
   await expect(page.getByText(/Arquivos e páginas sem limite/).first()).toBeVisible();
 

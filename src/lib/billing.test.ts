@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addPeriod, localDayStart, localMonthStart, subscribeMessage, whatsappLink } from "./billing";
+import { addPeriod, localDayStart, localMonthStart } from "./billing";
 import { DEFAULT_PLANS, INTERVALS, normalizeLimits, planFeatures, TRIAL_DAYS } from "./plans";
 import { isValidCnpj, isValidCpf } from "./core/cpf";
 import { normalizePhone } from "./core/phone";
@@ -27,14 +27,6 @@ describe("assinatura", () => {
     expect(addPeriod(new Date("2026-10-01T10:00:00Z"), "WEEK").toISOString()).toBe("2026-10-08T10:00:00.000Z");
     expect(addPeriod(new Date("2026-10-01T10:00:00Z"), "FORTNIGHT").toISOString()).toBe("2026-10-16T10:00:00.000Z");
     expect(addPeriod(new Date("2026-01-31T10:00:00Z"), "MONTH").toISOString()).toBe("2026-03-02T10:00:00.000Z");
-  });
-  it("monta o link do WhatsApp com a mensagem do plano", () => {
-    const eduvia = DEFAULT_PLANS.find((p) => p.slug === "eduvia")!;
-    const link = whatsappLink(subscribeMessage(eduvia, "MONTH", { name: "Ana", handle: "ana.silva" }));
-    expect(link).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
-    expect(decodeURIComponent(link.split("text=")[1])).toContain("plano Pro mensal (30 dias)");
-    expect(decodeURIComponent(link.split("text=")[1])).toContain("9,90");
-    expect(decodeURIComponent(link.split("text=")[1])).toContain("@ana.silva");
   });
   it("início do dia em São Paulo é 03:00 UTC", () => {
     expect(localDayStart("America/Sao_Paulo", new Date("2026-10-05T15:00:00Z")).toISOString()).toBe("2026-10-05T03:00:00.000Z");
