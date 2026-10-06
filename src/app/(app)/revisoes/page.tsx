@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { ENEM_PREP_ID, ENEM_TITLE } from "@/lib/enem/catalog";
 import { requireReadyUser } from "@/lib/session";
 import { today } from "@/lib/core/dates";
 import { QuestionCard, type QuestionData, type SourceRef } from "@/components/question-card";
@@ -17,7 +18,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
   const sp = await searchParams;
   const filter = sp.filtro === "erros" ? "erros" : "hoje";
   const day = today(user.timezone);
-  const preps = await db.preparation.findMany({ where: { userId: user.id, status: "ACTIVE" }, select: { id: true, title: true } });
+  const preps = [
+    ...(await db.preparation.findMany({ where: { userId: user.id, status: "ACTIVE" }, select: { id: true, title: true } })),
+    { id: ENEM_PREP_ID, title: ENEM_TITLE },
+  ];
   const prepFilter = preps.find((p) => p.id === sp.prep)?.id;
 
   const baseWhere = {

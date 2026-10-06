@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormError } from "@/components/ui/form";
 import type { SourceRef } from "@/components/question-card";
+import { isRichQuestion, QuestionText } from "@/components/rich-text";
 
 /** Questão do banco de erros: mostra a resposta certa e, sob pedido, uma aula curta com base no material do aluno. */
 export function ErrorBankItem({
@@ -39,9 +40,9 @@ export function ErrorBankItem({
         <span>{subject}</span>
         <Badge tone="danger">Errou {lapses}x</Badge>
       </div>
-      <p className="font-medium">{statement}</p>
+      <div className="font-medium"><QuestionText text={statement} rich={isRichQuestion(questionId)} /></div>
       <p className="flex items-start gap-2 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm">
-        <Check size={16} className="mt-0.5 shrink-0 text-success" /> <span><strong>Resposta certa:</strong> {correct}</span>
+        <Check size={16} className="mt-0.5 shrink-0 text-success" /> <span className="min-w-0"><strong>Resposta certa:</strong> <QuestionText text={correct} rich={isRichQuestion(questionId)} /></span>
       </p>
       {explanation && <p className="text-sm text-muted">{explanation}</p>}
       {sources.length > 0 && (

@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { GraduationCap, Plus } from "lucide-react";
+import { ENEM_TITLE } from "@/lib/enem/catalog";
+import { lessonStates } from "@/lib/enem/progress";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { PROFILES } from "@/lib/core/profiles";
@@ -25,6 +27,8 @@ export default async function Page() {
   const doneSet = new Set(done.map((d) => d.topicId));
   const topicsByPrep = await db.topic.findMany({ where: { subject: { preparation: { userId: user.id } } }, select: { id: true, subject: { select: { preparationId: true } } } });
   const day = today(user.timezone);
+  const enemLessons = [...(await lessonStates(user.id)).values()].flat();
+  const enemDone = enemLessons.filter((l) => l.passed).length;
 
   return (
     <div className="space-y-6">
@@ -32,6 +36,20 @@ export default async function Page() {
         <h1 className="text-2xl font-bold">Preparações</h1>
         <Link href="/preparacoes/nova" className={buttonClass("primary")}><Plus size={16} /> Nova</Link>
       </div>
+      {/* preparação fixa da plataforma: todo mundo tem, não dá para apagar e não conta no limite do plano */}
+      <Link href="/enem" aria-label={ENEM_TITLE}>
+        <Card className="border-primary/50 bg-primary/5 transition-colors hover:border-primary">
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="flex items-center gap-2 font-semibold"><GraduationCap size={20} className="text-primary" /> {ENEM_TITLE}</h2>
+            <Badge tone="primary">Da plataforma</Badge>
+          </div>
+          <p className="mt-1 text-xs text-muted">Aulas de todas as matérias e questões reais do ENEM. Grátis e fora do limite do seu plano.</p>
+          <div className="mt-3">
+            <div className="mb-1 flex justify-between text-xs text-muted"><span>Aulas concluídas</span><span>{enemDone}/{enemLessons.length}</span></div>
+            <Progress value={enemLessons.length ? enemDone / enemLessons.length : 0} />
+          </div>
+        </Card>
+      </Link>
       {!preps.length && (
         <Card className="text-center">
           <p className="font-medium">Você ainda não tem nenhuma preparação.</p>

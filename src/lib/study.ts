@@ -11,6 +11,8 @@ import { searchChunks } from "@/lib/rag";
 import { addXp, registerStudy, XP } from "@/lib/gamification";
 import { checkAchievementsSafe } from "@/lib/achievements";
 import { canAccessQuestion } from "@/lib/groups";
+import { findLesson } from "@/lib/enem/catalog";
+import { pickLessonQuestions } from "@/lib/enem/bank";
 
 export type { SourceRef } from "@/lib/sources";
 import type { SourceRef } from "@/lib/sources";
@@ -373,7 +375,10 @@ export async function nextLesson(preparationId: string) {
 export async function retakeSession(sessionId: string, userId: string) {
   const session = await db.studySession.findFirst({ where: { id: sessionId, userId } });
   if (!session) return null;
-  return db.studySession.update({ where: { id: sessionId }, data: { roundStartedAt: new Date(), completedAt: null, roundPulses: 0 } });
+  // Estudar ENEM: cada tentativa vem com outras 10 questões do ENEM (para não decorar as mesmas)
+  const enem = findLesson(session.topicId);
+  const questionIds = enem ? await pickLessonQuestions(userId, enem.materia) : undefined;
+  return db.studySession.update({ where: { id: sessionId }, data: { roundStartedAt: new Date(), completedAt: null, roundPulses: 0, ...(questionIds?.length ? { questionIds } : {}) } });
 }
 
 /**

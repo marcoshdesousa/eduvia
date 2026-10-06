@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { isRichQuestion, QuestionText } from "@/components/rich-text";
 import { Clock } from "lucide-react";
 import { saveAnswersAction, submitAttemptAction } from "@/app/actions/exams";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,8 @@ export function ExamRunner({ attemptId, title, deadline, initialAnswers, questio
 
   const q = questions[current];
   const answered = Object.keys(answers).length;
-  const mm = Math.max(0, Math.floor(left / 60000));
+  const hh = Math.max(0, Math.floor(left / 3_600_000));
+  const mm = Math.max(0, Math.floor((left % 3_600_000) / 60000));
   const ss = Math.max(0, Math.floor((left % 60000) / 1000));
 
   function choose(v: string) {
@@ -59,13 +61,13 @@ export function ExamRunner({ attemptId, title, deadline, initialAnswers, questio
       <div className="sticky top-14 z-10 -mx-4 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-2 backdrop-blur md:top-0">
         <span className="truncate text-sm font-medium">{title}</span>
         <span className={cn("inline-flex items-center gap-1 font-mono text-lg font-semibold tabular-nums", left < 60_000 && "text-danger")} aria-live="polite">
-          <Clock size={16} /> {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}
+          <Clock size={16} /> {hh > 0 ? `${hh}:` : ""}{String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}
         </span>
       </div>
 
       <Card className="space-y-4">
         <div className="text-sm text-muted">Questão {current + 1} de {questions.length} · {q.subject}</div>
-        <p className="whitespace-pre-line leading-relaxed">{q.statement}</p>
+        <div className="leading-relaxed"><QuestionText text={q.statement} rich={isRichQuestion(q.id)} /></div>
         <div className="space-y-2">
           {q.options.map((o, i) => (
             <button
@@ -76,7 +78,7 @@ export function ExamRunner({ attemptId, title, deadline, initialAnswers, questio
               className={cn("flex w-full items-start gap-3 rounded-lg border p-3 text-left text-sm", answers[q.id] === String(i) ? "border-primary bg-primary/10" : "border-border hover:bg-surface-2")}
             >
               <span className="grid size-6 shrink-0 place-items-center rounded-full border border-current text-xs font-semibold">{q.type === "CERTO_ERRADO" ? (i === 0 ? "C" : "E") : LETTERS[i]}</span>
-              <span className="flex-1">{o}</span>
+              <QuestionText text={o} rich={isRichQuestion(q.id)} className="min-w-0 flex-1" />
             </button>
           ))}
         </div>

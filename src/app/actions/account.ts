@@ -47,7 +47,7 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
   if ("error" in p) return { error: p.error };
 
   // a primeira conta de um banco vazio vira administradora (depois: npm run admin -- @usuario)
-  const firstAccount = (await db.user.count()) === 0;
+  const firstAccount = (await db.user.count({ where: { cpf: { not: null } } })) === 0;
   let userId: string;
   try {
     const res = await auth.api.signUpEmail({ body: { name, email: internalEmail(p.cpf), password }, headers: await headers() });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { GraduationCap, Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { formatDay } from "@/lib/core/dates";
@@ -30,6 +30,17 @@ export default async function Page() {
         </div>
         <Link href="/simulados/novo" className={buttonClass("primary")}><Plus size={16} /> Novo</Link>
       </div>
+
+      <Link href="/simulados/enem" className="block" aria-label="Simulado ENEM">
+        <Card className="flex items-center gap-3 border-primary/50 bg-primary/5 transition-colors hover:border-primary">
+          <GraduationCap size={28} className="shrink-0 text-primary" />
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">Simulado ENEM</div>
+            <div className="text-xs text-muted">Questões reais do ENEM, com a prova do 1º ou do 2º dia e o tempo de verdade.</div>
+          </div>
+          <span className={buttonClass("primary", "sm")}>Fazer</span>
+        </Card>
+      </Link>
 
       {finished.length >= 2 && (
         <Card>

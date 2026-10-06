@@ -1,5 +1,6 @@
 // Grupos de estudo: membros e papéis, convites por @, mural e compartilhamento de recursos.
 import { db } from "@/lib/db";
+import { ENEM_PREP_ID } from "@/lib/enem/catalog";
 import type { GroupRole, ShareType } from "@/generated/prisma/enums";
 import { notify } from "@/lib/notifications";
 import { checkAchievementsSafe } from "@/lib/achievements";
@@ -262,8 +263,10 @@ export async function canAccessStudyText(userId: string, studyTextId: string) {
 }
 
 /** Questão: da própria preparação, de uma lista de questões compartilhada ou de um simulado compartilhado. */
-export async function canAccessQuestion(userId: string, question: { id: string; topicId: string; topic: { subject: { preparation: { userId: string } } } }) {
+export async function canAccessQuestion(userId: string, question: { id: string; topicId: string; topic: { subject: { preparation: { id: string; userId: string } } } }) {
   if (question.topic.subject.preparation.userId === userId) return true;
+  // Estudar ENEM: questões da plataforma, abertas para todo mundo
+  if (question.topic.subject.preparation.id === ENEM_PREP_ID) return true;
   if (await sharedWith(userId, "QUESTION_SET", question.topicId)) return true;
   const exam = await db.exam.findFirst({
     where: { questionIds: { has: question.id }, OR: [{ ownerId: userId }, { id: { in: await sharedExamIds(userId) } }] },

@@ -127,7 +127,7 @@ export async function usage(user: UserLike) {
     db.preparation.count({ where: { userId: user.id, status: "ACTIVE" } }),
     db.material.count({ where: { preparation: { userId: user.id }, role: "CONTENT", status: { not: "ERROR" } } }),
     pagesToday(user.id, dayStart),
-    db.studySession.count({ where: { userId: user.id, kind: "STUDY", startedAt: { gte: dayStart } } }),
+    db.studySession.count({ where: { userId: user.id, kind: "STUDY", startedAt: { gte: dayStart }, NOT: { topicId: { startsWith: "enem-" } } } }),
     db.gameRun.count({ where: { userId: user.id, startedAt: { gte: dayStart } } }),
     db.exam.count({ where: { ownerId: user.id, createdAt: { gte: monthStart } } }),
     db.essay.count({ where: { userId: user.id, status: { not: "DRAFT" }, createdAt: { gte: dayStart } } }),
@@ -229,7 +229,8 @@ export async function scannedQuotaError(userId: string, materialId: string, page
 /** Sessões de estudo com conteúdo novo (revisões não contam). */
 export async function sessionLimitError(user: UserLike & { timezone: string }) {
   const a = await getAccess(user);
-  const used = await db.studySession.count({ where: { userId: user.id, kind: "STUDY", startedAt: { gte: localDayStart(user.timezone) } } });
+  // as aulas do Estudar ENEM (preparação da plataforma) não contam no limite
+  const used = await db.studySession.count({ where: { userId: user.id, kind: "STUDY", startedAt: { gte: localDayStart(user.timezone) }, NOT: { topicId: { startsWith: "enem-" } } } });
   if (a.limits.newSessionsPerDay === 0) return `No plano ${a.planName} você pode fazer revisões e o banco de erros, mas não sessões novas.${upgradeHint(a)}`;
   return over(used, a.limits.newSessionsPerDay) ? dailyLimit(a, `${a.limits.newSessionsPerDay} sessão(ões) nova(s). Revisões continuam liberadas`) : null;
 }

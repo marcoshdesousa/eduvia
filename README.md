@@ -43,7 +43,7 @@ e2e/                   testes de ponta a ponta (Playwright)
 - **Esqueci a senha:** CPF + telefone cadastrado + nova senha. O telefone é exigido porque CPF sozinho é fácil de descobrir e permitiria tomar a conta de outra pessoa.
 - O CPF é único (uma conta por pessoa). Internamente o Better Auth guarda um e-mail técnico derivado do CPF, que nunca é exibido nem usado.
 
-## Assinatura (manual, pelo WhatsApp)
+## Assinatura (Pix pela SyncPay)
 
 - **IA com a chave do aluno:** o cadastro pede a chave da API do **Google Gemini** do próprio aluno (grátis em aistudio.google.com/apikey). A plataforma não paga IA. A chave é testada na hora, guardada criptografada (AES-256-GCM com `AI_KEY_SECRET` ou `BETTER_AUTH_SECRET`) e pode ser trocada em **Minha IA**. Contas sem chave são levadas para `/conectar-ia`.
   - Modelos tentados em ordem (`GEMINI_MODELS`, padrão `gemini-2.5-flash,gemini-2.5-flash-lite`): a cota grátis do Google é por modelo, então quando um esgota o próximo assume.
@@ -115,6 +115,15 @@ e2e/                   testes de ponta a ponta (Playwright)
   - Em Ajustes: **ativar notificações neste aparelho** (push via PWA) e ligar/desligar o **lembrete no horário de estudo**, que chega uma vez por dia se houver sessão pendente.
   - Avisos de convite, entrada no grupo, simulado compartilhado, conquista e plano vencendo.
   - No iPhone, o push funciona com o Eduvia **adicionado à tela de início** (iOS 16.4+).
+
+## Estudar ENEM (preparação fixa da plataforma)
+
+- Todo aluno vê **Estudar ENEM** em Preparações (`/enem`). Não pode ser apagada, não conta no limite de preparações nem no de sessões por dia. Não usa IA.
+- **13 matérias, 57 aulas** escritas à mão (`src/lib/enem/content/*.ts`), com o robô narrador. Cada aula traz **10 questões reais do ENEM** da área da matéria (de preferência da própria matéria); com 75% libera a próxima; refazer sorteia outras 10. Prefere questões que o aluno ainda não viu. Erros vão para o banco de erros; o tempo conta na sequência.
+- **Estudar geral**: vai para a próxima aula da matéria mais atrasada.
+- **Simulado ENEM** (`/simulados/enem`): 1º dia (5 de inglês ou espanhol + 40 de Linguagens + 45 de Humanas, 5h30), 2º dia (45 de Natureza + 45 de Matemática, 5h) ou uma área (45 questões, metade do tempo do dia). Entrega sozinha no fim do tempo; nota por área. Conta no limite de simulados do plano.
+- **Questões**: 2.738 questões oficiais do ENEM 2009–2023 (INEP), com gabarito e imagens, tiradas dos dados públicos do projeto enem-api. Gerar de novo: `node scripts/build-enem.mjs <enem-api/public>` (escreve `data/enem/questions.json` e as imagens comprimidas em `public/enem/`).
+- O servidor grava tudo no banco sozinho na partida (`ensureEnemCatalog`), só quando aulas ou questões mudam. A preparação fica no usuário técnico `sistema-eduvia` (sem CPF, não faz login).
 
 ## Aulas com nota mínima
 

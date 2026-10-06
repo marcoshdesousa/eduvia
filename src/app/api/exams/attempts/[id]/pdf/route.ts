@@ -2,6 +2,9 @@ import { apiUser, jsonError } from "@/lib/api";
 import { db } from "@/lib/db";
 import { examPdf } from "@/lib/printable-pdf";
 
+/** Questões do ENEM vêm em markdown: no PDF, imagem vira "[imagem]" e some a marcação de negrito/itálico. */
+const plain = (t: string) => t.replace(/!\[[^\]]*\]\([^)]*\)/g, "[imagem]").replace(/\*\*|__|(?<![\w])_(?=\S)|(?<=\S)_(?![\w])/g, "");
+
 /** Simulado em PDF com as respostas que o aluno marcou (sem mostrar certo ou errado). */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { user, error } = await apiUser();
@@ -18,7 +21,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     finishedAt: attempt.finishedAt,
     questions: attempt.exam.questionIds.flatMap((id) => {
       const q = byId.get(id);
-      return q ? [{ statement: q.statement, options: (q.options as string[] | null) ?? null, answer: answers[id] ?? null }] : [];
+      return q ? [{ statement: plain(q.statement), options: ((q.options as string[] | null) ?? null)?.map(plain) ?? null, answer: answers[id] ?? null }] : [];
     }),
     tz: user.timezone,
   });

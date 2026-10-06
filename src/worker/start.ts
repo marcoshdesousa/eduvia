@@ -1,5 +1,7 @@
 // Worker: processa a fila (materiais, planos) e tarefas agendadas (lembretes, replanejamento diário).
 import { ensurePiper } from "@/lib/ai/piper";
+import { ensureEnemCatalog } from "@/lib/enem/bank";
+import { ENEM_PREP_ID } from "@/lib/enem/catalog";
 // Roda como processo separado (npm run worker) ou dentro do próprio app web (RUN_WORKER_IN_WEB=true).
 import { enqueue, getBoss, QUEUES, type JobPayloads } from "@/lib/queue";
 import { processMaterial } from "@/lib/materials/process";
@@ -66,6 +68,8 @@ export async function startWorker({ handleSignals }: { handleSignals: boolean })
   globalForWorker.workerStarted = true;
   const boss = await getBoss();
   await wipeFilesIfRequested().catch((e) => console.error("[worker] limpeza de arquivos", e));
+  // Estudar ENEM: aulas e questões reais da plataforma (só grava quando muda de versão)
+  void ensureEnemCatalog().catch((e) => console.error("[enem] preparar", e));
   // baixa a voz do robô (Piper) para o disco já na partida, para a primeira aula não esperar o download
   if (!isMockAi()) void ensurePiper().catch((e) => console.error("[voz] instalar Piper", e));
   console.log(
@@ -96,7 +100,7 @@ export async function startWorker({ handleSignals }: { handleSignals: boolean })
   });
 
   await boss.work(QUEUES.dailyMaintenance, async () => {
-    const preps = await db.preparation.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
+    const preps = await db.preparation.findMany({ where: { status: "ACTIVE", id: { not: ENEM_PREP_ID } }, select: { id: true } });
     for (const p of preps) await generatePlan(p.id);
     console.log(`[worker] replanejamento diário: ${preps.length} preparação(ões)`);
   });

@@ -16,7 +16,7 @@ import { cn, formatMinutes } from "@/lib/utils";
 
 export type SessionQuestion = QuestionData;
 
-type Header = { topic: string; subject: string; preparation: string; preparationId: string; kind: string; label: string; minutes: number };
+type Header = { topic: string; subject: string; preparation: string; preparationId: string; kind: string; label: string; minutes: number; backHref?: string };
 type Text = { content: string | null; highlights: string[]; keyPoints: { term: string; explanation: string }[]; refs: SourceRef[] } | null;
 
 type Grade = { tries: number; best: number | null; last: number | null; passed: boolean } | null;
@@ -53,7 +53,7 @@ export function SessionView({
   );
   const [step, setStep] = useState(completed ? steps.length - 1 : 0);
   const [answeredIds, setAnsweredIds] = useState(() => new Set(questions.filter((q) => q.answered).map((q) => q.id)));
-  const [summary, setSummary] = useState<{ correct: number; total: number; score: number; passed: boolean; best: number; nextPlannedId: string | null } | null>(null);
+  const [summary, setSummary] = useState<{ correct: number; total: number; score: number; passed: boolean; best: number; nextHref: string | null } | null>(null);
   const [comfort, setComfort] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const current = steps[step].key;
@@ -73,7 +73,7 @@ export function SessionView({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <Link href={`/preparacoes/${header.preparationId}`} className="text-sm text-muted hover:text-foreground">← {header.preparation}</Link>
+        <Link href={header.backHref ?? `/preparacoes/${header.preparationId}`} className="text-sm text-muted hover:text-foreground">← {header.preparation}</Link>
         <p className="mt-2 text-sm text-muted">{header.subject} · {header.label} · {formatMinutes(header.minutes)}</p>
         <h1 className="text-2xl font-bold">{header.topic}</h1>
       </div>
@@ -206,7 +206,7 @@ function FinishCard({
   pending,
   onRetake,
 }: {
-  summary: { correct: number; total: number; score: number; passed: boolean; best: number; nextPlannedId: string | null } | null;
+  summary: { correct: number; total: number; score: number; passed: boolean; best: number; nextHref: string | null } | null;
   grade: Grade;
   isLesson: boolean;
   comfort: string | null;
@@ -216,7 +216,7 @@ function FinishCard({
   const score = summary?.score ?? grade?.last ?? null;
   const passed = summary ? summary.passed : !isLesson || !!grade?.passed;
   const best = summary?.best ?? grade?.best ?? null;
-  const next = summary?.nextPlannedId;
+  const next = summary?.nextHref;
   return (
     <div className="space-y-3">
       {passed ? <PartyPopper className="mx-auto text-primary" size={32} /> : <XCircle className="mx-auto text-danger" size={32} />}
@@ -240,7 +240,7 @@ function FinishCard({
         {isLesson && !passed && (
           <Button disabled={pending} onClick={onRetake}><RotateCcw size={16} /> Reestudar e refazer a aula</Button>
         )}
-        {passed && next && <Link href={`/estudar/${next}`} className={buttonClass("primary")}>Próxima aula</Link>}
+        {passed && next && <Link href={next} className={buttonClass("primary")}>{next.startsWith("/enem/aula/") || next.startsWith("/estudar/") ? "Próxima aula" : "Voltar à matéria"}</Link>}
         {passed && !next && <Link href="/inicio" className={buttonClass("primary")}>Voltar ao início</Link>}
         {isLesson && passed && (
           <Button variant="outline" disabled={pending} onClick={onRetake}><RotateCcw size={16} /> Refazer para melhorar a nota</Button>

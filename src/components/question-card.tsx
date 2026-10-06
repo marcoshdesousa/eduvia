@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
+import { isRichQuestion, QuestionText } from "@/components/rich-text";
 
 export type Answered = { answer: string; isCorrect: boolean; score: number; feedback: string | null; correctAnswer: string; explanation: string };
 export type { SourceRef } from "@/lib/sources";
@@ -81,7 +82,7 @@ export function QuestionCard({
         {verdict === "partial" && <Badge tone="warning">Parcial</Badge>}
         {verdict === "wrong" && <Badge tone="danger">Errou · foi para o banco de erros</Badge>}
       </div>
-      <p className="whitespace-pre-line leading-relaxed">{q.statement}</p>
+      <div className="leading-relaxed"><QuestionText text={q.statement} rich={isRichQuestion(q.id)} /></div>
 
       {isOpen ? (
         answered ? (
@@ -122,7 +123,7 @@ export function QuestionCard({
                 <span className="grid size-6 shrink-0 place-items-center rounded-full border border-current text-xs font-semibold">
                   {q.type === "CERTO_ERRADO" ? (i === 0 ? "C" : "E") : LETTERS[i]}
                 </span>
-                <span className="flex-1">{opt}</span>
+                <QuestionText text={opt} rich={isRichQuestion(q.id)} className="min-w-0 flex-1" />
                 {answered && isCorrect && <CheckCircle2 size={18} className="shrink-0 text-success" />}
                 {answered && isChosen && !isCorrect && <XCircle size={18} className="shrink-0 text-danger" />}
               </button>

@@ -5,6 +5,8 @@ import { answerQuestion, completeSession, lessonBlocker, nextLesson, openSession
 import { db } from "@/lib/db";
 import { aiErrorMessage } from "@/lib/ai/client";
 import { sessionLimitError } from "@/lib/billing";
+import { findLesson } from "@/lib/enem/catalog";
+import { nextEnemLesson } from "@/lib/enem/progress";
 
 export async function startSessionAction(plannedId: string, minutes?: number): Promise<{ ok: true } | { error: string; upgrade?: boolean }> {
   const user = await requireReadyUser();
@@ -55,11 +57,17 @@ export async function completeSessionAction(sessionId: string) {
   const user = await requireReadyUser();
   const r = await completeSession(sessionId, user.id);
   if (!r) return null;
-  const session = await db.studySession.findUnique({ where: { id: sessionId }, select: { plannedSession: { select: { plan: { select: { preparationId: true } } } } } });
+  const session = await db.studySession.findUnique({ where: { id: sessionId }, select: { topicId: true, plannedSession: { select: { plan: { select: { preparationId: true } } } } } });
+  revalidatePath("/inicio");
+  // Estudar ENEM: próxima aula da mesma matéria (ou volta para a matéria quando acabar)
+  const enem = session ? findLesson(session.topicId) : null;
+  if (enem) {
+    const next = r.passed ? await nextEnemLesson(user.id, enem.materia.slug) : null;
+    return { ...r, nextHref: next ? `/enem/aula/${next.topicId}` : r.passed ? `/enem/${enem.materia.slug}` : null };
+  }
   const prepId = session?.plannedSession?.plan.preparationId;
   const next = r.passed && prepId ? await nextLesson(prepId) : null;
-  revalidatePath("/inicio");
-  return { ...r, nextPlannedId: next?.id ?? null };
+  return { ...r, nextHref: next ? `/estudar/${next.id}` : null };
 }
 
 /** Refazer a aula (para passar ou para melhorar a nota). */

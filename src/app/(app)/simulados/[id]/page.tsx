@@ -12,6 +12,8 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardTitle, Stat } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ExamRunner } from "./exam-runner";
+import { ENEM_PREP_ID } from "@/lib/enem/catalog";
+import { isRichQuestion, QuestionText } from "@/components/rich-text";
 import { canAccessExam, examRanking } from "@/lib/groups";
 
 const LETTERS = "ABCDEFGH";
@@ -105,7 +107,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
 
       <div className="flex flex-wrap gap-2">
         <form action={startAttemptAction.bind(null, exam.id)}><Button variant="outline">Refazer este simulado</Button></form>
-        <Link href="/simulados/novo" className={buttonClass("primary")}>Novo simulado</Link>
+        <Link href={exam.preparationId === ENEM_PREP_ID ? "/simulados/enem" : "/simulados/novo"} className={buttonClass("primary")}>Novo simulado</Link>
         <a href={`/api/exams/attempts/${result.id}/pdf`} target="_blank" rel="noreferrer" className={buttonClass("outline")}><Printer size={16} /> PDF para imprimir</a>
         {result.correct! < result.total! && <Link href="/revisoes?filtro=erros" className={buttonClass("ghost")}>Treinar os erros</Link>}
       </div>
@@ -149,7 +151,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
                   <span className="inline-flex items-center gap-1 text-muted"><Clock size={16} /> Em branco</span>
                 )}
               </div>
-              <p className="whitespace-pre-line leading-relaxed">{q.statement}</p>
+              <div className="leading-relaxed"><QuestionText text={q.statement} rich={isRichQuestion(q.id)} /></div>
               <ul className="space-y-1.5 text-sm">
                 {options.map((o, oi) => {
                   const isRight = q.correctAnswer === String(oi);
@@ -157,7 +159,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
                   return (
                     <li key={oi} className={cn("flex gap-2 rounded-lg border px-3 py-2", isRight ? "border-success bg-success/10" : isChosen ? "border-danger bg-danger/10" : "border-border")}>
                       <span className="font-semibold">{exam.style === "CERTO_ERRADO" ? (oi === 0 ? "C" : "E") : LETTERS[oi]}</span>
-                      <span className="flex-1">{o}</span>
+                      <QuestionText text={o} rich={isRichQuestion(q.id)} className="min-w-0 flex-1" />
                       {isRight && <span className="text-xs text-success">correta</span>}
                       {isChosen && !isRight && <span className="text-xs text-danger">sua resposta</span>}
                     </li>
