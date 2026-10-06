@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { devices, expect, test, type Browser, type Page } from "@playwright/test";
 import { PASSWORD, signUp, sql } from "./helpers";
 
@@ -108,4 +109,37 @@ test("Pix: admin, aluno no teste (iPhone), conta antiga vencida (computador) e r
   expect(Number(subs[0].days)).toBe(30);
   const [last] = await sql<{ valueCents: number; creditCents: number }>(`SELECT "valueCents", "creditCents" FROM "Payment" WHERE "billingType" = 'PIX' ORDER BY "createdAt" DESC LIMIT 1`);
   expect(last).toMatchObject({ valueCents: 830, creditCents: 660 });
+
+  // a promoção fica guardada pelo CPF: com os 3 meses do Avançado usados, ele volta ao preço normal
+  const [{ cpf }] = await sql<{ cpf: string }>(`SELECT cpf FROM "user" WHERE handle = $1`, [`aluno.iphone.${uid}`]);
+  const cpfHash = createHash("sha256").update(`eduvia-promo:${cpf}`).digest("hex");
+  const [used] = await sql<{ uses: number }>(`SELECT uses FROM "PromoUse" WHERE "cpfHash" = $1 AND "planSlug" = 'avancado'`, [cpfHash]);
+  expect(Number(used.uses)).toBe(1); // pagou 1 mês com promoção
+  await sql(`UPDATE "PromoUse" SET uses = 3 WHERE "cpfHash" = $1 AND "planSlug" = 'avancado'`, [cpfHash]);
+  await ip2.reload();
+  await expect(ip2.getByLabel("Promoção do plano Avançado")).toHaveCount(0);
+  await expect(ip2.getByLabel("Promoção do plano Ilimitado")).toBeVisible(); // a do Ilimitado continua
+
+  // plano liberado pelo admin: renova pelo Pix, mas com o preço normal (sem promoção)
+  const manualHandle = `aluno.manual.${uid}`;
+  const mp = await newPage(browser, desktop);
+  await signUp(mp, { name: "Aluno Manual", handle: manualHandle, plan: "gratis" });
+  await sql(
+    `INSERT INTO "Subscription" (id, "userId", "planSlug", provider, status, interval, "billingType", "currentPeriodEnd", "updatedAt")
+     SELECT 'man_' || id, id, 'avancado', 'manual', 'ACTIVE', 'MONTH', 'MANUAL', now() + interval '1 day', now() FROM "user" WHERE handle = $1`,
+    [manualHandle],
+  );
+  await sql(
+    `INSERT INTO "Payment" (id, "subscriptionId", "providerPaymentId", status, "billingType", "valueCents", "dueDate", "paidAt", "updatedAt")
+     SELECT 'pm_' || id, 'man_' || id, 'manual_e2e_' || id, 'PAID', 'MANUAL', 1990, now(), now(), now() FROM "user" WHERE handle = $1`,
+    [manualHandle],
+  );
+  await mp.goto("/assinatura");
+  await expect(mp.getByRole("button", { name: "Renovar Avançado com Pix" })).toBeVisible();
+  await expect(mp.getByLabel("Promoção do plano Avançado")).toHaveCount(0);
+  await payPix(mp, /Renovar Avançado com Pix/);
+  const [manualPay] = await sql<{ valueCents: number; promo: boolean }>(
+    `SELECT "valueCents", promo FROM "Payment" WHERE "billingType" = 'PIX' ORDER BY "createdAt" DESC LIMIT 1`,
+  );
+  expect(manualPay).toMatchObject({ valueCents: 1990, promo: false });
 });

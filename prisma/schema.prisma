@@ -717,6 +717,8 @@ model Payment {
   creditCents       Int           @default(0)
   /// Quantos dias este pagamento libera (30; mais, se sobrou crédito numa troca para um plano mais barato).
   periodDays        Int           @default(30)
+  /// Pago com o preço de promoção (conta um dos meses de promoção do CPF quando é pago).
+  promo             Boolean       @default(false)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -1102,4 +1104,14 @@ model Tournament {
   createdAt   DateTime @default(now())
 
   @@index([groupId, endsAt])
+}
+
+/// Meses de promoção já usados por CPF e plano (o CPF guardado como código): não volta ao apagar a conta.
+model PromoUse {
+  cpfHash   String
+  planSlug  String
+  uses      Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@id([cpfHash, planSlug])
 }
