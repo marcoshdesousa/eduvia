@@ -84,17 +84,33 @@ export default async function Page() {
           {paidPlans.map((p) => {
             const current = (subscribed && access.planSlug === p.slug) || (access.reason === "expired" && access.ended?.planName === p.name);
             const best = p.slug === "ilimitado";
-            const { option, quote: q } = offers.get(p.slug)!;
+            const { option, quote: q, promo } = offers.get(p.slug)!;
             return (
               <Card key={p.slug} className={`flex flex-col gap-3 ${current ? "border-primary bg-primary/5" : best ? "border-primary" : ""}`}>
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle>{p.name}</CardTitle>
                   {current ? <Badge tone="success">Seu plano</Badge> : best ? <Badge tone="primary">Tudo ilimitado</Badge> : null}
                 </div>
-                <div>
-                  <span className="text-3xl font-bold">{formatBRL(p.priceMonthCents)}</span>
-                  <span className="text-sm text-muted"> / 30 dias</span>
-                </div>
+                {promo ? (
+                  <div className="space-y-1" aria-label={`Promoção do plano ${p.name}`}>
+                    <Badge tone="warning">Promoção: {promo.months} primeiros meses</Badge>
+                    <div>
+                      <span className="mr-2 text-base text-muted line-through">{formatBRL(promo.normalCents)}</span>
+                      <span className="text-3xl font-bold">{formatBRL(q.priceCents)}</span>
+                      <span className="text-sm text-muted"> / 30 dias</span>
+                    </div>
+                    <p className="text-xs text-muted">
+                      {promo.month === 1
+                        ? `${formatBRL(q.priceCents)} nos ${promo.months} primeiros meses. Depois, ${formatBRL(promo.normalCents)} por mês.`
+                        : `Você está no ${promo.month}º de ${promo.months} meses com promoção. Depois, ${formatBRL(promo.normalCents)} por mês.`}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <span className="text-3xl font-bold">{formatBRL(p.priceMonthCents)}</span>
+                    <span className="text-sm text-muted"> / 30 dias</span>
+                  </div>
+                )}
                 <ul className="flex-1 space-y-1.5 text-sm">
                   {planFeatures(p.limits).map((f) => (
                     <li key={f} className="flex items-start gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success" />{f}</li>

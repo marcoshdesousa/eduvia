@@ -80,6 +80,25 @@ export const DEFAULT_PLANS: PlanDef[] = [
   },
 ];
 
+/**
+ * Promoção de entrada: nos primeiros meses pagos de cada plano, a pessoa paga menos; depois, o preço normal.
+ * Avançado: R$ 14,90 nos 3 primeiros meses (depois R$ 19,90). Ilimitado: R$ 29,90 nos 3 primeiros meses (depois R$ 44,90).
+ * O Pro não tem promoção.
+ */
+export const PROMOS: Partial<Record<string, { priceCents: number; months: number }>> = {
+  avancado: { priceCents: 1490, months: 3 },
+  ilimitado: { priceCents: 2990, months: 3 },
+};
+
+/** Preço do mês para quem já pagou `paidMonths` meses desse plano (promoção nos primeiros meses). */
+export function monthPrice(plan: { slug: string; priceMonthCents: number }, paidMonths: number) {
+  const promo = PROMOS[plan.slug];
+  if (promo && paidMonths < promo.months && promo.priceCents < plan.priceMonthCents) {
+    return { priceCents: promo.priceCents, promo: { month: paidMonths + 1, months: promo.months, normalCents: plan.priceMonthCents } };
+  }
+  return { priceCents: plan.priceMonthCents, promo: null };
+}
+
 /** Plano pago de entrada. */
 export const PAID_PLAN: PlanSlug = "eduvia";
 /** Duração de cada período pago, em dias. */

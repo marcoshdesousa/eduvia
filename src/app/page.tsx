@@ -24,7 +24,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { buttonClass } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
 import { formatBRL, listPlans } from "@/lib/billing";
-import { PAID_PLAN, planFeatures } from "@/lib/plans";
+import { PAID_PLAN, planFeatures, PROMOS } from "@/lib/plans";
 
 const STEPS = [
   { icon: FileUp, title: "Envie seu material", text: "PDFs, apostilas, fotos do caderno, DOCX ou texto colado. Para concurso, mande também o edital." },
@@ -59,7 +59,7 @@ const FAQ = [
   },
   {
     q: "Quanto custa?",
-    a: "Você começa com 3 dias de teste grátis. Depois, são três planos mensais: Pro (R$ 9,90), Avançado (R$ 19,90) e Ilimitado (R$ 44,90). Todos têm arquivos e páginas sem limite; o que muda é a quantidade de guias de estudo, aulas, redações e simulados. O pagamento é por Pix, direto no site: o plano libera sozinho assim que o Pix cai. Cada pagamento vale 30 dias, não há renovação automática e, se trocar de plano, você ganha desconto pelos dias que não usou.",
+    a: "Você começa com 3 dias de teste grátis. Depois, são três planos mensais: Pro (R$ 9,90), Avançado (R$ 19,90; nos 3 primeiros meses, R$ 14,90) e Ilimitado (R$ 44,90; nos 3 primeiros meses, R$ 29,90). Todos têm arquivos e páginas sem limite; o que muda é a quantidade de guias de estudo, aulas, redações e simulados. O pagamento é por Pix, direto no site: o plano libera sozinho assim que o Pix cai. Cada pagamento vale 30 dias, não há renovação automática e, se trocar de plano, você ganha desconto pelos dias que não usou.",
   },
   {
     q: "Meus materiais e dados ficam seguros?",
@@ -171,7 +171,9 @@ export default async function Home() {
               <PriceCard
                 key={p.slug}
                 label={p.name}
-                price={formatBRL(p.priceMonthCents)}
+                price={formatBRL(PROMOS[p.slug] && PROMOS[p.slug]!.priceCents < p.priceMonthCents ? PROMOS[p.slug]!.priceCents : p.priceMonthCents)}
+                was={PROMOS[p.slug] && PROMOS[p.slug]!.priceCents < p.priceMonthCents ? formatBRL(p.priceMonthCents) : undefined}
+                promo={PROMOS[p.slug] && PROMOS[p.slug]!.priceCents < p.priceMonthCents ? `nos ${PROMOS[p.slug]!.months} primeiros meses; depois ${formatBRL(p.priceMonthCents)}` : undefined}
                 period="30 dias"
                 features={planFeatures(p.limits).filter((f) => !f.startsWith("Sem "))}
                 highlight={p.slug === "ilimitado"}
@@ -229,15 +231,19 @@ function SectionTitle({ kicker, title, subtitle }: { kicker: string; title: stri
   );
 }
 
-function PriceCard({ label, price, period, extra, features, highlight }: { label: string; price: string; period: string; extra?: string; features: string[]; highlight?: boolean }) {
+function PriceCard({ label, price, was, promo, period, extra, features, highlight }: { label: string; price: string; was?: string; promo?: string; period: string; extra?: string; features: string[]; highlight?: boolean }) {
   return (
     <div className={`flex flex-col rounded-2xl border p-6 ${highlight ? "border-primary bg-primary/5 shadow-[0_0_0_1px_var(--primary)]" : "border-border bg-surface"}`}>
       <div className="flex items-center justify-between">
         <span className="font-semibold">{label}</span>
         {highlight && <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">Tudo ilimitado</span>}
       </div>
-      <div className="font-display mt-3 text-4xl font-extrabold">{price}</div>
-      <p className="text-sm text-muted">por {period}</p>
+      {was && <span className="mt-3 w-fit rounded-full bg-warning/15 px-2.5 py-0.5 text-xs font-semibold text-warning">Promoção</span>}
+      <div className="font-display mt-3 text-4xl font-extrabold">
+        {was && <span className="mr-2 align-middle text-lg font-semibold text-muted line-through">{was}</span>}
+        {price}
+      </div>
+      <p className="text-sm text-muted">por {period}{promo ? `, ${promo}` : ""}</p>
       {extra && <p className="text-xs text-muted">ou {extra}</p>}
       <ul className="mt-4 flex-1 space-y-1.5 text-sm">
         {features.map((f) => (

@@ -2,7 +2,7 @@
 import { db } from "@/lib/db";
 import { appUrl } from "@/lib/app-url";
 import { addPeriod, daysLeft, getPlan, RENEW_NOTICE_DAYS } from "@/lib/billing";
-import { priceFor } from "@/lib/plans";
+import { monthPrice, priceFor } from "@/lib/plans";
 import { today } from "@/lib/core/dates";
 import { createPix, pixStatus, webhookToken } from "@/lib/syncpay";
 import { planOption, quotePlan } from "@/lib/plan-change";
@@ -13,28 +13,51 @@ type Payer = { id: string; name: string; cpf: string | null; phone: string | nul
 /** Plano que o aluno não pode comprar agora (a mensagem vai direto para a tela). */
 export class PlanNotAvailable extends Error {}
 
-/** Orçamento do plano para este aluno, olhando o plano que ele tem agora. */
-/** Plano ativo do aluno agora (com o preço mensal), ou nada. */
+/** Plano ativo do aluno agora, ou nada. `paidCents` é quanto o mês atual custou (com promoção, se teve). */
 async function currentPlanOf(userId: string) {
   const sub = await db.subscription.findFirst({
     where: { userId, status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: new Date() } },
     orderBy: { currentPeriodEnd: "desc" },
+    include: { payments: { where: { status: "PAID" }, orderBy: { paidAt: "desc" }, take: 1, select: { valueCents: true, creditCents: true } } },
   });
   const plan = sub ? await getPlan(sub.planSlug) : null;
-  return sub && plan ? { planSlug: sub.planSlug, planName: plan.name, priceCents: priceFor(plan, "MONTH"), currentPeriodEnd: sub.currentPeriodEnd } : null;
+  if (!sub || !plan) return null;
+  const last = sub.payments[0];
+  const list = priceFor(plan, "MONTH");
+  // o desconto da troca é calculado pelo que o mês atual realmente custou (preço com promoção, se foi o caso)
+  const paidCents = last ? Math.min(list, last.valueCents + last.creditCents) : list;
+  return { planSlug: sub.planSlug, planName: plan.name, listCents: list, paidCents, currentPeriodEnd: sub.currentPeriodEnd };
 }
 
-/** Para cada plano: o que o aluno pode fazer (assinar, subir, renovar, já é o dele, indisponível) e quanto paga. */
+/** Quantos meses o aluno já pagou de cada plano (para a promoção dos primeiros meses). */
+async function paidMonthsByPlan(userId: string) {
+  const rows = await db.payment.findMany({ where: { status: "PAID", subscription: { userId } }, select: { subscription: { select: { planSlug: true } } } });
+  const out = new Map<string, number>();
+  for (const r of rows) out.set(r.subscription.planSlug, (out.get(r.subscription.planSlug) ?? 0) + 1);
+  return out;
+}
+
+/**
+ * Para cada plano: o que o aluno pode fazer (assinar, subir, renovar, já é o dele, indisponível), o preço do mês
+ * para ele (com a promoção dos primeiros meses, se ainda tiver) e quanto paga agora (com o desconto da troca).
+ */
 export async function planOffers(user: { id: string; timezone?: string }, plans: { slug: string; name: string; priceMonthCents: number }[]) {
-  const current = await currentPlanOf(user.id);
+  const [current, paid] = await Promise.all([currentPlanOf(user.id), paidMonthsByPlan(user.id)]);
   const renewOpen = !!current && daysLeft(current.currentPeriodEnd, user.timezone) <= RENEW_NOTICE_DAYS;
   return new Map(
     plans.map((p) => {
-      const plan = { slug: p.slug, name: p.name, priceCents: p.priceMonthCents };
-      return [p.slug, { option: planOption(plan, current, renewOpen), quote: quotePlan(plan, current) }] as const;
+      const month = monthPrice(p, paid.get(p.slug) ?? 0);
+      // subir ou descer de plano compara os preços normais; o valor a pagar usa o preço do mês (com promoção)
+      const option = planOption({ slug: p.slug, priceCents: p.priceMonthCents }, current && { planSlug: current.planSlug, priceCents: current.listCents, currentPeriodEnd: current.currentPeriodEnd }, renewOpen);
+      const quote = quotePlan(
+        { slug: p.slug, name: p.name, priceCents: month.priceCents },
+        current && { planSlug: current.planSlug, planName: current.planName, priceCents: current.paidCents, currentPeriodEnd: current.currentPeriodEnd },
+      );
+      return [p.slug, { option, quote, promo: month.promo, normalCents: p.priceMonthCents }] as const;
     }),
   );
 }
+
 /** Cria (ou reaproveita, se ainda estiver aberta) a cobrança Pix do plano mensal. */
 export async function createPlanPix(user: Payer, planSlug: string) {
   const plan = await getPlan(planSlug);

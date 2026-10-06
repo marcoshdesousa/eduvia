@@ -29,6 +29,10 @@ test("Pix: admin, aluno no teste (iPhone), conta antiga vencida (computador) e r
   await sql(`UPDATE "user" SET "isAdmin" = true WHERE handle = $1`, [`admin.pix.${uid}`]);
   await page.goto("/assinatura");
   for (const plan of ["Pro", "Avançado", "Ilimitado"]) await expect(page.getByRole("button", { name: `Assinar ${plan} com Pix` })).toBeVisible();
+  // promoção dos 3 primeiros meses no Avançado e no Ilimitado
+  await expect(page.getByLabel("Promoção do plano Avançado").getByText(/14,90 nos 3 primeiros meses\. Depois, R\$\s19,90/)).toBeVisible();
+  await expect(page.getByLabel("Promoção do plano Ilimitado").getByText(/29,90 nos 3 primeiros meses\. Depois, R\$\s44,90/)).toBeVisible();
+  await expect(page.getByLabel("Promoção do plano Pro")).toHaveCount(0);
   await expect(page.getByText(/WhatsApp/)).toHaveCount(0);
 
   // aluno no teste grátis, no iPhone: paga e o plano libera sozinho
@@ -84,10 +88,12 @@ test("Pix: admin, aluno no teste (iPhone), conta antiga vencida (computador) e r
   await expect(box.getByText("Trocar do Pro para o Avançado")).toBeVisible();
   await expect(box.getByText(/Desconto: 20 dias não usados do Pro/)).toBeVisible();
   await expect(box.getByText(/6,60/)).toBeVisible(); // 9,90 ÷ 30 × 20
-  await expect(box.getByText(/13,30/)).toBeVisible(); // 19,90 − 6,60
+  await expect(box.getByText(/8,30/)).toBeVisible(); // Avançado na promoção (14,90) − 6,60
   await payPix(ip2, /Trocar para o Avançado com Pix/);
   await ip2.reload();
   await expect(ip2.getByText("Seu plano: Avançado")).toBeVisible();
+  // 1 mês do Avançado pago: o próximo é o 2º de 3 com promoção
+  await expect(ip2.getByLabel("Promoção do plano Avançado").getByText(/Você está no 2º de 3 meses com promoção/)).toBeVisible();
   // agora o Pro (mais barato) fica indisponível até o Avançado acabar
   const proCard = ip2.getByLabel("Pro indisponível");
   await expect(proCard.getByText("Indisponível")).toBeVisible();
@@ -101,5 +107,5 @@ test("Pix: admin, aluno no teste (iPhone), conta antiga vencida (computador) e r
   expect(subs[0].planSlug).toBe("avancado");
   expect(Number(subs[0].days)).toBe(30);
   const [last] = await sql<{ valueCents: number; creditCents: number }>(`SELECT "valueCents", "creditCents" FROM "Payment" WHERE "billingType" = 'PIX' ORDER BY "createdAt" DESC LIMIT 1`);
-  expect(last).toMatchObject({ valueCents: 1330, creditCents: 660 });
+  expect(last).toMatchObject({ valueCents: 830, creditCents: 660 });
 });
