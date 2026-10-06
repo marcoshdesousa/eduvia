@@ -75,14 +75,14 @@ export const DEFAULT_PLANS: PlanDef[] = [
     order: 3,
     priceWeekCents: 0,
     priceFortnightCents: 0,
-    priceMonthCents: 4490,
+    priceMonthCents: 3490,
     limits: { ...FILES_UNLIMITED, preparationsPerMonth: -1, newSessionsPerDay: -1, gamesPerDay: -1, examsPerMonth: -1, essaysPerDay: -1, tutorMessagesPerDay: -1, groups: true, groupsOwned: -1 },
   },
 ];
 
 /**
  * Promoção de entrada: nos primeiros meses pagos de cada plano, a pessoa paga menos; depois, o preço normal.
- * Avançado: R$ 14,90 nos 3 primeiros meses (depois R$ 19,90). Ilimitado: R$ 29,90 nos 3 primeiros meses (depois R$ 44,90).
+ * Avançado: R$ 14,90 nos 3 primeiros meses (depois R$ 19,90). Ilimitado: R$ 29,90 nos 3 primeiros meses (depois R$ 34,90).
  * O Pro não tem promoção.
  */
 export const PROMOS: Partial<Record<string, { priceCents: number; months: number }>> = {

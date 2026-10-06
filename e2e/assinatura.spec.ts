@@ -13,7 +13,7 @@ test("teste grátis → admin libera o Pro; 3 IAs obrigatórias", async ({ page,
   await expect(page.getByText(/Teste grátis: faltam 3 dias/)).toBeVisible();
   await page.getByRole("link", { name: "Assinar", exact: true }).click();
   await expect(page).toHaveURL(/\/assinatura/);
-  for (const price of [/^R\$\s9,90$/, /^R\$\s19,90$/, /^R\$\s44,90$/]) await expect(page.getByText(price)).toBeVisible();
+  for (const price of [/^R\$\s9,90$/, /^R\$\s19,90$/, /^R\$\s34,90$/]) await expect(page.getByText(price)).toBeVisible();
   await expect(page.getByText(/WhatsApp/)).toHaveCount(0);
   await expect(page.locator('a[href*="wa.me"]')).toHaveCount(0);
   await expect(page.getByText("Teste grátis (3 dias)")).toBeVisible();

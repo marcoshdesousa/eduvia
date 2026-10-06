@@ -59,7 +59,7 @@ const FAQ = [
   },
   {
     q: "Quanto custa?",
-    a: "Você começa com 3 dias de teste grátis. Depois, são três planos mensais: Pro (R$ 9,90), Avançado (R$ 19,90; nos 3 primeiros meses, R$ 14,90) e Ilimitado (R$ 44,90; nos 3 primeiros meses, R$ 29,90). Todos têm arquivos e páginas sem limite; o que muda é a quantidade de guias de estudo, aulas, redações e simulados. O pagamento é por Pix, direto no site: o plano libera sozinho assim que o Pix cai. Cada pagamento vale 30 dias, não há renovação automática e, se trocar de plano, você ganha desconto pelos dias que não usou.",
+    a: "Você começa com 3 dias de teste grátis. Depois, são três planos mensais: Pro (R$ 9,90), Avançado (R$ 19,90; nos 3 primeiros meses, R$ 14,90) e Ilimitado (R$ 34,90; nos 3 primeiros meses, R$ 29,90). Todos têm arquivos e páginas sem limite; o que muda é a quantidade de guias de estudo, aulas, redações e simulados. O pagamento é por Pix, direto no site: o plano libera sozinho assim que o Pix cai. Cada pagamento vale 30 dias, não há renovação automática e, se trocar de plano, você ganha desconto pelos dias que não usou.",
   },
   {
     q: "Meus materiais e dados ficam seguros?",

@@ -54,10 +54,10 @@ describe("planos", () => {
     expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Professor IA: 20 mensagens por dia");
     expect(planFeatures(DEFAULT_PLANS[3].limits)).toContain("Testes rápidos à vontade");
   });
-  it("três planos mensais (9,90, 19,90 e 44,90) e teste grátis de 3 dias, todos com arquivos sem limite", () => {
+  it("três planos mensais (9,90, 19,90 e 34,90) e teste grátis de 3 dias, todos com arquivos sem limite", () => {
     const by = Object.fromEntries(DEFAULT_PLANS.map((p) => [p.slug, p]));
     const paid = [by.eduvia, by.avancado, by.ilimitado];
-    expect(paid.map((p) => p.priceMonthCents)).toEqual([990, 1990, 4490]);
+    expect(paid.map((p) => p.priceMonthCents)).toEqual([990, 1990, 3490]);
     expect(paid.every((p) => p.priceWeekCents === 0 && p.priceFortnightCents === 0)).toBe(true);
     expect(INTERVALS.map((i) => i.key)).toEqual(["MONTH"]);
     expect(TRIAL_DAYS).toBe(3);

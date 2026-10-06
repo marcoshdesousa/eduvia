@@ -31,7 +31,7 @@ test("Pix: admin, aluno no teste (iPhone), conta antiga vencida (computador) e r
   for (const plan of ["Pro", "Avançado", "Ilimitado"]) await expect(page.getByRole("button", { name: `Assinar ${plan} com Pix` })).toBeVisible();
   // promoção dos 3 primeiros meses no Avançado e no Ilimitado
   await expect(page.getByLabel("Promoção do plano Avançado").getByText(/14,90 nos 3 primeiros meses\. Depois, R\$\s19,90/)).toBeVisible();
-  await expect(page.getByLabel("Promoção do plano Ilimitado").getByText(/29,90 nos 3 primeiros meses\. Depois, R\$\s44,90/)).toBeVisible();
+  await expect(page.getByLabel("Promoção do plano Ilimitado").getByText(/29,90 nos 3 primeiros meses\. Depois, R\$\s34,90/)).toBeVisible();
   await expect(page.getByLabel("Promoção do plano Pro")).toHaveCount(0);
   await expect(page.getByText(/WhatsApp/)).toHaveCount(0);
 

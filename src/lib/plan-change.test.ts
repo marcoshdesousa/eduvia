@@ -43,14 +43,14 @@ describe("o que dá para comprar com um plano ativo", () => {
 });
 
 describe("promoção dos primeiros meses", () => {
-  it("Avançado: R$ 14,90 nos 3 primeiros meses e depois R$ 19,90; Ilimitado: R$ 29,90 e depois R$ 44,90; Pro sem promoção", async () => {
+  it("Avançado: R$ 14,90 nos 3 primeiros meses e depois R$ 19,90; Ilimitado: R$ 29,90 e depois R$ 34,90; Pro sem promoção", async () => {
     const { monthPrice } = await import("./plans");
     const av = { slug: "avancado", priceMonthCents: 1990 };
     expect(monthPrice(av, 0)).toMatchObject({ priceCents: 1490, promo: { month: 1, months: 3 } });
     expect(monthPrice(av, 2)).toMatchObject({ priceCents: 1490, promo: { month: 3 } });
     expect(monthPrice(av, 3)).toEqual({ priceCents: 1990, promo: null });
-    expect(monthPrice({ slug: "ilimitado", priceMonthCents: 4490 }, 0).priceCents).toBe(2990);
-    expect(monthPrice({ slug: "ilimitado", priceMonthCents: 4490 }, 5).priceCents).toBe(4490);
+    expect(monthPrice({ slug: "ilimitado", priceMonthCents: 3490 }, 0).priceCents).toBe(2990);
+    expect(monthPrice({ slug: "ilimitado", priceMonthCents: 3490 }, 5).priceCents).toBe(3490);
     expect(monthPrice({ slug: "eduvia", priceMonthCents: 990 }, 0)).toEqual({ priceCents: 990, promo: null });
   });
 });
