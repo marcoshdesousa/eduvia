@@ -119,7 +119,7 @@ e2e/                   testes de ponta a ponta (Playwright)
 ## Estudar ENEM (preparação fixa da plataforma)
 
 - Todo aluno vê **Estudar ENEM** em Preparações (`/enem`). Não pode ser apagada, não conta no limite de preparações nem no de sessões por dia. Não usa IA.
-- **13 matérias, 57 aulas** escritas à mão (`src/lib/enem/content/*.ts`), com o robô narrador. Cada aula traz **10 questões reais do ENEM** da área da matéria (de preferência da própria matéria); com 75% libera a próxima; refazer sorteia outras 10. Prefere questões que o aluno ainda não viu. Erros vão para o banco de erros; o tempo conta na sequência.
+- **13 matérias, 105 aulas** escritas à mão (pelo menos 6 por matéria; aulas novas entram no fim) (`src/lib/enem/content/*.ts`), com o robô narrador. Cada aula traz **10 questões reais do ENEM** da área da matéria (de preferência da própria matéria); com 75% libera a próxima; refazer sorteia outras 10. Prefere questões que o aluno ainda não viu. Erros vão para o banco de erros; o tempo conta na sequência.
 - **Estudar geral**: vai para a próxima aula da matéria mais atrasada.
 - **Simulado ENEM** (`/simulados/enem`): 1º dia (5 de inglês ou espanhol + 40 de Linguagens + 45 de Humanas, 5h30), 2º dia (45 de Natureza + 45 de Matemática, 5h) ou uma área (45 questões, metade do tempo do dia). Entrega sozinha no fim do tempo; nota por área. Conta no limite de simulados do plano.
 - **Questões**: 2.738 questões oficiais do ENEM 2009–2023 (INEP), com gabarito e imagens, tiradas dos dados públicos do projeto enem-api. Gerar de novo: `node scripts/build-enem.mjs <enem-api/public>` (escreve `data/enem/questions.json` e as imagens comprimidas em `public/enem/`).

@@ -8,6 +8,7 @@ const bank = JSON.parse(readFileSync("data/enem/questions.json", "utf8")) as Ban
 describe("Estudar ENEM", () => {
   it("todas as matérias têm aulas completas", () => {
     expect(MATERIAS.length).toBeGreaterThanOrEqual(13);
+    expect(MATERIAS.every((m) => m.lessons.length >= 6)).toBe(true);
     const slugs = new Set(MATERIAS.map((m) => m.slug));
     expect(slugs.size).toBe(MATERIAS.length);
     for (const m of MATERIAS) {
