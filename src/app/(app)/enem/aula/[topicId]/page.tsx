@@ -89,7 +89,7 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
         <Card className="space-y-3">
           <p className="flex items-center gap-2 font-semibold"><BookOpen size={18} className="text-primary" /> Como é a aula</p>
           <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
-            <li>Leia o texto (ou ouça o robô lendo para você).</li>
+            <li>Assista à aula em vídeo (slides com a voz do robô) ou leia o texto, se preferir.</li>
             {lesson.quiz ? (
               <li>
                 Responda o quiz: {lesson.quiz.choices.length} perguntas de marcar e {lesson.quiz.open.length} de escrever, sobre o que você estudou.
@@ -143,6 +143,7 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
       completed={!!session.completedAt}
       text={text ? { content: text.content, highlights: text.highlights as string[], keyPoints: text.keyPoints as { term: string; explanation: string }[], refs: [] } : null}
       questions={ordered}
+      video={{ slug: materia.slug, materia: materia.name, lesson: index + 1, title: lesson.title, highlights: lesson.highlights }}
     />
   );
   if (!lesson.essay) return view;

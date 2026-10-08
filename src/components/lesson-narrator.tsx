@@ -227,11 +227,108 @@ function rankVoice(v: SpeechSynthesisVoice, gender: "f" | "m") {
 /** Atraso entre o tempo do tocador e o som que se ouve (codificação do MP3 + saída de áudio do celular). */
 const SOUND_LAG = 0.12;
 
-/** Um pedaço de áudio pronto: o MP3 e o momento de cada palavra (k = número da palavra na aula, s = frase). */
 /** Um pedaço de áudio baixado: o MP3, a duração e o momento de cada palavra (k = palavra na aula, s = frase). */
 type Chunk = { mp3: ArrayBuffer; seconds: number; words: { k: number; s: number; t: number }[] };
-/** A aula inteira pronta para tocar sem parar: um áudio só e o tempo de cada palavra. */
-type Whole = { url: string; words: { k: number; s: number; t: number }[] };
+/** A aula inteira pronta para tocar sem parar: um áudio só, o tempo de cada palavra e a duração total. */
+export type WholeAudio = { url: string; words: { k: number; s: number; t: number }[]; seconds: number };
+
+/**
+ * Baixa a voz do robô (Piper) de uma aula: pedaço por pedaço (com até 3 tentativas cada, 3 ao mesmo tempo)
+ * e junta tudo num áudio só. Fica guardado: tocar de novo não baixa outra vez. Usado pelo "Ouvir" e pelo vídeo.
+ */
+export class LessonAudio {
+  private chunks: (Promise<Chunk> | undefined)[] = [];
+  private whole: Promise<WholeAudio> | null = null;
+  private urls: string[] = [];
+  constructor(
+    private parts: string[],
+    private blocks: { text: string; from: number; to: number }[],
+    private wordOffset: number[],
+    private stopped: () => boolean,
+  ) {}
+
+  private fetchBlock(i: number): Promise<Chunk> {
+    const have = this.chunks[i];
+    if (have) return have;
+    const b = this.blocks[i];
+    const job = (async () => {
+      let lastError: Error | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (this.stopped()) throw new Error("cancelado");
+        const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: b.text }) }).catch((e: Error) => e);
+        if (r instanceof Response && r.ok) {
+          const mp3 = await r.arrayBuffer();
+          const seconds = Number(r.headers.get("x-audio-seconds")) || mp3.byteLength / 6000;
+          const measured = decodeTimes(r.headers.get("x-word-times"));
+          const own = this.parts.slice(b.from, b.to + 1);
+          const estimate = wordTimeline(own, sentenceTimeline(own, [{ from: 0, to: own.length - 1 }], [seconds]), seconds);
+          const words = estimate.map((w, j) => ({ k: this.wordOffset[b.from] + j, s: b.from + w.s, t: measured && measured.length === estimate.length ? measured[j] : w.t }));
+          return { mp3, seconds, words };
+        }
+        lastError = r instanceof Response ? new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "voz indisponível") : r;
+        if (r instanceof Response && r.status !== 503 && r.status < 500) break;
+        await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
+      }
+      throw lastError ?? new Error("voz indisponível");
+    })();
+    this.chunks[i] = job;
+    job.catch(() => {
+      if (this.chunks[i] === job) this.chunks[i] = undefined; // deu erro: tenta de novo na próxima vez
+    });
+    return job;
+  }
+
+  /** A aula INTEIRA num áudio só (avisa a porcentagem pronta): toca do começo ao fim sem parar para carregar. */
+  prepare(onProgress: (pct: number) => void): Promise<WholeAudio> {
+    if (this.whole) return this.whole;
+    const job = (async () => {
+      let done = 0;
+      let next = 0;
+      onProgress(0);
+      const ready: Chunk[] = new Array(this.blocks.length);
+      const worker = async () => {
+        while (next < this.blocks.length) {
+          const i = next++;
+          ready[i] = await this.fetchBlock(i);
+          done++;
+          onProgress(Math.round((done / this.blocks.length) * 100));
+        }
+      };
+      await Promise.all([worker(), worker(), worker()]);
+      const url = URL.createObjectURL(new Blob(ready.map((c) => c.mp3), { type: "audio/mpeg" }));
+      this.urls.push(url);
+      // tempo de cada palavra na aula inteira: soma a duração dos pedaços anteriores
+      let offset = 0;
+      const words: WholeAudio["words"] = [];
+      for (const c of ready) {
+        for (const w of c.words) words.push({ ...w, t: offset + w.t });
+        offset += c.seconds;
+      }
+      return { url, words, seconds: offset };
+    })();
+    this.whole = job;
+    job.catch(() => {
+      if (this.whole === job) this.whole = null; // deu erro: tenta de novo na próxima vez
+    });
+    return job;
+  }
+
+  dispose() {
+    for (const u of this.urls) URL.revokeObjectURL(u);
+    this.urls = [];
+  }
+}
+
+/** Onde começam as palavras de cada frase na lista de todas as palavras da aula. */
+export function wordOffsets(parts: string[]) {
+  const off: number[] = [];
+  let n = 0;
+  for (const p of parts) {
+    off.push(n);
+    n += splitWords(p).length;
+  }
+  return off;
+}
 
 /** Mensagens que vão trocando enquanto o áudio carrega (para a espera não angustiar). */
 const LOADING_MESSAGES = [
@@ -253,16 +350,7 @@ type State = "idle" | "loading" | "playing" | "paused";
 export function LessonNarrator({ text, labels = [], targetRef }: { text: string; labels?: string[]; targetRef?: RefObject<HTMLElement | null> }) {
   const parts = useMemo(() => toSpeech(text, labels), [text, labels]);
   const blocks = useMemo(() => toBlocks(parts), [parts]);
-  // onde começam as palavras de cada frase na lista de todas as palavras da aula
-  const wordOffset = useMemo(() => {
-    const off: number[] = [];
-    let n = 0;
-    for (const p of parts) {
-      off.push(n);
-      n += splitWords(p).length;
-    }
-    return off;
-  }, [parts]);
+  const wordOffset = useMemo(() => wordOffsets(parts), [parts]);
   // a voz do robô (Piper) é masculina; a voz do aparelho (reserva) segue o mesmo tom
   const gender = "m" as "f" | "m";
   const [rate, setRate] = useState(1);
@@ -274,26 +362,23 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
   const [mode, setMode] = useState<"natural" | "device">("natural");
   const [note, setNote] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
-  const chunks = useRef<(Promise<Chunk> | undefined)[]>([]);
-  const urls = useRef<string[]>([]);
-  const playing = useRef<Whole | null>(null);
-  const whole = useRef<Promise<Whole> | null>(null);
+  const playing = useRef<WholeAudio | null>(null);
   const [message, setMessage] = useState(0);
   const highlighter = useRef<ReturnType<typeof makeHighlighter> | null>(null);
   const raf = useRef(0);
   const current = useRef(-1);
   const stopped = useRef(false);
   const run = useRef(0);
+  const loader = useMemo(() => new LessonAudio(parts, blocks, wordOffset, () => stopped.current), [parts, blocks, wordOffset]);
 
+  useEffect(() => () => loader.dispose(), [loader]);
   useEffect(() => {
-    const made = urls.current;
     return () => {
       stopped.current = true;
       cancelAnimationFrame(raf.current);
       audio.current?.pause();
       highlighter.current?.destroy();
       if ("speechSynthesis" in window) speechSynthesis.cancel();
-      for (const u of made) URL.revokeObjectURL(u);
     };
   }, []);
 
@@ -344,82 +429,7 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     setState("idle");
   };
 
-  /**
-   * Baixa um pedaço do áudio (com até 3 tentativas) e calcula o tempo de cada palavra dele.
-   * Fica guardado: tocar de novo não baixa outra vez.
-   */
-  const fetchBlock = (i: number): Promise<Chunk> | null => {
-    if (i >= blocks.length) return null;
-    const have = chunks.current[i];
-    if (have) return have;
-    const b = blocks[i];
-    const job = (async () => {
-      let lastError: Error | null = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        if (stopped.current) throw new Error("cancelado");
-        const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: b.text }) }).catch((e: Error) => e);
-        if (r instanceof Response && r.ok) {
-          const mp3 = await r.arrayBuffer();
-          const seconds = Number(r.headers.get("x-audio-seconds")) || mp3.byteLength / 6000;
-          const measured = decodeTimes(r.headers.get("x-word-times"));
-          const own = parts.slice(b.from, b.to + 1);
-          const estimate = wordTimeline(own, sentenceTimeline(own, [{ from: 0, to: own.length - 1 }], [seconds]), seconds);
-          const words = estimate.map((w, j) => ({ k: wordOffset[b.from] + j, s: b.from + w.s, t: measured && measured.length === estimate.length ? measured[j] : w.t }));
-          return { mp3, seconds, words };
-        }
-        lastError = r instanceof Response ? new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "voz indisponível") : r;
-        if (r instanceof Response && r.status !== 503 && r.status < 500) break;
-        await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
-      }
-      throw lastError ?? new Error("voz indisponível");
-    })();
-    chunks.current[i] = job;
-    job.catch(() => {
-      if (chunks.current[i] === job) chunks.current[i] = undefined; // deu erro: tenta de novo na próxima vez
-    });
-    return job;
-  };
-
-  /**
-   * Baixa a aula INTEIRA (3 pedaços de cada vez, mostrando a porcentagem) e junta num áudio só:
-   * o robô só começa a falar quando tudo está pronto e lê do começo ao fim sem parar para carregar.
-   */
-  const prepareAll = (): Promise<Whole> => {
-    if (whole.current) return whole.current;
-    const job = (async () => {
-      let done = 0;
-      let next = 0;
-      setProgress(0);
-      setShown(0);
-      const chunksDone: Chunk[] = new Array(blocks.length);
-      const worker = async () => {
-        while (next < blocks.length) {
-          const i = next++;
-          chunksDone[i] = await fetchBlock(i)!;
-          done++;
-          setProgress(Math.round((done / blocks.length) * 100));
-        }
-      };
-      await Promise.all([worker(), worker(), worker()]);
-      const url = URL.createObjectURL(new Blob(chunksDone.map((c) => c.mp3), { type: "audio/mpeg" }));
-      urls.current.push(url);
-      // tempo de cada palavra na aula inteira: soma a duração dos pedaços anteriores
-      let offset = 0;
-      const words: Whole["words"] = [];
-      for (const c of chunksDone) {
-        for (const w of c.words) words.push({ ...w, t: offset + w.t });
-        offset += c.seconds;
-      }
-      return { url, words };
-    })();
-    whole.current = job;
-    job.catch(() => {
-      if (whole.current === job) whole.current = null; // deu erro: tenta de novo na próxima vez
-    });
-    return job;
-  };
-
-  const follow = (c: Whole, a: HTMLAudioElement, myRun: number) => {
+  const follow = (c: WholeAudio, a: HTMLAudioElement, myRun: number) => {
     const tick = () => {
       if (run.current !== myRun || stopped.current) return;
       // o som sai do alto-falante um pouquinho depois do tempo do tocador: a marcação espera esse instante
@@ -447,9 +457,12 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     a.preload = "auto";
     (a as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
     setState("loading");
-    let c: Whole;
+    let c: WholeAudio;
     try {
-      c = await prepareAll();
+      c = await loader.prepare((pct) => {
+        setProgress(pct);
+        if (pct === 0) setShown(0);
+      });
     } catch (e) {
       if (stopped.current || run.current !== myRun || (e as Error).message === "cancelado") return;
       // voz do robô indisponível agora: usa a voz do aparelho, sem travar a aula

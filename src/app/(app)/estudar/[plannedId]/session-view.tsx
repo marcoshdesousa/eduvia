@@ -3,8 +3,9 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { LessonNarrator } from "@/components/lesson-narrator";
+import { LessonVideo, type VideoInfo } from "@/components/lesson-video";
 import { ContentReadyToast, finishMessage, StudyTimer } from "./study-timer";
-import { BookOpen, Brain, CheckCircle2, Clock, Lightbulb, PartyPopper, RotateCcw, XCircle } from "lucide-react";
+import { BookOpen, Brain, CheckCircle2, Clock, Lightbulb, MonitorPlay, PartyPopper, RotateCcw, XCircle } from "lucide-react";
 import { MinutesPicker } from "./minutes-picker";
 import { completeSessionAction, retakeSessionAction, studyPulseAction } from "@/app/actions/study";
 import { useRouter } from "next/navigation";
@@ -32,6 +33,7 @@ export function SessionView({
   questions,
   grade,
   minuteOptions,
+  video,
 }: {
   minuteOptions?: { options: readonly number[]; suggested: number };
   header: Header;
@@ -41,6 +43,8 @@ export function SessionView({
   text: Text;
   questions: SessionQuestion[];
   grade: Grade;
+  /** Aulas do Estudar ENEM: dá para assistir à aula em "modo vídeo" (slides com a voz do robô). */
+  video?: VideoInfo;
 }) {
   const router = useRouter();
   const recall = questions.filter((q) => q.type === "OPEN_RECALL");
@@ -61,6 +65,21 @@ export function SessionView({
   const [pending, start] = useTransition();
   const current = steps[step].key;
   const articleRef = useRef<HTMLElement>(null);
+  const [mode, setMode] = useState<"video" | "texto">(video ? "video" : "texto");
+  // a escolha (vídeo ou texto) fica guardada neste aparelho
+  useEffect(() => {
+    if (!video) return;
+    try {
+      const saved = localStorage.getItem("eduvia:modo-aula");
+      if (saved === "texto" || saved === "video") setMode(saved);
+    } catch {}
+  }, [video]);
+  const chooseMode = (m: "video" | "texto") => {
+    setMode(m);
+    try {
+      localStorage.setItem("eduvia:modo-aula", m);
+    } catch {}
+  };
 
   // conta o tempo de estudo (1 min por minuto com a aula aberta na tela): a sequência vale com 5 min no dia
   const active = !completed && !summary;
@@ -98,7 +117,37 @@ export function SessionView({
         ))}
       </ol>
 
-      {current === "texto" && text && (
+      {current === "texto" && text && video && text.content && (
+        <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Como você quer estudar">
+          {([["video", "Vídeo", MonitorPlay], ["texto", "Ler e ouvir", BookOpen]] as const).map(([m, label, Icon]) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              onClick={() => chooseMode(m)}
+              className={cn("flex items-center justify-center gap-2 rounded-xl border-2 p-3 text-sm font-semibold transition", mode === m ? "border-primary bg-primary/10 text-primary" : "border-border bg-surface text-muted")}
+            >
+              <Icon size={18} /> {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {current === "texto" && text && video && text.content && mode === "video" && (
+        <div className="space-y-4">
+          <LessonVideo
+            text={text.content}
+            info={video}
+            quizLabel={questions.length ? "Fazer o quiz" : "Continuar"}
+            onQuiz={() => setStep(step + 1)}
+            onRead={() => chooseMode("texto")}
+          />
+          <Button variant="secondary" className="w-full sm:w-auto" onClick={() => setStep(step + 1)}>{questions.length ? "Ir para o quiz" : "Continuar"}</Button>
+        </div>
+      )}
+
+      {current === "texto" && text && !(video && text.content && mode === "video") && (
         <div className="space-y-4">
           {text.content && <LessonNarrator text={text.content} labels={text.refs.map((r) => r.label)} targetRef={articleRef} />}
           {text.content && /\]\(\/fonte\//.test(linkSources(text.content, text.refs)) && (

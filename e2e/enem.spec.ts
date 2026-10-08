@@ -8,7 +8,7 @@ const uid = Date.now().toString(36);
  * consultando o gabarito no banco. Começa logo depois do texto da aula.
  */
 async function answerAll(page: Page, wrong = false) {
-  await page.getByRole("button", { name: /Já li|Continuar/ }).first().click();
+  await page.getByRole("button", { name: /Já li|Continuar|Ir para o quiz/ }).first().click();
   // cada etapa mostra as perguntas dela (primeiro as de escrever, depois as de marcar)
   const onScreen = async () => {
     await expect(page.locator("[data-question]").first()).toBeAttached();
@@ -60,6 +60,11 @@ test("Estudar ENEM: aulas com quiz e 75%, refazer, banco de erros e simulado do 
   await page.getByRole("link", { name: "Começar" }).first().click();
   await page.getByRole("button", { name: /Começar aula/ }).click();
   await expect(page.getByRole("heading", { name: "Interpretação de texto: como o ENEM pergunta" })).toBeVisible();
+  // começa no modo vídeo (capa com "Assistir"); dá para trocar para o texto, e a escolha fica guardada
+  await expect(page.getByRole("tab", { name: "Vídeo" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "Assistir à aula" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ler é a habilidade mais cobrada do ENEM" })).toBeVisible(); // partes da aula
+  await page.getByRole("tab", { name: "Ler e ouvir" }).click();
   await expect(page.getByText("Ler é a habilidade mais cobrada do ENEM")).toBeVisible();
   const first = await answerAll(page, true);
   expect(first.choice).toHaveLength(5);
