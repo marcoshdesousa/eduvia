@@ -2,24 +2,26 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
-import { featureLimitError } from "@/lib/billing";
+import { featureLimitError, getAccess, lessonPlanLock } from "@/lib/billing";
 import { AREAS, ENEM_EXAMS, ENEM_PREP_ID, findLesson, isEnemExamKind, LESSON_MINUTES } from "@/lib/enem/catalog";
 import { retakeSession, SESSION_MINUTES } from "@/lib/study";
-import { ensureEnemCatalog, pickExamQuestions, pickLessonQuestions } from "@/lib/enem/bank";
+import { ensureEnemCatalog, lessonQuestionIds, pickExamQuestions } from "@/lib/enem/bank";
 import { enemSession, lessonUnlocked, nextEnemLesson } from "@/lib/enem/progress";
 
-/** Abre a aula do ENEM (cria a sessão na primeira vez, com 10 questões do ENEM da matéria). */
+/** Abre a aula do ENEM (cria a sessão na primeira vez, com o quiz da aula). */
 export async function startEnemLessonAction(topicId: string, minutes?: number): Promise<{ error: string } | void> {
   const user = await requireReadyUser();
   const found = findLesson(topicId);
   if (!found) return { error: "Aula não encontrada." };
   await ensureEnemCatalog();
+  const lock = lessonPlanLock(await getAccess(user), found.index, found.materia.lessons.length);
+  if (lock) return { error: `Esta aula faz parte do plano ${lock.needs}. Assine para liberar.` };
   if (!(await lessonUnlocked(user.id, topicId))) return { error: "Esta aula ainda está bloqueada: tire pelo menos 75% na aula anterior." };
   const chosenMinutes = minutes && (SESSION_MINUTES as readonly number[]).includes(minutes) ? minutes : LESSON_MINUTES;
   const open = await enemSession(user.id, topicId);
   if (!open) {
     const text = await db.studyText.findFirst({ where: { topicId }, orderBy: { createdAt: "desc" }, select: { id: true } });
-    const questionIds = await pickLessonQuestions(user.id, found.materia);
+    const questionIds = await lessonQuestionIds(user.id, topicId);
     await db.studySession.create({ data: { userId: user.id, topicId, kind: "STUDY", studyTextId: text?.id ?? null, questionIds, chosenMinutes } });
   } else {
     // aula aberta há muito tempo: recomeça com o tempo escolhido agora (e outras questões)
@@ -32,7 +34,7 @@ export async function startEnemLessonAction(topicId: string, minutes?: number): 
 /** "Estudar geral": vai para a próxima aula liberada da matéria mais atrasada. */
 export async function studyGeneralAction() {
   const user = await requireReadyUser();
-  const next = await nextEnemLesson(user.id);
+  const next = await nextEnemLesson(user.id, undefined, (await getAccess(user)).limits.lessonsPct);
   redirect(next ? `/enem/aula/${next.topicId}` : "/enem");
 }
 

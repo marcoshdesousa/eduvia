@@ -1,38 +1,31 @@
 // Assinatura paga por Pix (SyncPay): cria a cobrança do plano e, quando o Pix é confirmado, libera 30 dias.
-import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { appUrl } from "@/lib/app-url";
 import { addPeriod, daysLeft, getPlan, RENEW_NOTICE_DAYS } from "@/lib/billing";
-import { monthPrice, priceFor } from "@/lib/plans";
+import { monthPrice, planRank, priceFor } from "@/lib/plans";
 import { today } from "@/lib/core/dates";
 import { createPix, pixStatus, webhookToken } from "@/lib/syncpay";
 import { planOption, quotePlan } from "@/lib/plan-change";
+import { cpfKey } from "@/lib/cpf-key";
+import { REFERRAL_PLAN, referralStatus, type ReferralStatus } from "@/lib/referral";
 export type { PlanQuote } from "@/lib/plan-change";
+export { cpfKey } from "@/lib/cpf-key";
 
-type Payer = { id: string; name: string; cpf: string | null; phone: string | null; handle: string | null; timezone?: string };
+type Payer = { id: string; name: string; cpf: string | null; phone: string | null; handle: string | null; timezone?: string; createdAt?: Date };
 
 /** Plano que o aluno não pode comprar agora (a mensagem vai direto para a tela). */
 export class PlanNotAvailable extends Error {}
 
-/** Plano ativo do aluno agora, ou nada. `paidCents` é quanto o mês atual custou (com promoção, se teve). */
+/** Plano ativo do aluno agora, ou nada. */
 async function currentPlanOf(userId: string) {
   const sub = await db.subscription.findFirst({
     where: { userId, status: { in: ["ACTIVE", "PAST_DUE"] }, currentPeriodEnd: { gt: new Date() } },
     orderBy: { currentPeriodEnd: "desc" },
-    include: { payments: { where: { status: "PAID" }, orderBy: { paidAt: "desc" }, take: 1, select: { valueCents: true, creditCents: true, billingType: true } } },
+    include: { payments: { where: { status: "PAID" }, orderBy: { paidAt: "desc" }, take: 1, select: { billingType: true } } },
   });
   const plan = sub ? await getPlan(sub.planSlug) : null;
   if (!sub || !plan) return null;
-  const last = sub.payments[0];
-  const list = priceFor(plan, "MONTH");
-  // o desconto da troca é calculado pelo que o mês atual realmente custou (preço com promoção, se foi o caso)
-  const paidCents = last ? Math.min(list, last.valueCents + last.creditCents) : list;
-  return { planSlug: sub.planSlug, planName: plan.name, listCents: list, paidCents, currentPeriodEnd: sub.currentPeriodEnd, manual: last?.billingType === "MANUAL" };
-}
-
-/** CPF guardado como código (para a promoção): não dá para voltar ao CPF, mas o mesmo CPF sempre dá o mesmo código. */
-export function cpfKey(cpf: string) {
-  return createHash("sha256").update(`eduvia-promo:${cpf.replace(/\D/g, "")}`).digest("hex");
+  return { planSlug: sub.planSlug, planName: plan.name, currentPeriodEnd: sub.currentPeriodEnd, manual: sub.payments[0]?.billingType === "MANUAL" };
 }
 
 /**
@@ -45,28 +38,34 @@ async function promoUsesByPlan(cpf: string | null) {
   return new Map(rows.map((r) => [r.planSlug, r.uses]));
 }
 
+export type PlanOffer = {
+  option: ReturnType<typeof planOption>;
+  quote: ReturnType<typeof quotePlan>;
+  promo: ReturnType<typeof monthPrice>["promo"];
+  normalCents: number;
+  /** só no plano por indicação */
+  referral: ReferralStatus | null;
+};
+
 /**
- * Para cada plano: o que o aluno pode fazer (assinar, subir, renovar, já é o dele, indisponível), o preço do mês
- * para ele (com a promoção dos primeiros meses, se ainda tiver) e quanto paga agora (com o desconto da troca).
+ * Para cada plano: o que o aluno pode fazer (assinar, subir, renovar, já é o dele, indisponível) e o preço do mês
+ * para ele (com a promoção dos primeiros meses, se ainda tiver; no plano por indicação, o preço da indicação).
  */
-export async function planOffers(user: { id: string; timezone?: string; cpf?: string | null }, plans: { slug: string; name: string; priceMonthCents: number }[]) {
+export async function planOffers(user: { id: string; timezone?: string; cpf?: string | null; createdAt?: Date }, plans: { slug: string; name: string; priceMonthCents: number }[]) {
   const cpf = user.cpf !== undefined ? user.cpf : ((await db.user.findUnique({ where: { id: user.id }, select: { cpf: true } }))?.cpf ?? null);
   const [current, used] = await Promise.all([currentPlanOf(user.id), promoUsesByPlan(cpf)]);
   const renewOpen = !!current && daysLeft(current.currentPeriodEnd, user.timezone) <= RENEW_NOTICE_DAYS;
-  return new Map(
-    plans.map((p) => {
-      // renovar um plano liberado pelo admin: paga o preço normal (sem promoção)
-      const manualRenew = !!current?.manual && current.planSlug === p.slug;
-      const month = manualRenew ? { priceCents: p.priceMonthCents, promo: null } : monthPrice(p, used.get(p.slug) ?? 0);
-      // subir ou descer de plano compara os preços normais; o valor a pagar usa o preço do mês (com promoção)
-      const option = planOption({ slug: p.slug, priceCents: p.priceMonthCents }, current && { planSlug: current.planSlug, priceCents: current.listCents, currentPeriodEnd: current.currentPeriodEnd }, renewOpen);
-      const quote = quotePlan(
-        { slug: p.slug, name: p.name, priceCents: month.priceCents },
-        current && { planSlug: current.planSlug, planName: current.planName, priceCents: current.paidCents, currentPeriodEnd: current.currentPeriodEnd },
-      );
-      return [p.slug, { option, quote, promo: month.promo, normalCents: p.priceMonthCents }] as const;
-    }),
-  );
+  const out = new Map<string, PlanOffer>();
+  for (const p of plans) {
+    const referral = p.slug === REFERRAL_PLAN ? await referralStatus({ id: user.id, cpf, createdAt: user.createdAt }, p.priceMonthCents) : null;
+    // renovar um plano liberado pelo admin: paga o preço normal (sem promoção)
+    const manualRenew = !!current?.manual && current.planSlug === p.slug;
+    const month = referral ? { priceCents: referral.priceCents, promo: null } : manualRenew ? { priceCents: p.priceMonthCents, promo: null } : monthPrice(p, used.get(p.slug) ?? 0);
+    const option = planOption({ slug: p.slug }, current && { planSlug: current.planSlug, currentPeriodEnd: current.currentPeriodEnd }, renewOpen, new Date(), RENEW_NOTICE_DAYS);
+    const quote = quotePlan({ slug: p.slug, name: p.name, priceCents: month.priceCents }, current && { planSlug: current.planSlug, planName: current.planName, currentPeriodEnd: current.currentPeriodEnd });
+    out.set(p.slug, { option, quote, promo: month.promo, normalCents: p.priceMonthCents, referral });
+  }
+  return out;
 }
 
 /** Cria (ou reaproveita, se ainda estiver aberta) a cobrança Pix do plano mensal. */
@@ -75,11 +74,16 @@ export async function createPlanPix(user: Payer, planSlug: string) {
   if (!plan || plan.slug === "gratis" || !plan.active) throw new Error("Plano inválido.");
   if (priceFor(plan, "MONTH") <= 0) throw new Error("Plano sem preço.");
   const offer = (await planOffers(user, [{ slug: plan.slug, name: plan.name, priceMonthCents: priceFor(plan, "MONTH") }])).get(plan.slug)!;
-  // com plano ativo: só subir de plano ou renovar o mesmo perto de vencer
+  // com plano ativo: só subir de plano ou renovar perto de vencer
   if (offer.option.kind === "current") throw new PlanNotAvailable("Este já é o seu plano. A renovação abre 2 dias antes de vencer.");
-  if (offer.option.kind === "lower") throw new PlanNotAvailable("Plano mais barato só fica disponível quando o seu plano atual acabar.");
+  if (offer.option.kind === "lower") throw new PlanNotAvailable("Este plano só fica disponível perto do fim do seu plano atual.");
+  if (offer.referral && !offer.referral.unlocked) {
+    const left = offer.referral.needed - offer.referral.count;
+    throw new PlanNotAvailable(`Falta${left === 1 ? "" : "m"} ${left} indicaç${left === 1 ? "ão" : "ões"} para liberar este plano. Compartilhe o seu código.`);
+  }
   const quote = offer.quote;
   const valueCents = quote.payCents;
+  const referral = !!offer.referral;
 
   // Pix do mesmo plano e mesmo valor criado há menos de 20 minutos e ainda não pago: mostra o mesmo
   const open = await db.payment.findFirst({
@@ -92,7 +96,7 @@ export async function createPlanPix(user: Payer, planSlug: string) {
     },
     orderBy: { createdAt: "desc" },
   });
-  if (open?.pixCode) return { paymentId: open.id, pixCode: open.pixCode, valueCents, planName: plan.name, days: open.periodDays, creditCents: open.creditCents };
+  if (open?.pixCode) return { paymentId: open.id, pixCode: open.pixCode, valueCents, planName: plan.name, days: open.periodDays };
 
   const cpf = (user.cpf ?? "").replace(/\D/g, "");
   const charge = await createPix({
@@ -105,9 +109,9 @@ export async function createPlanPix(user: Payer, planSlug: string) {
     data: { userId: user.id, planSlug: plan.slug, provider: "syncpay", status: "PENDING", interval: "MONTH", billingType: "PIX", currentPeriodEnd: new Date() },
   });
   const payment = await db.payment.create({
-    data: { subscriptionId: sub.id, providerPaymentId: `syncpay_${charge.id}`, status: "PENDING", billingType: "PIX", valueCents, dueDate: today(), pixCode: charge.pixCode, creditCents: quote.creditCents, periodDays: quote.days, promo: !!offer.promo },
+    data: { subscriptionId: sub.id, providerPaymentId: `syncpay_${charge.id}`, status: "PENDING", billingType: "PIX", valueCents, dueDate: today(), pixCode: charge.pixCode, periodDays: quote.days, promo: !!offer.promo, referral },
   });
-  return { paymentId: payment.id, pixCode: charge.pixCode, valueCents, planName: plan.name, days: quote.days, creditCents: quote.creditCents };
+  return { paymentId: payment.id, pixCode: charge.pixCode, valueCents, planName: plan.name, days: quote.days };
 }
 
 /** Confere na SyncPay se o Pix caiu e, se caiu, libera o plano (pode ser chamado várias vezes, sem repetir). */
@@ -127,7 +131,10 @@ export async function confirmPix(paymentId: string): Promise<"paid" | "pending" 
   return "paid";
 }
 
-/** Libera o plano. Mesmo plano ainda ativo: soma 30 dias ao final. Troca de plano: vale a partir de agora (com o desconto já dado). */
+/**
+ * Libera o plano. Mesmo plano (ou do mesmo nível, como Completo ↔ Indicação) ainda ativo: soma 30 dias ao final.
+ * Plano maior: vale a partir de agora (o anterior acaba na hora; não há desconto pelos dias que sobraram).
+ */
 async function activate(paymentId: string) {
   await db.$transaction(async (tx) => {
     // trava a cobrança: dois avisos ao mesmo tempo não liberam duas vezes
@@ -135,8 +142,8 @@ async function activate(paymentId: string) {
     if (!claimed.count) return;
     const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId }, include: { subscription: { include: { user: { select: { cpf: true } } } } } });
     const pending = payment.subscription;
-    // pago com preço de promoção: gasta um dos meses de promoção daquele plano para esse CPF
-    if (payment.promo && pending.user.cpf) {
+    // pago com preço de promoção ou de indicação: conta para esse CPF (não volta ao apagar a conta)
+    if ((payment.promo || payment.referral) && pending.user.cpf) {
       const cpfHash = cpfKey(pending.user.cpf);
       await tx.promoUse.upsert({
         where: { cpfHash_planSlug: { cpfHash, planSlug: pending.planSlug } },
@@ -154,8 +161,10 @@ async function activate(paymentId: string) {
       await tx.subscription.delete({ where: { id: pending.id } });
       return;
     }
-    // troca de plano (o desconto pelos dias não usados já veio no valor) ou plano novo: vale a partir de agora
-    if (current) await tx.subscription.update({ where: { id: current.id }, data: { status: "CANCELED", canceledAt: new Date() } });
-    await tx.subscription.update({ where: { id: pending.id }, data: { status: "ACTIVE", currentPeriodEnd: new Date(Date.now() + payment.periodDays * 86_400_000) } });
+    // mesmo nível (renovou com o outro plano do mesmo nível): os 30 dias somam ao final do atual
+    const sameLevel = !!current && planRank(current.planSlug) === planRank(pending.planSlug);
+    const start = sameLevel ? current!.currentPeriodEnd : new Date();
+    if (current) await tx.subscription.update({ where: { id: current.id }, data: { status: "CANCELED", canceledAt: new Date(), ...(sameLevel ? {} : { currentPeriodEnd: new Date() }) } });
+    await tx.subscription.update({ where: { id: pending.id }, data: { status: "ACTIVE", currentPeriodEnd: new Date(start.getTime() + payment.periodDays * 86_400_000) } });
   });
 }

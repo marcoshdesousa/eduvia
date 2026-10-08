@@ -1,17 +1,24 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
-import { drawEssayTheme, drawPortuguesePrompt } from "@/lib/core/essay-themes";
+import { drawEssayTheme, drawPortuguesePrompt, motivatingTexts, type EssayPrompt } from "@/lib/core/essay-themes";
+import { findLesson } from "@/lib/enem/catalog";
 import { EssayForm } from "./essay-form";
 
 export const metadata = { title: "Nova redação" };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ tipo?: string; prep?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ tipo?: string; prep?: string; aula?: string }> }) {
   const user = await requireReadyUser();
   const sp = await searchParams;
   const portugues = sp.tipo === "portugues";
   const prep = sp.prep ? await db.preparation.findFirst({ where: { id: sp.prep, userId: user.id }, select: { id: true, title: true } }) : null;
-  const prompt = portugues ? drawPortuguesePrompt() : drawEssayTheme();
+  // atividade de redação de uma aula do ENEM: tema da aula
+  const lessonEssay = !portugues && sp.aula ? findLesson(sp.aula)?.lesson.essay : undefined;
+  const prompt: EssayPrompt = lessonEssay
+    ? { theme: lessonEssay.theme, instructions: lessonEssay.instructions, texts: motivatingTexts(lessonEssay.theme) }
+    : portugues
+      ? drawPortuguesePrompt()
+      : drawEssayTheme();
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <Link href="/redacao" className="text-sm text-muted hover:text-foreground">← Redação</Link>

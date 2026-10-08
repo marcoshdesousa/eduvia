@@ -1,196 +1,138 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Lock, PenLine, Play, RotateCcw, Target, Zap } from "lucide-react";
+import { BookOpenCheck, ClipboardCheck, Gift, GraduationCap, PenLine, PlayCircle, RotateCcw, Zap } from "lucide-react";
 import { db } from "@/lib/db";
-import { InstallAppBanner } from "@/components/install-app";
 import { requireReadyUser } from "@/lib/session";
-import { ensurePlanFresh } from "@/lib/plan";
-import { addDays, formatDay, keyFromDay, today, weekday } from "@/lib/core/dates";
+import { addDays, keyFromDay, today } from "@/lib/core/dates";
 import { levelFromXp, liveStreak, STREAK_MIN_MINUTES } from "@/lib/gamification";
 import { StreakCard } from "@/components/streak-card";
-import { weeklyEssays } from "@/lib/essay-plan";
-import { MasteryBadge, Progress } from "@/components/ui/badge";
+import { getAccess, hasFullAccess } from "@/lib/billing";
+import { ensureEnemCatalog } from "@/lib/enem/bank";
+import { MATERIAS } from "@/lib/enem/catalog";
+import { lessonStates, nextEnemLesson } from "@/lib/enem/progress";
+import { InstallButton } from "@/components/install-app";
+import { Progress } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle, Stat } from "@/components/ui/card";
-import { cn, formatMinutes } from "@/lib/utils";
 
 export const metadata = { title: "Início" };
+
+const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
 
 export default async function Page() {
   const user = await requireReadyUser();
   const day = today(user.timezone);
-  const preps = await db.preparation.findMany({ where: { userId: user.id, status: "ACTIVE" } });
-  for (const p of preps) await ensurePlanFresh(p, user.timezone);
-
-  // semana de domingo a sábado
-  const weekStart = addDays(day, -weekday(day));
-  const [todayOnly, overdue, dueQuestions, errorBank, weekDays, critical, topicStats, lastDays] = await Promise.all([
-    db.plannedSession.findMany({
-      where: { plan: { preparation: { userId: user.id, status: "ACTIVE" } }, date: day, status: { in: ["PENDING", "DONE"] } },
-      include: { topic: { include: { subject: { include: { preparation: true } } } }, studySession: { select: { bestScore: true, tries: true, passedAt: true } } },
-      orderBy: [{ status: "asc" }, { order: "asc" }],
-    }),
-    // aulas perdidas: continuam no dia delas e precisam ser feitas antes das de hoje
-    db.plannedSession.findMany({
-      where: { plan: { preparation: { userId: user.id, status: "ACTIVE" } }, date: { lt: day }, status: "PENDING", kind: "STUDY" },
-      include: { topic: { include: { subject: { include: { preparation: true } } } }, studySession: { select: { bestScore: true, tries: true, passedAt: true } } },
-      orderBy: [{ date: "asc" }, { order: "asc" }],
-    }),
-    db.reviewItem.count({ where: { userId: user.id, dueAt: { lte: day }, question: { topic: { subject: { preparation: { status: "ACTIVE" } } } } } }),
+  await ensureEnemCatalog();
+  const access = await getAccess(user);
+  const pct = access.limits.lessonsPct;
+  const [next, states, dueQuestions, errorBank, lastDays] = await Promise.all([
+    nextEnemLesson(user.id, undefined, pct),
+    lessonStates(user.id, undefined, pct),
+    db.reviewItem.count({ where: { userId: user.id, dueAt: { lte: day } } }),
     db.reviewItem.count({ where: { userId: user.id, inErrorBank: true } }),
-    db.studyDay.findMany({ where: { userId: user.id, date: { gte: weekStart } } }),
-    db.topicMastery.findMany({
-      where: { userId: user.id, status: "CRITICO", topic: { subject: { preparation: { status: "ACTIVE" } } } },
-      include: { topic: { include: { subject: true } } },
-      orderBy: { accuracy: "asc" },
-      take: 5,
-    }),
-    db.topic.findMany({
-      where: { subject: { preparation: { userId: user.id, status: "ACTIVE" } } },
-      select: { id: true, subject: { select: { preparationId: true } }, mastery: { where: { userId: user.id }, select: { studyDone: true } } },
-    }),
     db.studyDay.findMany({ where: { userId: user.id, date: { gte: addDays(day, -6) } }, select: { date: true, minutes: true } }),
   ]);
-  const essays = await weeklyEssays(user);
-  const streak = liveStreak(user, preps.flatMap((p) => p.studyDays), day);
+  const streak = liveStreak(user, EVERY_DAY, day);
   // o dia conta para a sequência com pelo menos 5 minutos de estudo
   const studied = new Set(lastDays.filter((d) => d.minutes >= STREAK_MIN_MINUTES).map((d) => keyFromDay(d.date)));
   const minutesToday = lastDays.find((d) => keyFromDay(d.date) === keyFromDay(day))?.minutes ?? 0;
-
-  const todaySessions = [...overdue, ...todayOnly];
-  const pending = todaySessions.filter((s) => s.status === "PENDING");
-  // só a primeira aula pendente de cada preparação fica liberada (as outras esperam 75% na anterior)
-  const unlocked = new Set<string>();
-  for (const s of [...pending].sort((a, b) => a.date.getTime() - b.date.getTime() || a.order - b.order)) {
-    if (s.kind !== "STUDY") {
-      unlocked.add(s.id);
-      continue;
-    }
-    const prepId = s.topic.subject.preparationId;
-    if (![...unlocked].some((id) => pending.find((p) => p.id === id && p.kind === "STUDY" && p.topic.subject.preparationId === prepId))) unlocked.add(s.id);
-  }
-  const doneToday = todaySessions.filter((s) => s.status === "DONE");
-  const todayMinutes = todaySessions.reduce((s, x) => s + x.durationMin, 0);
-  const weekMinutes = weekDays.reduce((s, d) => s + d.minutes, 0);
-  const weekGoal = preps.reduce((s, p) => s + p.dailyMinutes * p.studyDays.length, 0);
+  const all = [...states.values()].flat();
+  const passed = all.filter((l) => l.passed).length;
+  const nextMateria = next ? MATERIAS.find((m) => next.topicId.startsWith(`enem-a-${m.slug}-`)) : null;
+  // matérias com algum progresso (as que o aluno está estudando), as mais avançadas primeiro
+  const started = MATERIAS.map((m) => {
+    const ls = states.get(m.slug) ?? [];
+    return { m, done: ls.filter((l) => l.passed).length, total: ls.length };
+  })
+    .filter((x) => x.done > 0)
+    .sort((a, b) => b.done / b.total - a.done / a.total)
+    .slice(0, 5);
   const { level, progress } = levelFromXp(user.xp);
+  const actions = [
+    { href: "/simulados/enem", icon: ClipboardCheck, title: "Simulado ENEM", text: "Prova com o tempo do ENEM" },
+    { href: "/teste-rapido", icon: Zap, title: "Teste rápido", text: "Questões reais, cronometradas" },
+    { href: "/redacao", icon: PenLine, title: "Redação", text: "Tema do ENEM com correção" },
+    { href: "/professor", icon: GraduationCap, title: "Professor IA", text: "Tire suas dúvidas" },
+  ];
 
   return (
     <div className="space-y-6">
-      <InstallAppBanner />
-      <div>
-        <h1 className="text-2xl font-bold">Olá, {user.name.split(" ")[0]}!</h1>
-        <p className="text-sm text-muted">
-          {pending.length ? overdue.length
-            ? `Você tem ${overdue.length} aula(s) atrasada(s). Faça elas primeiro para liberar as de hoje.`
-            : `Você tem ${formatMinutes(pending.reduce((s, x) => s + x.durationMin, 0))} de estudo para hoje.` : doneToday.length ? "Estudo de hoje concluído. Mandou bem!" : "Nada agendado para hoje."}
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Olá, {user.name.split(" ")[0]}!</h1>
+          <p className="text-sm text-muted">{passed ? `Você já concluiu ${passed} aula${passed === 1 ? "" : "s"} do ENEM. Continue assim!` : "Vamos estudar para o ENEM? Comece pela primeira aula."}</p>
+        </div>
+        <InstallButton />
       </div>
 
-      <StreakCard streak={streak} best={user.longestStreak} day={day} studied={studied} minutesToday={minutesToday} goal={STREAK_MIN_MINUTES} href={pending.find((p) => unlocked.has(p.id)) ? `/estudar/${pending.find((p) => unlocked.has(p.id))!.id}` : preps.length ? "/revisoes" : "/preparacoes/nova"} />
+      <StreakCard streak={streak} best={user.longestStreak} day={day} studied={studied} minutesToday={minutesToday} goal={STREAK_MIN_MINUTES} href={next ? `/enem/aula/${next.topicId}` : "/enem"} />
 
-      {!preps.length ? (
-        <Card className="text-center">
-          <p className="font-medium">Vamos começar?</p>
-          <p className="mt-1 text-sm text-muted">Crie sua primeira preparação e envie seus materiais. A IA monta o plano para você.</p>
-          <Link href="/preparacoes/nova" className={buttonClass("primary", "md", "mt-4")}>Criar preparação</Link>
-        </Card>
-      ) : (
-        <Card>
-          <div className="flex items-center justify-between">
-            <CardTitle>O que fazer hoje</CardTitle>
-            <span className="text-xs text-muted">{doneToday.length}/{todaySessions.length} sessões · {formatMinutes(todayMinutes)}</span>
-          </div>
-          {todaySessions.length > 0 && <Progress value={doneToday.length / todaySessions.length} className="mt-3" tone="success" />}
-          <ul className="mt-3 divide-y divide-border">
-            {todaySessions.map((s) => (
-              <li key={s.id} className="flex items-center gap-3 py-3">
-                {s.status === "DONE" ? <CheckCircle2 size={18} className="shrink-0 text-success" /> : s.kind === "REVIEW" ? <RotateCcw size={18} className="shrink-0 text-warning" /> : <Play size={18} className="shrink-0 text-primary" />}
-                <div className="min-w-0 flex-1">
-                  <div className={cn("truncate text-sm font-medium", s.status === "DONE" && "text-muted line-through")}>{s.topic.title}</div>
-                  <div className="truncate text-xs text-muted">
-                    {s.date < day && <span className="font-semibold text-warning">Atrasada ({formatDay(s.date, { day: "2-digit", month: "short" })}) · </span>}
-                    {s.topic.subject.preparation.title} · {s.kind === "REVIEW" ? (s.reviewNumber ? `Revisão R${s.reviewNumber}` : "Reforço") : s.partCount > 1 ? `Parte ${s.part}/${s.partCount}` : "Estudo"} · {formatMinutes(s.durationMin)}
-                  </div>
-                </div>
-                {s.status === "DONE" && s.kind === "STUDY" && s.studySession?.bestScore != null && (
-                  <span className="text-xs font-semibold text-success">{Math.round(s.studySession.bestScore * 100)}%</span>
-                )}
-                {s.status === "PENDING" && !unlocked.has(s.id) && (
-                  <span className="inline-flex items-center gap-1 text-xs text-muted" title="Libera quando você tirar 75% na aula anterior"><Lock size={14} /> Bloqueada</span>
-                )}
-                {s.status === "PENDING" && unlocked.has(s.id) && (
-                  <Link href={`/estudar/${s.id}`} className={buttonClass(s.kind === "STUDY" ? "primary" : "outline", "sm")}>
-                    {s.kind === "REVIEW" ? "Revisar" : s.studySession?.tries ? `Refazer (${Math.round((s.studySession.bestScore ?? 0) * 100)}%)` : "Estudar"}
-                  </Link>
-                )}
-              </li>
-            ))}
-            {essays.map((e) => (
-              <li key={e.prep.id} className="flex items-center gap-3 py-3">
-                {e.essayId ? <CheckCircle2 size={18} className="shrink-0 text-success" /> : <PenLine size={18} className="shrink-0 text-primary" />}
-                <div className="min-w-0 flex-1">
-                  <div className={cn("truncate text-sm font-medium", e.essayId && "text-muted line-through")}>Redação da semana</div>
-                  <div className="truncate text-xs text-muted">{e.prep.title} · tema sorteado com correção</div>
-                </div>
-                {e.essayId ? (
-                  <Link href={`/redacao/${e.essayId}`} className="text-xs text-primary">Ver nota</Link>
-                ) : (
-                  <Link href={`/redacao/nova?prep=${e.prep.id}`} className={buttonClass("outline", "sm")}>Escrever</Link>
-                )}
-              </li>
-            ))}
-            {!todaySessions.length && !essays.length && <li className="py-3 text-sm text-muted">Sem sessões hoje. Que tal praticar o banco de erros?</li>}
-          </ul>
-          {dueQuestions > 0 && (
-            <Link href="/revisoes" className="mt-2 flex items-center justify-between rounded-lg bg-surface-2 p-3 text-sm hover:bg-border">
-              <span className="inline-flex items-center gap-2"><Target size={16} className="text-primary" />{dueQuestions} questão(ões) para revisar hoje</span>
-              <span className="text-primary">Praticar →</span>
+      <Card className="space-y-3">
+        <CardTitle className="flex items-center gap-2"><BookOpenCheck size={18} className="text-primary" /> Próxima aula</CardTitle>
+        {next ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted">{nextMateria?.name} · Aula {next.index + 1}</p>
+              <p className="font-semibold">{next.title}</p>
+            </div>
+            <Link href={`/enem/aula/${next.topicId}`} className={buttonClass("primary")}>
+              <PlayCircle size={16} /> {next.sessionId ? "Continuar" : "Começar"}
             </Link>
-          )}
-        </Card>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">
+            Você concluiu todas as aulas liberadas no seu plano. {hasFullAccess(access) ? "Revise o banco de erros e faça simulados!" : "Assine um plano para liberar mais aulas."}
+          </p>
+        )}
+        <div>
+          <div className="mb-1 flex justify-between text-xs text-muted"><span>Seu progresso no ENEM</span><span>{passed}/{all.length} aulas</span></div>
+          <Progress value={all.length ? passed / all.length : 0} />
+        </div>
+        <Link href="/enem" className="inline-block text-sm text-primary">Ver todas as matérias →</Link>
+      </Card>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {actions.map((a) => (
+          <Link key={a.href} href={a.href}>
+            <Card className="h-full space-y-1 transition-colors hover:border-primary/50">
+              <a.icon size={22} className="text-primary" />
+              <p className="font-semibold">{a.title}</p>
+              <p className="text-xs text-muted">{a.text}</p>
+            </Card>
+          </Link>
+        ))}
+      </div>
+
+      {!hasFullAccess(access) && (
+        <Link href="/assinatura#indicacao" className="block">
+          <Card className="flex items-center gap-3 border-success/50 bg-success/5 transition-colors hover:border-success">
+            <Gift className="shrink-0 text-success" />
+            <div className="min-w-0 flex-1 text-sm">
+              <p className="font-semibold">Indique amigos e tenha tudo liberado por R$ 7,90</p>
+              <p className="text-muted">Compartilhe o seu código. Quando 3 pessoas criarem a conta com ele, você libera o plano com tudo do Completo.</p>
+            </div>
+          </Card>
+        </Link>
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Stat label="Nível" value={<span className="inline-flex items-center gap-1"><Zap size={20} className="text-primary" />{level}</span>} hint={<Progress value={progress} className="mt-1" />} />
-        <Stat label="Meta da semana" value={formatMinutes(weekMinutes)} hint={weekGoal ? <Progress value={weekMinutes / weekGoal} className="mt-1" tone="success" /> : "Sem meta"} />
-        <Stat className="col-span-2 lg:col-span-1" label="Banco de erros" value={errorBank} hint={<Link href="/revisoes" className="text-primary">Refazer questões</Link>} />
+        <Stat label="Para revisar hoje" value={dueQuestions} hint={<Link href="/revisoes" className="text-primary">Revisar</Link>} />
+        <Stat className="col-span-2 lg:col-span-1" label="Banco de erros" value={errorBank} hint={<Link href="/revisoes" className="inline-flex items-center gap-1 text-primary"><RotateCcw size={12} /> Refazer questões</Link>} />
       </div>
 
-      {critical.length > 0 && (
+      {started.length > 0 && (
         <Card>
-          <CardTitle className="flex items-center gap-2"><AlertTriangle size={16} className="text-danger" /> Pontos de atenção</CardTitle>
-          <ul className="mt-3 divide-y divide-border">
-            {critical.map((m) => (
-              <li key={m.topicId} className="flex items-center gap-3 py-2 text-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{m.topic.title}</div>
-                  <div className="text-xs text-muted">{m.topic.subject.name} · {Math.round(m.accuracy * 100)}% de acerto em {m.attempts} questões</div>
-                </div>
-                <MasteryBadge status={m.status} />
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-xs text-muted">Recomendação: refaça essas questões no banco de erros. O plano já agendou um reforço extra para esses assuntos.</p>
-        </Card>
-      )}
-
-      {preps.length > 0 && (
-        <Card>
-          <CardTitle>Progresso dos planos</CardTitle>
+          <CardTitle>Suas matérias</CardTitle>
           <div className="mt-3 space-y-4">
-            {preps.map((p) => {
-              const topics = topicStats.filter((t) => t.subject.preparationId === p.id);
-              const finished = topics.filter((t) => t.mastery[0]?.studyDone).length;
-              return (
-                <Link key={p.id} href={`/preparacoes/${p.id}`} className="block">
-                  <div className="mb-1 flex justify-between text-sm">
-                    <span className="font-medium">{p.title}</span>
-                    <span className="text-muted">{finished}/{topics.length} assuntos</span>
-                  </div>
-                  <Progress value={topics.length ? finished / topics.length : 0} />
-                </Link>
-              );
-            })}
+            {started.map(({ m, done, total }) => (
+              <Link key={m.slug} href={`/enem/${m.slug}`} className="block">
+                <div className="mb-1 flex justify-between text-sm">
+                  <span className="font-medium">{m.name}</span>
+                  <span className="text-muted">{done}/{total} aulas</span>
+                </div>
+                <Progress value={done / Math.max(1, total)} />
+              </Link>
+            ))}
           </div>
         </Card>
       )}

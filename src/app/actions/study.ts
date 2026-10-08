@@ -4,7 +4,7 @@ import { requireReadyUser } from "@/lib/session";
 import { answerQuestion, completeSession, lessonBlocker, nextLesson, openSession, retakeSession, SESSION_MINUTES, studyPulse } from "@/lib/study";
 import { db } from "@/lib/db";
 import { aiErrorMessage } from "@/lib/ai/client";
-import { sessionLimitError } from "@/lib/billing";
+import { getAccess, sessionLimitError } from "@/lib/billing";
 import { findLesson } from "@/lib/enem/catalog";
 import { nextEnemLesson } from "@/lib/enem/progress";
 
@@ -62,7 +62,7 @@ export async function completeSessionAction(sessionId: string) {
   // Estudar ENEM: próxima aula da mesma matéria (ou volta para a matéria quando acabar)
   const enem = session ? findLesson(session.topicId) : null;
   if (enem) {
-    const next = r.passed ? await nextEnemLesson(user.id, enem.materia.slug) : null;
+    const next = r.passed ? await nextEnemLesson(user.id, enem.materia.slug, (await getAccess(user)).limits.lessonsPct) : null;
     return { ...r, nextHref: next ? `/enem/aula/${next.topicId}` : r.passed ? `/enem/${enem.materia.slug}` : null };
   }
   const prepId = session?.plannedSession?.plan.preparationId;

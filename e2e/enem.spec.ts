@@ -3,57 +3,73 @@ import { signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
 
-/** Responde as questões da aula aberta: certas (ou erradas, se `wrong`), consultando o gabarito no banco. */
-async function answerAll(page: Page, handle: string, wrong = false) {
-  const [s] = await sql<{ id: string; questionIds: string[] }>(
-    `SELECT s.id, s."questionIds" FROM "StudySession" s JOIN "user" u ON u.id = s."userId" WHERE u.handle = $1 ORDER BY s."startedAt" DESC LIMIT 1`,
-    [handle],
-  );
-  const qs = await sql<{ id: string; correctAnswer: string }>(`SELECT id, "correctAnswer" FROM "Question" WHERE id = ANY($1)`, [s.questionIds]);
-  const right = new Map(qs.map((q) => [q.id, Number(q.correctAnswer)]));
-  for (const id of s.questionIds) {
-    const card = page.locator(`[data-question="${id}"]`);
-    const pick = wrong ? (right.get(id)! + 1) % 5 : right.get(id)!;
-    await card.locator("button").nth(pick).click();
-    await card.getByRole("button", { name: "Responder" }).click();
+/**
+ * Responde o quiz da aula aberta (as de escrever primeiro, depois as de marcar): certas ou erradas (`wrong`),
+ * consultando o gabarito no banco. Começa logo depois do texto da aula.
+ */
+async function answerAll(page: Page, wrong = false) {
+  await page.getByRole("button", { name: /Já li|Continuar/ }).first().click();
+  // cada etapa mostra as perguntas dela (primeiro as de escrever, depois as de marcar)
+  const onScreen = async () => {
+    await expect(page.locator("[data-question]").first()).toBeAttached();
+    const ids = await page.locator("[data-question]").evaluateAll((els) => els.map((e) => e.getAttribute("data-question")!));
+    const qs = await sql<{ id: string; type: string; correctAnswer: string }>(`SELECT id, type, "correctAnswer" FROM "Question" WHERE id = ANY($1)`, [ids]);
+    const byId = new Map(qs.map((q) => [q.id, q]));
+    return ids.map((id) => byId.get(id)!);
+  };
+  let qs = await onScreen();
+  const open = qs.filter((q) => q.type === "OPEN_RECALL").map((q) => q.id);
+  if (open.length) {
+    for (const q of qs) {
+      const card = page.locator(`[data-question="${q.id}"]`);
+      await card.locator("textarea").fill(wrong ? "não sei" : q.correctAnswer);
+      await card.getByRole("button", { name: "Enviar resposta" }).click();
+      await expect(card.getByText("Resposta-modelo")).toBeVisible();
+    }
+    await page.getByRole("button", { name: "Continuar" }).click();
+    await expect(page.locator(`[data-question="${open[0]}"]`)).toHaveCount(0);
+    qs = await onScreen();
+  }
+  const choice = qs.map((q) => q.id);
+  for (const q of qs) {
+    const card = page.locator(`[data-question="${q.id}"]`);
+    const right = Number(q.correctAnswer);
+    // o cronômetro fixo no topo pode cobrir a alternativa: clica direto no elemento
+    await card.locator("button").nth(wrong ? (right + 1) % 5 : right).dispatchEvent("click");
+    await card.getByRole("button", { name: "Responder" }).dispatchEvent("click");
     await expect(card.getByText(wrong ? /Errou/ : "Acertou")).toBeVisible();
   }
-  return s.questionIds;
+  await page.getByRole("button", { name: "Continuar" }).click();
+  return { open, choice };
 }
 
-test("Estudar ENEM: preparação fixa, aulas com 75%, refazer e simulado do 2º dia", async ({ page }) => {
+test("Estudar ENEM: aulas com quiz e 75%, refazer, banco de erros e simulado do 2º dia", async ({ page }) => {
   const handle = `aluno.enem.${uid}`;
   await signUp(page, { name: "Aluno ENEM", handle });
 
-  // a preparação fixa aparece para todo mundo
-  await page.goto("/preparacoes");
-  await page.getByRole("link", { name: "Estudar ENEM" }).click();
+  // o menu leva direto ao Estudar ENEM
+  await page.getByRole("link", { name: "Estudar", exact: true }).click();
   await expect(page).toHaveURL(/\/enem$/);
   await expect(page.getByText("Como estudar aqui")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Matéria Redação" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Estudar geral" })).toBeVisible();
   await page.getByRole("link", { name: "Matéria Língua Portuguesa" }).click();
   await expect(page.getByText("Bloqueada: tire 75% na aula anterior").first()).toBeVisible();
 
-  // aula 1: texto + 10 questões reais; errando tudo, não passa
+  // aula 1: texto + quiz; errando tudo, não passa
   await page.getByRole("link", { name: "Começar" }).first().click();
   await page.getByRole("button", { name: /Começar aula/ }).click();
   await expect(page.getByRole("heading", { name: "Interpretação de texto: como o ENEM pergunta" })).toBeVisible();
   await expect(page.getByText("Ler é a habilidade mais cobrada do ENEM")).toBeVisible();
-  await page.getByRole("button", { name: "Continuar" }).click();
-  const first = await answerAll(page, handle, true);
-  expect(first).toHaveLength(10);
-  expect(first.every((id) => id.startsWith("enem-"))).toBe(true);
-  await page.getByRole("button", { name: "Continuar" }).click();
+  const first = await answerAll(page, true);
+  expect(first.choice).toHaveLength(5);
   await page.getByRole("button", { name: "Concluir e ver a nota" }).click();
   await expect(page.getByText("Quase lá! Você ainda não passou nesta aula.")).toBeVisible();
 
-  // refazer: vêm outras 10 questões; acertando tudo, passa e libera a próxima
+  // refazer: acertando tudo, passa e libera a próxima
   await page.getByRole("button", { name: /Reestudar e refazer a aula/ }).click();
   await page.getByRole("button", { name: /Refazer em \d+ min/ }).click();
-  await page.getByRole("button", { name: "Continuar" }).click();
-  const second = await answerAll(page, handle);
-  expect(second.filter((id) => first.includes(id)).length).toBeLessThan(3);
-  await page.getByRole("button", { name: "Continuar" }).click();
+  await answerAll(page);
   await page.getByRole("button", { name: "Concluir e ver a nota" }).click();
   await expect(page.getByText("Aula aprovada! Próxima aula liberada.")).toBeVisible();
   await page.getByRole("link", { name: "Próxima aula" }).click();
@@ -62,13 +78,42 @@ test("Estudar ENEM: preparação fixa, aulas com 75%, refazer e simulado do 2º 
   await expect(page.getByText(/Melhor nota: 100%/)).toBeVisible();
   await expect(page.getByText("Aprovada")).toBeVisible();
 
-  // os erros foram para o banco de erros (filtro "Estudar ENEM")
-  await page.goto(`/revisoes?filtro=erros&prep=enem`);
-  await expect(page.getByText(/Questão \d+ do ENEM \d{4}/).first()).toBeVisible();
+  // Redação: quiz próprio (5 de marcar + 1 de escrever, corrigida pela IA) e atividade de redação
+  await page.goto("/enem/redacao");
+  await page.getByRole("link", { name: "Começar" }).first().click();
+  await page.getByRole("button", { name: /Começar aula/ }).click();
+  await expect(page.getByRole("heading", { name: "Como é a redação do ENEM" })).toBeVisible();
+  await expect(page.getByText(/5 perguntas de marcar e 1 de escrever/)).toHaveCount(0);
+  const quiz = await answerAll(page);
+  expect(quiz.choice).toHaveLength(5);
+  expect(quiz.open).toHaveLength(1);
+  expect(quiz.choice.every((id) => id.startsWith("enem-quiz-redacao-1-m"))).toBe(true);
+  await page.getByRole("button", { name: "Concluir e ver a nota" }).click();
+  await expect(page.getByText("Aula aprovada! Próxima aula liberada.")).toBeVisible();
+  const n = (await sql<{ n: string }>(`SELECT count(*)::text AS n FROM "Topic" WHERE id LIKE 'enem-a-redacao-%'`))[0].n;
+  await sql(
+    `INSERT INTO "StudySession" (id, "userId", "topicId", kind, "questionIds", "passedAt", "bestScore", "completedAt")
+     SELECT 'e2e_r_' || u.id || '_' || g, u.id, 'enem-a-redacao-' || g, 'STUDY', '{}', now(), 1, now() FROM "user" u, generate_series(2, $2::int - 1) g WHERE u.handle = $1`,
+    [handle, Number(n)],
+  );
+  await page.goto(`/enem/aula/enem-a-redacao-${n}`);
+  await page.getByRole("button", { name: /Começar aula/ }).click();
+  await expect(page.getByText("Atividade de redação desta aula")).toBeVisible();
+  await page.getByRole("link", { name: "Escrever a redação" }).click();
+  await expect(page.getByText("O impacto do uso excessivo de celulares na saúde mental dos adolescentes").first()).toBeVisible();
+
+  // os erros foram para o banco de erros
+  await page.goto(`/revisoes?filtro=erros`);
+  await expect(page.getByText("Resposta certa:").first()).toBeVisible();
+
+  // início: próxima aula e progresso
+  await page.goto("/inicio");
+  await expect(page.getByText("Próxima aula")).toBeVisible();
+  await expect(page.getByText(/1\/\d+ aulas/).first()).toBeVisible();
 
   // simulado ENEM do 2º dia: 90 questões, 5 horas, entrega e nota por área
   await page.goto("/simulados");
-  await page.getByRole("link", { name: "Simulado ENEM" }).click();
+  await page.getByRole("link", { name: "Simulado ENEM" }).first().click();
   await page.getByRole("button", { name: "Fazer o 2º dia" }).click();
   await expect(page.getByRole("heading", { name: "Simulado ENEM — 2º dia" })).toBeVisible();
   await expect(page.getByText(/90 questões · 300 min/)).toBeVisible();

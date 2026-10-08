@@ -57,8 +57,11 @@ export function EnableNotificationsBanner({ vapidKey }: { vapidKey: string | nul
     (async () => {
       if (!vapidKey || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
       if (Notification.permission === "denied") return;
+      // só aparece dentro do app instalado e uma vez só (no navegador, o aviso do topo é para baixar o app)
+      const installed = window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
+      if (!installed) return;
       try {
-        if (sessionStorage.getItem("eduvia:push-later") === "1") return;
+        if (localStorage.getItem("eduvia:push-asked") === "1") return;
       } catch {}
       const reg = await navigator.serviceWorker.register("/sw.js");
       if (!(await reg.pushManager.getSubscription())) setShow(true);
@@ -74,7 +77,7 @@ export function EnableNotificationsBanner({ vapidKey }: { vapidKey: string | nul
   if (!show) return null;
   const later = () => {
     try {
-      sessionStorage.setItem("eduvia:push-later", "1");
+      localStorage.setItem("eduvia:push-asked", "1");
     } catch {}
   };
   return (
@@ -170,7 +173,7 @@ export function PushSettings({ vapidKey, remindersEnabled }: { vapidKey: string 
           }}
           className="accent-[var(--primary)]"
         />
-        Lembrete no horário de estudo de cada preparação
+        Lembrete na hora de estudar
       </label>
       <div className="flex flex-wrap items-center gap-3">
         {state === "on" ? (

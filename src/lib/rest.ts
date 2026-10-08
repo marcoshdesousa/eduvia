@@ -1,9 +1,10 @@
 // "Descanse": quando o aluno estuda demais (ou bate um limite do dia), sugerimos uma pausa
-// com coisas que não gastam a IA dele: ler o próprio PDF, um livro da matéria, fazer revisões.
+// com coisas que não gastam a IA dele: reler a aula, um livro da matéria, fazer revisões.
 import { db } from "@/lib/db";
 import { getAccess, localDayStart } from "@/lib/billing";
 import { isUnlimited } from "@/lib/plans";
 import { today } from "@/lib/core/dates";
+import { ENEM_PREP_ID, findLesson } from "@/lib/enem/catalog";
 
 type RestUser = { id: string; timezone: string };
 
@@ -40,6 +41,8 @@ export type RestSuggestions = {
   subject: string | null;
   topic: string | null;
   pdf: { title: string; href: string; page: number } | null;
+  /** aula do Estudar ENEM para reler */
+  lesson: { title: string; href: string } | null;
   books: { title: string; author: string }[];
   /** Quando os limites do dia do Eduvia voltam (meia-noite no fuso do aluno). */
   resetAt: Date;
@@ -55,12 +58,16 @@ export async function restSuggestions(user: RestUser, topicId?: string | null): 
     null;
   const topic = id
     ? await db.topic.findFirst({
-        where: { id, subject: { preparation: { userId: user.id } } },
+        where: { id, subject: { preparation: { OR: [{ userId: user.id }, { id: ENEM_PREP_ID }] } } },
         include: { subject: { select: { name: true, books: true, preparationId: true } } },
       })
     : null;
   const resetAt = localDayStart(user.timezone, new Date(Date.now() + 24 * 3600_000));
-  if (!topic) return { subject: null, topic: null, pdf: null, books: [], resetAt };
+  if (!topic) return { subject: null, topic: null, pdf: null, lesson: null, books: [], resetAt };
+  const enem = findLesson(topic.id);
+  if (enem) {
+    return { subject: enem.materia.name, topic: enem.lesson.title, pdf: null, lesson: { title: enem.lesson.title, href: `/enem/aula/${topic.id}` }, books: [], resetAt };
+  }
 
   let pdf: RestSuggestions["pdf"] = null;
   if (topic.materialId) {
@@ -75,5 +82,5 @@ export async function restSuggestions(user: RestUser, topicId?: string | null): 
     if (m && link) pdf = { title: m.title, href: `/fonte/${m.id}?p=${link.chunk.pageStart}`, page: link.chunk.pageStart };
   }
   const books = Array.isArray(topic.subject.books) ? (topic.subject.books as { title: string; author: string }[]) : [];
-  return { subject: topic.subject.name, topic: topic.title, pdf, books, resetAt };
+  return { subject: topic.subject.name, topic: topic.title, pdf, lesson: null, books, resetAt };
 }

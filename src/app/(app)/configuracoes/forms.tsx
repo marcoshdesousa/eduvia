@@ -57,7 +57,7 @@ export function DeleteAccountForm({ handle }: { handle: string }) {
   return (
     <ActionForm action={action} className="space-y-3">
       <FormError message={state?.error} />
-      <p className="text-sm text-muted">Apaga sua conta, preparações, materiais e histórico. Não dá para desfazer. Digite <strong>@{handle}</strong> para confirmar.</p>
+      <p className="text-sm text-muted">Apaga sua conta e todo o seu histórico de estudo. Não dá para desfazer. Digite <strong>@{handle}</strong> para confirmar.</p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input name="confirm" placeholder={`@${handle}`} className="sm:max-w-xs" />
         <Button variant="danger" disabled={pending}>Excluir minha conta</Button>

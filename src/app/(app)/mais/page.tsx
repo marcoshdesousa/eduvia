@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Award, BarChart3, ChevronRight, LifeBuoy, Smartphone, Users, CreditCard, PenLine, RotateCcw, Settings, Shield } from "lucide-react";
+import { Award, Gift, BarChart3, ChevronRight, LifeBuoy, Smartphone, Users, CreditCard, PenLine, RotateCcw, Settings, Shield } from "lucide-react";
 import { requireReadyUser } from "@/lib/session";
 import { db } from "@/lib/db";
 import { ThemeToggle } from "@/components/theme";
@@ -14,7 +14,8 @@ export default async function Page() {
   ]);
   const badge: Record<string, number> = { "/grupos": invites, "/suporte": replies };
   const links = [
-    { href: "/instalar", label: "Instalar o app no celular", icon: Smartphone },
+    { href: "/instalar", label: "Baixar o app do Eduvia", icon: Smartphone },
+    { href: "/assinatura#indicacao", label: "Indique e pague menos", icon: Gift },
     { href: "/perfil", label: "Meu perfil e conquistas", icon: Award },
     { href: "/grupos", label: "Grupos de estudo", icon: Users },
     { href: "/desempenho", label: "Desempenho", icon: BarChart3 },

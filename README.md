@@ -1,6 +1,21 @@
 # Eduvia
 
-Plataforma de estudos com IA para qualquer estudante. O aluno envia os próprios materiais (PDF, DOCX, imagens, texto) e a IA monta o plano de estudo, as sessões com texto e perguntas, as revisões espaçadas e o banco de erros.
+Plataforma de estudos **focada no ENEM**: aulas prontas de todas as matérias e de redação (com o robô lendo e um quiz em cada aula), questões reais do ENEM, simulados com o tempo da prova, redação corrigida, banco de erros e Professor IA.
+
+## Agora: Eduvia só ENEM (outubro de 2026)
+
+- **Sem preparações próprias nem envio de PDF.** As rotas antigas (`/preparacoes`, `/estudar`) levam para `/enem`. As funções de limite de arquivos/preparações em `src/lib/billing.ts` devolvem sempre o aviso "o Eduvia agora é focado no ENEM".
+- **Só a Gemini do aluno** (`ALWAYS_OFF` em `src/lib/ai/providers.ts` desliga Groq e OpenRouter). O cadastro pede só a Gemini.
+- **Planos** (`src/lib/plans.ts`, migração `36_so_enem_indicacao`): **Grátis** para sempre (todas as matérias, 10% das aulas de cada; 1 simulado, 1 redação e 1 teste rápido por mês; 5 perguntas ao Professor IA por mês); **Básico R$ 9,90** (50% das aulas; 1 simulado, 2 redações, 3 testes rápidos e 10 perguntas ao Professor por dia; sem grupos); **Completo R$ 19,90** (R$ 14,90 nos 3 primeiros meses por CPF; tudo; 3 simulados, 5 redações, testes à vontade, 30 perguntas por dia; grupos); **Indicação** (igual ao Completo). Limites por dia e por mês (vale o que acabar primeiro), editáveis em Admin → Planos. Planos antigos (Pro/Avançado/Ilimitado) usam os limites do novo equivalente.
+- **Troca de plano:** só para cima, pagando o preço cheio (sem desconto pelos dias); o novo vale 30 dias a partir do pagamento. Plano menor fica "Indisponível" até o atual acabar; o próprio plano (ou outro do mesmo nível, Completo ↔ Indicação) só renova 2 dias antes de vencer. Plano vencido volta para o Grátis (com aviso por 7 dias).
+- **Indicação** (`src/lib/referral.ts`): cada conta tem um código de 6 números (único). No cadastro há o campo "Código de indicação" (o link `/cadastro?cupom=123456` já preenche). Com **3 indicações**, a pessoa paga o plano Indicação por **R$ 7,90**; depois de usar, precisa de **1 indicação nova** (feita depois do último pagamento) e paga **R$ 9,90**. Não acumula. Cada CPF indicado conta uma vez só, para sempre (tabela `ReferralUse`); o "já usou os R$ 7,90" fica guardado pelo CPF em `PromoUse`.
+- **Quiz das aulas:** cada aula pode ter `quiz` (5 de marcar + 1 a 3 de escrever) e `essay` (atividade de redação) em `src/lib/enem/content/*`. As de escrever são corrigidas pela Gemini; se a IA não responder, uma correção simples (`simpleGrade` em `src/lib/study.ts`) evita travar a aula. Aulas ainda sem quiz próprio usam 5 questões reais do ENEM. Passa com 75%.
+- **Redação** é uma matéria (`content/redacao.ts`).
+- **Teste rápido** usa as questões reais do ENEM (1, 2 ou 3 min por pergunta); **simulados** são só ENEM; o **Professor IA** é um professor do ENEM que usa trechos das aulas.
+- **App:** faixa "Baixe o app" no topo de todas as telas e botão no cabeçalho, no Início e na página inicial (`/baixar-app` é pública). Dentro do app instalado a faixa some e o convite de notificações aparece uma vez só.
+- **Recomeçar do zero:** Admin → Site → "Recomeçar do zero" apaga todas as contas menos as de administrador e o histórico de estudo do administrador (digitando APAGAR TUDO). Nada é apagado sozinho.
+
+As seções abaixo descrevem a versão anterior (preparações próprias com PDF) e ficam como histórico.
 
 - Arquitetura, modelo de dados, telas e fases: [docs/ARQUITETURA.md](docs/ARQUITETURA.md)
 - Status: **Fases 1, 2 e 3 concluídas**: contas por CPF, assinatura manual pelo WhatsApp, plano de estudo, sessões, revisões, teste rápido, simulados, redação, desempenho, Professor IA, grupos de estudo, conquistas, perfil e notificações (app + push/PWA).

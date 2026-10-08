@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { db } from "@/lib/db";
-import { AREAS, areaOf, ENEM_EXAMS, ENEM_PREP_ID, ENEM_TITLE, LESSON_QUESTIONS, lessonTopicId, materiaSubjectId, MATERIAS, SYSTEM_USER_ID, type AreaKey, type EnemExamKind, type Materia } from "./catalog";
+import { AREAS, areaOf, ENEM_EXAMS, ENEM_PREP_ID, ENEM_TITLE, findLesson, LESSON_QUESTIONS, lessonQuizIds, lessonTopicId, materiaSubjectId, MATERIAS, quizChoiceId, quizOpenId, SYSTEM_USER_ID, type AreaKey, type EnemExamKind, type Materia } from "./catalog";
 
 export type BankQuestion = {
   id: string;
@@ -22,9 +22,10 @@ export type BankQuestion = {
 /** Versão do catálogo: muda sozinha quando as aulas ou as questões mudam (o servidor atualiza o banco na próxima vez). */
 async function catalogVersion() {
   const raw = await readFile(path.join(/*turbopackIgnore: true*/ process.cwd(), "data/enem/questions.json"));
-  return `enem-${createHash("sha1").update(JSON.stringify(MATERIAS)).update(raw).digest("hex").slice(0, 12)}`;
+  return `enem-${createHash("sha1").update(SEED_VERSION).update(JSON.stringify(MATERIAS)).update(raw).digest("hex").slice(0, 12)}`;
 }
 const PROMPT_VERSION = "enem-v1";
+const SEED_VERSION = "2";
 
 let bankCache: Promise<BankQuestion[]> | null = null;
 export function loadBank() {
@@ -94,7 +95,18 @@ async function seed() {
       });
       const key = { topicId, part: 1, partCount: 1, studentType: "ENEM_VESTIBULAR" as const, promptVersion: PROMPT_VERSION };
       const data = { content: l.content, highlights: l.highlights, keyPoints: l.keyPoints, sourceRefs: [] };
-      await db.studyText.upsert({ where: { topicId_part_partCount_studentType_promptVersion: key }, create: { ...key, ...data }, update: data });
+      const text = await db.studyText.upsert({ where: { topicId_part_partCount_studentType_promptVersion: key }, create: { ...key, ...data }, update: data, select: { id: true } });
+      // quiz próprio da aula: 5 de marcar + 1 a 3 de escrever (atualiza o texto sem mexer nas respostas dos alunos)
+      for (const [qi, q] of (l.quiz?.choices ?? []).entries()) {
+        const id = quizChoiceId(topicId, qi);
+        const row = { topicId, studyTextId: text.id, type: "MULTIPLE_CHOICE" as const, statement: q.q, options: q.options, correctAnswer: String(q.answer), explanation: q.explanation, difficulty: 2 };
+        await db.question.upsert({ where: { id }, create: { id, ...row }, update: row });
+      }
+      for (const [qi, q] of (l.quiz?.open ?? []).entries()) {
+        const id = quizOpenId(topicId, qi);
+        const row = { topicId, studyTextId: text.id, type: "OPEN_RECALL" as const, statement: q.q, correctAnswer: q.expected, explanation: q.expected, difficulty: 2 };
+        await db.question.upsert({ where: { id }, create: { id, ...row }, update: row });
+      }
     }
   }
 
@@ -178,7 +190,23 @@ function draw(pool: BankQuestion[], count: number, seen: Map<string, number>, pr
   return shuffle(out);
 }
 
-/** 10 questões do ENEM para a aula de uma matéria: da área dela, de preferência da própria matéria. */
+/**
+ * Perguntas da aula: o quiz próprio dela (5 de marcar + 1 a 3 de escrever, sobre o que foi estudado).
+ * Aula ainda sem quiz próprio: 5 questões reais do ENEM da matéria.
+ */
+export async function lessonQuestionIds(userId: string, topicId: string) {
+  const found = findLesson(topicId);
+  if (!found) return [];
+  const quiz = lessonQuizIds(topicId, found.lesson);
+  if (quiz) {
+    // as de marcar em ordem sorteada (as de escrever ficam por último)
+    const n = found.lesson.quiz!.choices.length;
+    return [...shuffle(quiz.slice(0, n)), ...quiz.slice(n)];
+  }
+  return pickLessonQuestions(userId, found.materia);
+}
+
+/** Questões do ENEM para a aula de uma matéria: da área dela, de preferência da própria matéria. */
 export async function pickLessonQuestions(userId: string, materia: Materia, count = LESSON_QUESTIONS) {
   const bank = await loadBank();
   const pool = bank.filter((q) => q.area === materia.area && (materia.lang ? q.lang === materia.lang : !q.lang));
@@ -201,4 +229,11 @@ export async function pickExamQuestions(userId: string, kind: EnemExamKind) {
     }
   }
   return ids;
+}
+
+/** Questões do ENEM para o teste rápido (de uma área ou de todas), as que o aluno ainda não viu primeiro. */
+export async function pickQuickQuestions(userId: string, area: AreaKey | "todas", count: number) {
+  const bank = await loadBank();
+  const pool = area === "todas" ? bank : bank.filter((q) => q.area === area);
+  return draw(pool, count, await seenIds(userId)).map((q) => q.id);
 }

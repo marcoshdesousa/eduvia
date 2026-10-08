@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
-import { BookOpen, Lock } from "lucide-react";
+import { BookOpen, Crown, Lock, PenLine } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { warmLesson } from "@/lib/ai/tts";
+import { getAccess, lessonPlanLock } from "@/lib/billing";
 import { ENEM_TITLE, findLesson, LESSON_MINUTES, LESSON_QUESTIONS, lessonTopicId } from "@/lib/enem/catalog";
 import { ensureEnemCatalog } from "@/lib/enem/bank";
 import { enemSession, lessonUnlocked } from "@/lib/enem/progress";
@@ -45,6 +46,24 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
     </div>
   );
 
+  const lock = lessonPlanLock(await getAccess(user), index, materia.lessons.length);
+  if (lock) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4">
+        {title}
+        <Card className="space-y-3 text-center">
+          <Crown className="mx-auto text-primary" size={32} />
+          <p className="font-semibold">Aula do plano {lock.needs}</p>
+          <p className="text-sm text-muted">
+            O seu plano libera uma parte das aulas de cada matéria. Assine o plano {lock.needs} para estudar esta aula
+            {lock.needs === "Completo" ? " e todas as outras" : " e metade das aulas de cada matéria"}.
+          </p>
+          <Link href="/assinatura" className={buttonClass("primary")}>Ver planos</Link>
+        </Card>
+      </div>
+    );
+  }
+
   if (!(await lessonUnlocked(user.id, topicId))) {
     return (
       <div className="mx-auto max-w-xl space-y-4">
@@ -71,7 +90,14 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
           <p className="flex items-center gap-2 font-semibold"><BookOpen size={18} className="text-primary" /> Como é a aula</p>
           <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
             <li>Leia o texto (ou ouça o robô lendo para você).</li>
-            <li>Responda {LESSON_QUESTIONS} questões reais do ENEM de {materia.name}. Elas são do conteúdo geral da matéria, como na prova.</li>
+            {lesson.quiz ? (
+              <li>
+                Responda o quiz: {lesson.quiz.choices.length} perguntas de marcar e {lesson.quiz.open.length} de escrever, sobre o que você estudou.
+                As de escrever são corrigidas pela IA.
+              </li>
+            ) : (
+              <li>Responda {LESSON_QUESTIONS} questões reais do ENEM de {materia.name}.</li>
+            )}
             <li>Com 75% ou mais, a próxima aula é liberada. Pode refazer quantas vezes quiser.</li>
           </ol>
           <StartLesson topicId={topicId} options={SESSION_MINUTES} suggested={nearestSessionMinutes(minutes)} resume={stale} />
@@ -106,7 +132,7 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
     ];
   });
 
-  return (
+  const view = (
     <SessionView
       key={session.roundStartedAt.toISOString()}
       minuteOptions={{ options: SESSION_MINUTES, suggested: nearestSessionMinutes(minutes) }}
@@ -118,5 +144,19 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
       text={text ? { content: text.content, highlights: text.highlights as string[], keyPoints: text.keyPoints as { term: string; explanation: string }[], refs: [] } : null}
       questions={ordered}
     />
+  );
+  if (!lesson.essay) return view;
+  return (
+    <div className="space-y-6">
+      {view}
+      <Card className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 border-primary/40 bg-primary/5">
+        <PenLine className="shrink-0 text-primary" />
+        <div className="min-w-0 flex-1 text-sm">
+          <p className="font-semibold">Atividade de redação desta aula</p>
+          <p className="text-muted">Tema: {lesson.essay.theme}</p>
+        </div>
+        <Link href={`/redacao/nova?aula=${topicId}`} className={buttonClass("primary", "sm")}>Escrever a redação</Link>
+      </Card>
+    </div>
   );
 }

@@ -21,7 +21,9 @@ type ShareType = "MATERIAL" | "SUMMARY" | "QUESTION_SET" | "EXAM";
 const TYPE_LABEL: Record<ShareType, string> = { MATERIAL: "Material (PDF)", SUMMARY: "Resumo (texto de estudo)", QUESTION_SET: "Lista de questões", EXAM: "Simulado" };
 
 export function ShareForm({ groupId, resources }: { groupId: string; resources: Record<ShareType, { id: string; label: string }[]> }) {
-  const [type, setType] = useState<ShareType>("MATERIAL");
+  // só os tipos que o aluno tem para compartilhar (no Eduvia do ENEM, os simulados); o simulado sempre aparece
+  const types = (Object.keys(TYPE_LABEL) as ShareType[]).filter((t) => t === "EXAM" || resources[t].length);
+  const [type, setType] = useState<ShareType>(types[0] ?? "EXAM");
   const [resourceId, setResourceId] = useState("");
   const [result, setResult] = useState<{ error?: string; message?: string } | null>(null);
   const [pending, start] = useTransition();
@@ -30,7 +32,7 @@ export function ShareForm({ groupId, resources }: { groupId: string; resources: 
     <div className="space-y-2">
       <div className="flex flex-col gap-2 sm:flex-row">
         <Select value={type} onChange={(e) => { setType(e.target.value as ShareType); setResourceId(""); setResult(null); }} className="sm:w-56" aria-label="Tipo">
-          {(Object.keys(TYPE_LABEL) as ShareType[]).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+          {types.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
         </Select>
         <Select value={resourceId} onChange={(e) => { setResourceId(e.target.value); setResult(null); }} aria-label="O que compartilhar">
           <option value="">{options.length ? "Escolha..." : "Nada disponível deste tipo"}</option>

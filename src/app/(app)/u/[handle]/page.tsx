@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Avatar } from "@/components/avatar";
 import { notFound } from "next/navigation";
-import { Flame, Lock, Zap } from "lucide-react";
+import { Lock, Zap } from "lucide-react";
+import { StreakIcon } from "@/components/streak-icon";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { ACHIEVEMENTS, computeStats } from "@/lib/achievements";
@@ -67,7 +68,7 @@ export default async function Page({ params }: { params: Promise<{ handle: strin
         <Progress value={progress} />
       </Card>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Sequência" value={<span className="inline-flex items-center gap-1"><Flame size={20} className="text-warning" />{user.currentStreak}</span>} hint={`recorde ${user.longestStreak}`} />
+        <Stat label="Sequência" value={<span className="inline-flex items-center gap-1"><StreakIcon className="h-5 w-5" />{user.currentStreak}</span>} hint={`recorde ${user.longestStreak}`} />
         <Stat label="Sessões" value={stats.sessions} />
         <Stat label="Questões" value={stats.attempts} hint={stats.attempts ? `${Math.round((accuracy._avg.score ?? 0) * 100)}% de acerto` : undefined} />
         <Stat label="Simulados" value={stats.exams} hint={stats.exams ? `melhor nota ${stats.bestExam.toFixed(1).replace(".", ",")}` : undefined} />

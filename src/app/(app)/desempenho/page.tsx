@@ -105,7 +105,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
         </Card>
         <Card>
           <CardTitle>Minutos estudados por dia</CardTitle>
-          <p className="text-xs text-muted">Últimos 30 dias, todas as preparações</p>
+          <p className="text-xs text-muted">Últimos 30 dias</p>
           <div className="mt-3">
             <ColumnChart data={last30} format="minutes" valueLabel="Minutos" />
           </div>

@@ -22,6 +22,31 @@ describe("Estudar ENEM", () => {
     }
   });
 
+  it("quiz próprio das aulas: 5 de marcar (5 alternativas, gabarito válido) e 1 a 3 de escrever", () => {
+    const withQuiz = MATERIAS.flatMap((m) => m.lessons.map((l, i) => ({ id: `${m.slug} aula ${i + 1}`, l })).filter((x) => x.l.quiz));
+    expect(withQuiz.length).toBeGreaterThan(0);
+    for (const { id, l } of withQuiz) {
+      const q = l.quiz!;
+      expect(q.choices, id).toHaveLength(5);
+      expect(q.open.length, id).toBeGreaterThanOrEqual(1);
+      expect(q.open.length, id).toBeLessThanOrEqual(3);
+      for (const c of q.choices) {
+        expect(c.options, `${id}: ${c.q}`).toHaveLength(5);
+        expect(new Set(c.options).size, `${id}: alternativas repetidas em "${c.q}"`).toBe(5);
+        expect(c.answer, id).toBeGreaterThanOrEqual(0);
+        expect(c.answer, id).toBeLessThan(5);
+        expect(c.explanation.length, id).toBeGreaterThan(20);
+      }
+      for (const o of q.open) expect(o.expected.length, id).toBeGreaterThan(30);
+    }
+  });
+
+  it("a Redação é uma matéria com prática de redação", () => {
+    const r = MATERIAS.find((m) => m.slug === "redacao")!;
+    expect(r.lessons.length).toBeGreaterThanOrEqual(10);
+    expect(r.lessons.some((l) => l.essay)).toBe(true);
+  });
+
   it("questões reais com 5 alternativas e gabarito, nas 4 áreas", () => {
     expect(bank.length).toBeGreaterThan(2500);
     for (const q of bank) {

@@ -99,7 +99,7 @@ export function TutorChat({
     <Card className="flex min-h-[70vh] min-w-0 flex-col p-0">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-3">
         <div className="font-semibold">Professor IA</div>
-        {!threadId && preparations.length > 0 && (
+        {!threadId && preparations.length > 1 && (
           <Select value={prepId} onChange={(e) => setPrepId(e.target.value)} className="h-9 w-auto" aria-label="Preparação">
             {preparations.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
           </Select>
@@ -111,7 +111,7 @@ export function TutorChat({
         {!messages.length && (
           <div className="py-8 text-center">
             <p className="text-lg font-semibold">Tire suas dúvidas</p>
-            <p className="mt-1 text-sm text-muted">Respondo com base nos seus materiais e mostro de qual página veio.</p>
+            <p className="mt-1 text-sm text-muted">Sou o seu professor do ENEM: explico qualquer matéria, crio questões e ajudo na redação.</p>
             {recentThreads.length > 0 && (
               <div className="mt-6 space-y-1 lg:hidden">
                 <p className="text-xs text-muted">Conversas recentes</p>
@@ -182,7 +182,7 @@ export function TutorChat({
                   }
                 }}
                 rows={2}
-                placeholder="Pergunte qualquer coisa sobre o seu material..."
+                placeholder="Pergunte qualquer coisa sobre o ENEM..."
                 className="min-h-12 resize-none"
                 aria-label="Mensagem"
               />
@@ -197,7 +197,7 @@ export function TutorChat({
 
 const THINKING = [
   "Pensando…",
-  "Lendo o seu material…",
+  "Pensando na melhor explicação…",
   "Não saia dessa tela, já estou respondendo.",
   "Organizando a explicação…",
   "Quase terminando…",

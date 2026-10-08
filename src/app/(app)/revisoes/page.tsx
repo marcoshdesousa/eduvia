@@ -45,7 +45,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Revisões</h1>
-        <p className="text-sm text-muted">No banco de erros você vê o que errou e aprende a resposta certa com o seu material. Quando acertar a questão de novo (numa revisão ou teste rápido), ela sai de lá.</p>
+        <p className="text-sm text-muted">No banco de erros você vê o que errou e vê a resposta certa com a explicação. Quando acertar a questão de novo (numa revisão ou teste rápido), ela sai de lá.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Link href={tabHref("hoje")} className={cn("rounded-lg px-3 py-1.5 text-sm font-medium", filter === "hoje" ? "bg-primary/15 text-primary" : "text-muted hover:bg-surface-2")}>

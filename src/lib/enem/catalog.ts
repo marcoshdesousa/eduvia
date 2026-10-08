@@ -9,6 +9,7 @@ import { MORE_LINGUAGENS } from "./content/more-linguagens";
 import { MORE_HUMANAS } from "./content/more-humanas";
 import { MORE_NATUREZA } from "./content/more-natureza";
 import { MORE_MATEMATICA } from "./content/more-matematica";
+import { REDACAO } from "./content/redacao";
 
 export const ENEM_PREP_ID = "enem";
 /** Dono técnico da preparação fixa (não é uma conta de verdade: sem CPF, não entra em listas nem no login). */
@@ -37,7 +38,7 @@ export type Materia = {
 
 // aulas a mais entram DEPOIS das primeiras: o número (e o id) de cada aula não muda e ninguém perde o progresso
 const MORE = { ...MORE_LINGUAGENS, ...MORE_HUMANAS, ...MORE_NATUREZA, ...MORE_MATEMATICA };
-export const MATERIAS: Materia[] = [...LINGUAGENS, ...HUMANAS, ...NATUREZA, ...MATEMATICA].map((m) => ({ ...m, lessons: [...m.lessons, ...(MORE[m.slug] ?? [])] }));
+export const MATERIAS: Materia[] = [...LINGUAGENS, ...HUMANAS, ...NATUREZA, ...MATEMATICA, ...REDACAO].map((m) => ({ ...m, lessons: [...m.lessons, ...(MORE[m.slug] ?? [])] }));
 
 export const materiaSubjectId = (slug: string) => `enem-m-${slug}`;
 export const lessonTopicId = (materia: string, lesson: number) => `enem-a-${materia}-${lesson + 1}`;
@@ -54,8 +55,16 @@ export function findLesson(topicId: string) {
 
 export const isEnemQuestion = (questionId: string) => questionId.startsWith("enem-");
 
-/** Perguntas por aula (questões do ENEM da matéria, não só do que foi estudado). */
-export const LESSON_QUESTIONS = 10;
+/** Perguntas de marcar por aula. Aulas com quiz próprio têm 5 de marcar + 1 a 3 de escrever (sobre o que foi estudado). */
+export const LESSON_QUESTIONS = 5;
+
+/** Ids das perguntas do quiz próprio da aula (ficam gravadas no banco junto com a aula). */
+export const quizChoiceId = (topicId: string, n: number) => `${topicId.replace(/^enem-a-/, "enem-quiz-")}-m${n + 1}`;
+export const quizOpenId = (topicId: string, n: number) => `${topicId.replace(/^enem-a-/, "enem-quiz-")}-e${n + 1}`;
+export function lessonQuizIds(topicId: string, lesson: EnemLesson) {
+  if (!lesson.quiz) return null;
+  return [...lesson.quiz.choices.map((_, i) => quizChoiceId(topicId, i)), ...lesson.quiz.open.map((_, i) => quizOpenId(topicId, i))];
+}
 /** Tempo sugerido de cada aula (o aluno escolhe; texto + 10 questões). */
 export const LESSON_MINUTES = 20;
 

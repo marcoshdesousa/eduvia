@@ -24,7 +24,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { slug: "primeira-sessao", name: "Primeiro passo", description: "Conclua sua primeira sessão de estudo.", emoji: "🌱", test: (s) => s.sessions >= 1 },
   { slug: "sessoes-10", name: "Pegando o ritmo", description: "Conclua 10 sessões de estudo.", emoji: "📚", test: (s) => s.sessions >= 10 },
   { slug: "sessoes-50", name: "Maratonista", description: "Conclua 50 sessões de estudo.", emoji: "🏃", test: (s) => s.sessions >= 50 },
-  { slug: "sequencia-3", name: "Três em sequência", description: "Estude 3 dias seguidos.", emoji: "🔥", test: (s) => s.longestStreak >= 3 },
+  { slug: "sequencia-3", name: "Três em sequência", description: "Estude 3 dias seguidos.", emoji: "📆", test: (s) => s.longestStreak >= 3 },
   { slug: "sequencia-7", name: "Semana perfeita", description: "Estude 7 dias seguidos.", emoji: "⚡", test: (s) => s.longestStreak >= 7 },
   { slug: "sequencia-30", name: "Imparável", description: "Estude 30 dias seguidos.", emoji: "🏆", test: (s) => s.longestStreak >= 30 },
   { slug: "questoes-100", name: "Cem questões", description: "Responda 100 questões.", emoji: "✍️", test: (s) => s.attempts >= 100 },

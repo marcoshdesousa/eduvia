@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
-import { INTERVALS, intervalInfo, priceFor } from "@/lib/plans";
+import { INTERVALS, intervalInfo, LEGACY_PLANS, priceFor } from "@/lib/plans";
 import { formatBRL, listPlans, localDayStart, localMonthStart } from "@/lib/billing";
 import { onlyDigits } from "@/lib/core/cpf";
 import { formatCpf, formatPhone } from "@/lib/core/phone";
@@ -23,6 +23,7 @@ import { CloseTicketButton } from "./close-ticket-button";
 import { ALL_PROVIDERS, disabledProviders, hasKey, providerLabel } from "@/lib/ai/providers";
 import { toggleProviderAction } from "@/app/actions/ai";
 import { VoiceTest } from "./voice-test";
+import { ResetForm } from "./reset-form";
 
 export const metadata = { title: "Admin" };
 
@@ -145,6 +146,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
     return (
       <div className="space-y-6">
         {header}
+        <Card className="space-y-3 border-danger/40">
+          <div>
+            <CardTitle>Recomeçar do zero</CardTitle>
+            <p className="text-sm text-muted">
+              Apaga todas as contas, menos as de administrador. Da sua conta, apaga as preparações e o histórico de estudo (aulas, simulados,
+              redações, grupos). A sua conta, o login, a IA e o plano ficam. Não dá para desfazer.
+            </p>
+          </div>
+          <ResetForm others={total - (await db.user.count({ where: { isAdmin: true, cpf: { not: null } } }))} />
+        </Card>
         <Card className="space-y-4">
           <div>
             <CardTitle>Redes sociais</CardTitle>
@@ -161,7 +172,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
     return (
       <div className="space-y-6">
         {header}
-        {plans.map((p) => <PlanEditor key={p.slug} plan={{ ...p, subscribers: counts.find((c) => c.planSlug === p.slug)?._count ?? 0 }} />)}
+        {plans.filter((p) => !LEGACY_PLANS[p.slug] || counts.some((c) => c.planSlug === p.slug)).map((p) => <PlanEditor key={p.slug} plan={{ ...p, subscribers: counts.find((c) => c.planSlug === p.slug)?._count ?? 0 }} />)}
       </div>
     );
   }
@@ -273,7 +284,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
     take: 30,
   });
   const paidPlans = plans
-    .filter((p) => p.slug !== "gratis")
+    .filter((p) => p.slug !== "gratis" && p.active)
     .map((p) => ({ slug: p.slug, name: p.name, prices: INTERVALS.flatMap((i) => (priceFor(p, i.key) > 0 ? [{ key: i.key, label: `${i.label} (${formatBRL(priceFor(p, i.key))})` }] : [])) }));
 
   return (
@@ -303,7 +314,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
                   ) : (
                     <Badge tone="warning">Grátis</Badge>
                   )}
-                  {ALL_PROVIDERS.every((p) => aiOff.includes(p) || hasKey(u, p)) ? <Badge tone="primary">IAs conectadas</Badge> : <Badge tone="danger">IAs incompletas</Badge>}
+                  {ALL_PROVIDERS.every((p) => aiOff.includes(p) || hasKey(u, p)) ? <Badge tone="primary">Gemini conectada</Badge> : <Badge tone="danger">Sem Gemini</Badge>}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-muted">
                   <span>CPF {formatCpf(u.cpf!)}</span>

@@ -2,10 +2,11 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { addDays, keyFromDay, weekdayShort } from "@/lib/core/dates";
 import { buttonClass } from "@/components/ui/button";
+import { StreakIcon } from "@/components/streak-icon";
 
 /**
- * Sequência no estilo Duolingo: foguinho aceso quando o aluno já estudou hoje,
- * apagado (cinza) quando ainda falta estudar para manter a sequência.
+ * Sequência no estilo Duolingo: chama acesa quando o aluno já estudou hoje,
+ * apagada (cinza) quando ainda falta estudar para manter a sequência.
  */
 export function StreakCard({
   streak,
@@ -35,7 +36,7 @@ export function StreakCard({
       )}
     >
       <div className="flex items-center gap-4">
-        <Flame lit={lit} />
+        <StreakIcon lit={lit} className={cn("h-16 w-14", lit && "streak-flame")} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <span className={cn("font-display text-4xl font-extrabold tabular-nums", lit ? "text-[#f97316]" : "text-muted")}>{streak}</span>
@@ -43,7 +44,7 @@ export function StreakCard({
           </div>
           <p className="text-sm text-muted">
             {lit
-              ? "Foguinho aceso! Você já estudou hoje. Volte amanhã para manter a sequência."
+              ? "Sequência garantida! Você já estudou hoje. Volte amanhã para continuar."
               : streak > 0
                 ? `Estude ${goal} minutos hoje para não perder a sua sequência!`
                 : `Comece uma sequência hoje: basta estudar ${goal} minutos.`}
@@ -65,7 +66,7 @@ export function StreakCard({
                 )}
                 aria-label={on ? "estudou" : "não estudou"}
               >
-                {on ? "🔥" : "·"}
+                {on ? <StreakIcon mono className="h-4 w-4" /> : "·"}
               </span>
             </li>
           );
@@ -87,23 +88,5 @@ export function StreakCard({
         {!lit && <Link href={href} className={buttonClass("primary", "sm")}>Estudar agora</Link>}
       </div>
     </section>
-  );
-}
-
-function Flame({ lit }: { lit: boolean }) {
-  return (
-    <svg viewBox="0 0 48 60" className={cn("h-16 w-14 shrink-0", lit && "streak-flame")} aria-hidden>
-      <path
-        d="M24 2c3 9 14 15 14 30a14 14 0 0 1-28 0c0-7 3-11 6-14 0 5 2 8 5 9-2-9 1-18 3-25z"
-        fill={lit ? "url(#flameOuter)" : "var(--border)"}
-      />
-      <path d="M24 30c2 5 7 7 7 13a7 7 0 0 1-14 0c0-4 2-6 4-8 0 2 1 4 2 4-1-4 0-7 1-9z" fill={lit ? "#fde68a" : "var(--surface-2)"} />
-      <defs>
-        <linearGradient id="flameOuter" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fbbf24" />
-          <stop offset="1" stopColor="#ea580c" />
-        </linearGradient>
-      </defs>
-    </svg>
   );
 }

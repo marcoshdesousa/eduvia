@@ -4,6 +4,7 @@ import { apiUser, jsonError } from "@/lib/api";
 import { db } from "@/lib/db";
 import { featureLimitError } from "@/lib/billing";
 import { tutorReply } from "@/lib/tutor";
+import { ENEM_PREP_ID } from "@/lib/enem/catalog";
 
 const Body = z.object({
   threadId: z.string().nullish(),
@@ -24,7 +25,9 @@ export async function POST(req: Request) {
 
   let thread = b.threadId ? await db.tutorThread.findFirst({ where: { id: b.threadId, userId: user.id } }) : null;
   if (!thread) {
-    const prep = b.preparationId ? await db.preparation.findFirst({ where: { id: b.preparationId, userId: user.id } }) : null;
+    // o Professor IA conversa sobre o ENEM (a preparação fixa da plataforma)
+    const prepId = b.preparationId || ENEM_PREP_ID;
+    const prep = prepId === ENEM_PREP_ID ? { id: ENEM_PREP_ID } : await db.preparation.findFirst({ where: { id: prepId, userId: user.id } });
     if (!prep) return jsonError("Escolha uma preparação", 400);
     thread = await db.tutorThread.create({ data: { userId: user.id, preparationId: prep.id, title: b.content.replace(/\s+/g, " ").slice(0, 70) } });
   }

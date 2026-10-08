@@ -76,15 +76,17 @@ test("login por CPF ou @ e nova senha pelo CPF + telefone", async ({ page, brows
   await device2.close();
 });
 
-test("teste grátis acabou: a conta continua salva e, ao entrar, vai direto para assinar", async ({ page }) => {
+test("plano venceu: a conta continua e volta para o Grátis, com aviso para renovar", async ({ page }) => {
   const handle = `expirou.${uid}`;
-  await signUp(page, { name: "Teste Acabou", handle, plan: "gratis" });
-  await sql(`UPDATE "user" SET "trialEndsAt" = now() - interval '1 day' WHERE handle = $1`, [handle]);
+  await signUp(page, { name: "Plano Acabou", handle });
+  await sql(`UPDATE "Subscription" SET "currentPeriodEnd" = now() - interval '1 hour' WHERE "userId" = (SELECT id FROM "user" WHERE handle = $1)`, [handle]);
   await page.goto("/inicio");
-  await expect(page).toHaveURL(/\/assinatura/);
-  await expect(page.getByText(/Seu teste grátis acabou/).first()).toBeVisible();
-  await page.goto("/preparacoes");
-  await expect(page).toHaveURL(/\/assinatura/);
-  await page.goto("/suporte");
-  await expect(page).toHaveURL(/\/suporte/);
+  await expect(page).toHaveURL(/\/inicio/);
+  await expect(page.getByText(/Seu plano Completo venceu e você voltou para o Grátis/).first()).toBeVisible();
+  await page.goto("/assinatura");
+  await expect(page.getByText("Seu plano: Grátis")).toBeVisible();
+  await expect(page.getByText("Plano Completo vencido")).toBeVisible();
+  // continua estudando no Grátis (10% das aulas)
+  await page.goto("/enem");
+  await expect(page.getByText("10% das aulas liberadas")).toBeVisible();
 });

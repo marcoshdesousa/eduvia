@@ -36,6 +36,15 @@ export function RestCard({
         </div>
       </div>
       <ul className="space-y-3 text-sm">
+        {s.lesson && (
+          <li className="flex items-start gap-2">
+            <BookOpen size={16} className="mt-0.5 shrink-0 text-primary" />
+            <span>
+              <strong>Reler a aula</strong> com calma, sem pressa:{" "}
+              <a href={s.lesson.href} className="text-primary underline">{s.lesson.title}</a>
+            </span>
+          </li>
+        )}
         {s.pdf && (
           <li className="flex items-start gap-2">
             <FileText size={18} className="mt-0.5 shrink-0 text-primary" />
@@ -56,7 +65,7 @@ export function RestCard({
             </span>
           </li>
         )}
-        {!s.pdf && !s.books.length && (
+        {!s.pdf && !s.lesson && !s.books.length && (
           <li className="flex items-start gap-2">
             <BookOpen size={18} className="mt-0.5 shrink-0 text-primary" />
             <span><strong>Ler um livro</strong>{s.subject ? ` de ${s.subject}` : " sobre o que você está estudando"}, sem pressa, para fixar o assunto.</span>

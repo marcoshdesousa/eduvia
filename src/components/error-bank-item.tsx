@@ -74,7 +74,7 @@ export function ErrorBankItem({
               })
             }
           >
-            {pending ? <Loader2 size={16} className="animate-spin" /> : <BookOpenCheck size={16} />} Aprender o certo com o meu material
+            {pending ? <Loader2 size={16} className="animate-spin" /> : <BookOpenCheck size={16} />} Entender a resposta certa
           </Button>
         </>
       )}

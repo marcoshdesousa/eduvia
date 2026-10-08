@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import { Avatar } from "@/components/avatar";
-import { Flame, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
+import { StreakIcon } from "@/components/streak-icon";
 import { Logo } from "@/components/brand";
 import { BottomNav, SideNav } from "@/components/app-nav";
 import { ThemeToggle } from "@/components/theme";
@@ -19,9 +18,7 @@ import { EnableNotificationsBanner, RegisterServiceWorker } from "@/components/p
 import { vapidPublicKey } from "@/lib/notifications";
 import { NotificationBell } from "@/components/notification-bell";
 import { PdfViewerHost } from "@/components/pdf-viewer";
-
-/** Páginas liberadas com o teste encerrado ou o plano vencido: assinar, falar com o suporte e os ajustes da conta (sair). */
-const EXPIRED_ALLOWED = ["/assinatura", "/suporte", "/configuracoes", "/mais", "/notificacoes"];
+import { InstallBar, InstallButton } from "@/components/install-app";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireReadyUser();
@@ -32,12 +29,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db.groupInvite.count({ where: { inviteeId: user.id, status: "PENDING" } }),
     db.supportMessage.count({ where: { fromStaff: true, readAt: null, ticket: { userId: user.id } } }),
   ]);
-  // teste grátis acabou ou o plano venceu: a conta continua salva e o aluno entra normalmente,
-  // mas vai direto para a tela de pagar (pagou, libera na hora)
-  if (access.reason === "expired") {
-    const path = (await headers()).get("x-pathname") ?? "";
-    if (!EXPIRED_ALLOWED.some((p) => path === p || path.startsWith(`${p}/`))) redirect("/assinatura");
-  }
   const badges = { "/grupos": invites, "/suporte": supportReplies, "/mais": invites + supportReplies };
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[240px_1fr]">
@@ -58,7 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="text-xs text-muted">nível {level}</span>
           </div>
           <div className="flex items-center gap-4 text-xs text-muted">
-            <span className="inline-flex items-center gap-1"><Flame size={14} className="text-warning" />{user.currentStreak} dia(s)</span>
+            <span className="inline-flex items-center gap-1"><StreakIcon className="h-3.5 w-3.5" />{user.currentStreak} dia(s)</span>
             <span className="inline-flex items-center gap-1"><Zap size={14} className="text-primary" />{user.xp} XP</span>
           </div>
           <ThemeToggle withLabel />
@@ -68,8 +59,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/90 px-4 py-3 backdrop-blur md:hidden">
           <Logo href="/inicio" />
           <div className="flex items-center gap-3 text-xs text-muted">
-            <span className="inline-flex items-center gap-1"><Flame size={14} className="text-warning" />{user.currentStreak}</span>
+            <span className="inline-flex items-center gap-1"><StreakIcon className="h-3.5 w-3.5" />{user.currentStreak}</span>
             <span className="inline-flex items-center gap-1"><Zap size={14} className="text-primary" />{user.xp}</span>
+            <InstallButton compact label="Baixar o app" className="text-primary" />
             <NotificationBell count={unread} />
             <Link href="/perfil" aria-label="Meu perfil"><Avatar id={user.avatar} name={user.name} size={28} /></Link>
           </div>
@@ -84,6 +76,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             stateKey={`${access.until.toISOString().slice(0, 10)}`}
           />
         )}
+        <InstallBar />
         <EnableNotificationsBanner vapidKey={await vapidPublicKey()} />
         {isMockAi() && (
           <div className="border-b border-warning/30 bg-warning/10 px-4 py-2 text-center text-xs text-warning">

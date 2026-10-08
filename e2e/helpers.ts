@@ -10,10 +10,10 @@ export const GEMINI_KEY = "AIzaChaveDeTesteDoEduvia1234567890";
  * Cria a conta pela tela de cadastro. Por padrão já libera o plano pago (via banco),
  * para os testes de funcionalidade não esbarrarem nos limites do plano Grátis.
  */
-export async function signUp(page: Page, opts: { name: string; handle: string; plan?: "eduvia" | "gratis" }) {
+export async function signUp(page: Page, opts: { name: string; handle: string; plan?: "completo" | "basico" | "gratis"; coupon?: string; cpf?: string }) {
   // os testes criam muitas contas do mesmo IP: zera o limite de cadastros
   await sql(`DELETE FROM verification WHERE identifier LIKE 'limit:signup:%'`);
-  const cpf = randomCpf();
+  const cpf = opts.cpf ?? randomCpf();
   const phone = randomPhone();
   await page.goto("/cadastro");
   await page.getByLabel("Nome", { exact: true }).fill(opts.name);
@@ -23,21 +23,23 @@ export async function signUp(page: Page, opts: { name: string; handle: string; p
   await expect(page.getByText("Disponível!")).toBeVisible();
   await page.getByLabel("Senha", { exact: true }).fill(PASSWORD);
   await page.getByLabel("Confirme a senha").fill(PASSWORD);
+  if (opts.coupon) await page.getByLabel("Código de indicação (opcional)").fill(opts.coupon);
   await page.locator('input[name="terms"]').check();
-  // passo 1 cria a conta; passo 2: conectar as IAs (Gemini, Groq e OpenRouter)
+  // passo 1 cria a conta; passo 2: conectar a Gemini
   await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page).toHaveURL(/\/conectar-ia/);
   await connectAis(page);
   await page.getByRole("link", { name: /Começar a estudar/ }).click();
   await expect(page).toHaveURL(/\/inicio/);
-  if ((opts.plan ?? "eduvia") === "eduvia") await grantPlan(opts.handle);
+  const plan = opts.plan ?? "completo";
+  if (plan !== "gratis") await grantPlan(opts.handle, plan);
   return { cpf, phone };
 }
 
 /** Chaves de teste (o servidor em AI_MODE=mock aceita qualquer chave com formato plausível). */
 export const AI_KEYS = { gemini: GEMINI_KEY, groq: "gsk_chavedetestedoeduvia123456", openrouter: "sk-or-v1-chavedetestedoeduvia123456" } as const;
 
-/** Conecta as IAs na tela "Conecte suas IAs": uma por tela; ao conectar, aparece a próxima. */
+/** Conecta a IA na tela "Conecte a sua IA" (só a Gemini; as outras ficam desligadas). */
 export async function connectAis(page: Page) {
   for (const [p, key] of Object.entries(AI_KEYS)) {
     const card = page.locator(`#ia-${p}`);
@@ -55,11 +57,11 @@ export async function generateLessons(page: Page) {
   await expect(page.getByText("Aulas geradas")).toBeVisible({ timeout: 120_000 });
 }
 
-export async function grantPlan(handle: string) {
+export async function grantPlan(handle: string, plan = "completo") {
   await sql(
     `INSERT INTO "Subscription" (id, "userId", "planSlug", provider, status, interval, "billingType", "currentPeriodEnd", "updatedAt")
-     SELECT 'e2e_' || id, id, 'eduvia', 'manual', 'ACTIVE', 'MONTH', 'MANUAL', now() + interval '30 days', now() FROM "user" WHERE handle = $1`,
-    [handle],
+     SELECT 'e2e_' || id, id, $2, 'manual', 'ACTIVE', 'MONTH', 'MANUAL', now() + interval '30 days', now() FROM "user" WHERE handle = $1`,
+    [handle, plan],
   );
 }
 

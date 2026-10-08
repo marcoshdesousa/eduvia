@@ -1,14 +1,14 @@
 "use server";
 import { redirect } from "next/navigation";
-import { aiErrorMessage } from "@/lib/ai/client";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { featureLimitError } from "@/lib/billing";
-import { ensureQuestionPool } from "@/lib/question-bank";
+import { ensureEnemCatalog, pickQuickQuestions } from "@/lib/enem/bank";
+import { ENEM_PREP_ID, type AreaKey } from "@/lib/enem/catalog";
 import { answerQuestion } from "@/lib/study";
 import { addXp } from "@/lib/gamification";
 import { checkAchievementsSafe } from "@/lib/achievements";
-import { QUICK_COUNTS, QUICK_MAX_CORRECT_SHARE, QUICK_SECONDS, QUICK_TEST_SLUG, type QuickAnswerResult } from "@/lib/quick-test";
+import { QUICK_AREAS, QUICK_COUNTS, QUICK_SECONDS, QUICK_TEST_SLUG, type QuickAnswerResult } from "@/lib/quick-test";
 import type { FormState } from "./account";
 
 const MIN_QUESTIONS = 5;
@@ -20,33 +20,18 @@ export async function createQuickTestAction(_: FormState, f: FormData): Promise<
   const count = Number(f.get("count"));
   const seconds = Number(f.get("seconds"));
   if (!(QUICK_COUNTS as readonly number[]).includes(count)) return { error: "Escolha 10, 15 ou 20 perguntas." };
-  if (!(QUICK_SECONDS as readonly number[]).includes(seconds)) return { error: "Escolha 10, 15, 20 ou 30 segundos por pergunta." };
+  if (!(QUICK_SECONDS as readonly number[]).includes(seconds)) return { error: "Escolha 1, 2 ou 3 minutos por pergunta." };
   const done = await db.gameRun.count({ where: { userId: user.id, gameSlug: QUICK_TEST_SLUG } });
   const name = String(f.get("name") ?? "").trim().slice(0, 60) || `Teste ${done + 1}`;
 
-  const prep = await db.preparation.findFirst({ where: { id: String(f.get("preparationId")), userId: user.id }, include: { editalAnalysis: true } });
-  if (!prep) return { error: "Escolha uma preparação." };
-  const subjectId = String(f.get("subjectId") ?? "") || null;
-  const topics = await db.topic.findMany({
-    where: { subject: { preparationId: prep.id, ...(subjectId ? { id: subjectId } : {}) } },
-    select: { id: true, mastery: { where: { userId: user.id }, select: { studyDone: true } } },
-  });
-  // prioriza o que o aluno já estudou (as perguntas são sobre o que ele viu)
-  const studied = topics.filter((t) => t.mastery[0]?.studyDone).map((t) => t.id);
-  const topicIds = studied.length ? studied : topics.map((t) => t.id);
-  if (!topicIds.length) return { error: "Essa preparação ainda não tem assuntos. Envie seus materiais primeiro." };
-
-  let questionIds: string[];
-  try {
-    questionIds = await ensureQuestionPool({ userId: user.id, prep, topicIds, needed: count, purpose: "jogo", maxCorrectShare: QUICK_MAX_CORRECT_SHARE });
-  } catch (e) {
-    console.error("[teste rápido]", e);
-    return { error: aiErrorMessage(e, "Não foi possível preparar as perguntas agora. Tente de novo.") };
-  }
-  if (questionIds.length < MIN_QUESTIONS) return { error: "Ainda há poucas perguntas sobre esses assuntos. Estude mais sessões ou envie mais material." };
+  const area = String(f.get("area") ?? "todas");
+  if (!QUICK_AREAS.some((x) => x.key === area)) return { error: "Escolha a área." };
+  await ensureEnemCatalog();
+  const questionIds = await pickQuickQuestions(user.id, area as AreaKey | "todas", count);
+  if (questionIds.length < MIN_QUESTIONS) return { error: "Não foi possível montar o teste agora. Tente de novo." };
 
   const run = await db.gameRun.create({
-    data: { userId: user.id, preparationId: prep.id, gameSlug: QUICK_TEST_SLUG, name, topicIds, questionIds, config: { count, seconds } },
+    data: { userId: user.id, preparationId: ENEM_PREP_ID, gameSlug: QUICK_TEST_SLUG, name, topicIds: [], questionIds, config: { count, seconds, area } },
   });
   redirect(`/teste-rapido/${run.id}`);
 }

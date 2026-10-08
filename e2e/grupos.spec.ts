@@ -1,24 +1,9 @@
-import { expect, test, type Page } from "@playwright/test";
-import { makeStudyPdf } from "./fixtures";
-import { generateLessons, signUp, sql } from "./helpers";
+import { expect, test } from "@playwright/test";
+import { signUp, sql } from "./helpers";
 
 const uid = Date.now().toString(36);
 
-async function newPrep(page: Page, title: string, pdf: boolean) {
-  await page.goto("/preparacoes/nova");
-  await page.getByRole("button", { name: /Outro \/ estudo livre/ }).click();
-  await page.getByLabel("Nome da preparação").fill(title);
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByRole("button", { name: "Criar e enviar materiais" }).click();
-  await expect(page).toHaveURL(/\/preparacoes\/(?!nova)[^/?]+/);
-  if (pdf) {
-    await page.locator('input[type="file"][multiple]').setInputFiles({ name: "apostila.pdf", mimeType: "application/pdf", buffer: await makeStudyPdf(10) });
-    await expect(page.getByText("Pronto", { exact: true })).toBeVisible({ timeout: 90_000 });
-    await generateLessons(page);
-  }
-}
-
-test("fase 3: grupo com convite, mural, compartilhamento, simulado com ranking, conquistas e perfil", async ({ browser }) => {
+test("grupos (plano Completo): convite, código, mural, simulado compartilhado com ranking, torneio, conquistas e perfil", async ({ browser }) => {
   test.setTimeout(240_000);
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
@@ -27,11 +12,9 @@ test("fase 3: grupo com convite, mural, compartilhamento, simulado com ranking, 
   await signUp(a, { name: "Ana Dona", handle: ha });
   await signUp(b, { name: "Beto Membro", handle: hb });
 
-  // Ana: preparação com material e um simulado (gera questões)
-  await newPrep(a, "Biologia da Ana", true);
-  await a.goto("/simulados/novo");
-  await a.getByRole("button", { name: "30", exact: true }).click();
-  await a.getByRole("button", { name: "Montar simulado" }).click();
+  // Ana monta um simulado ENEM de Matemática (para compartilhar com o grupo)
+  await a.goto("/simulados/enem");
+  await a.getByRole("button", { name: /Matemática/ }).first().click();
   await expect(a.getByRole("button", { name: "Começar simulado" })).toBeVisible({ timeout: 90_000 });
 
   // Ana cria o grupo e convida o Beto pelo @
@@ -81,51 +64,23 @@ test("fase 3: grupo com convite, mural, compartilhamento, simulado com ranking, 
   await a.goto(groupUrl);
   await expect(a.getByText("Oi, pessoal!")).toBeVisible({ timeout: 10_000 });
 
-  // Ana compartilha material, lista de questões e simulado
+  // Ana compartilha o simulado
   await a.goto(`${groupUrl}?aba=compartilhados`);
-  for (const [i, type] of (["MATERIAL", "QUESTION_SET", "EXAM"] as const).entries()) {
-    await a.getByLabel("Tipo").selectOption(type);
-    await a.getByLabel("O que compartilhar").selectOption({ index: 1 });
-    await a.getByRole("button", { name: "Compartilhar" }).click();
-    await expect(a.getByText("Compartilhado com o grupo!")).toBeVisible();
-    await expect(a.getByRole("button", { name: "Remover" })).toHaveCount(i + 1);
-  }
-
-  // Beto adiciona o material à própria preparação (sem reprocessar)
-  await newPrep(b, "Biologia do Beto", false);
-  await b.goto(`${groupUrl}?aba=compartilhados`);
-  await b.getByRole("button", { name: "Adicionar à minha preparação" }).click();
-  await b.getByRole("button", { name: "Adicionar", exact: true }).click();
-  await expect(b.getByText(/Adicionado a "Biologia do Beto"/)).toBeVisible();
-
-  // Beto pratica a lista de questões
-  await b.getByRole("link", { name: "Praticar" }).first().click();
-  await expect(b.getByText(/Os erros entram no seu banco de erros/)).toBeVisible();
-  const first = b.locator("[data-question]").first();
-  await first.locator("button").first().click();
-  await first.getByRole("button", { name: "Responder" }).click();
-  await expect(first.getByText("Explicação:")).toBeVisible();
+  await a.getByLabel("Tipo").selectOption("EXAM");
+  await a.getByLabel("O que compartilhar").selectOption({ index: 1 });
+  await a.getByRole("button", { name: "Compartilhar" }).click();
+  await expect(a.getByText("Compartilhado com o grupo!")).toBeVisible();
 
   // Beto faz o simulado do grupo e vê o ranking
   await b.goto(`${groupUrl}?aba=compartilhados`);
   await b.getByRole("link", { name: "Fazer simulado" }).click();
   await b.getByRole("button", { name: "Começar simulado" }).click();
   await expect(b.getByText(/Questão 1 de/)).toBeVisible();
-  const total = await b.getByRole("button", { name: /Ir para a questão/ }).count();
-  for (let i = 0; i < total; i++) {
-    await b.getByRole("button", { name: `Ir para a questão ${i + 1}`, exact: true }).click();
-    await b.locator("[data-option='0']").click();
-  }
+  await b.locator("[data-option='0']").click();
+  b.on("dialog", (d) => d.accept());
   await b.getByRole("button", { name: "Entregar prova" }).click();
   await expect(b.getByText("Ranking — Turma de Biologia")).toBeVisible({ timeout: 30_000 });
   await expect(b.locator("ol").getByText(`@${hb}`)).toBeVisible();
-
-  // material importado ficou pronto na preparação do Beto
-  await b.goto("/preparacoes");
-  await b.getByRole("link", { name: /Biologia do Beto/ }).click();
-  await b.getByRole("link", { name: "Materiais", exact: true }).click();
-  await expect(b.getByText("Pronto", { exact: true })).toBeVisible({ timeout: 60_000 });
-  await generateLessons(b);
 
   // conquista de grupo e perfil
   await b.goto("/perfil");
@@ -165,7 +120,6 @@ test("fase 3: grupo com convite, mural, compartilhamento, simulado com ranking, 
   a.on("dialog", (d) => d.accept());
   await a.getByRole("button", { name: "Tornar admin" }).click();
   await expect(a.getByText("Admin", { exact: true })).toBeVisible();
-  b.on("dialog", (d) => d.accept());
   await b.goto(`${groupUrl}?aba=membros`);
   await b.getByRole("button", { name: "Sair do grupo" }).click();
   await expect(b).toHaveURL(/\/grupos$/);

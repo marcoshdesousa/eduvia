@@ -78,6 +78,65 @@ export function InstallSteps() {
 
 const DISMISS_KEY = "eduvia-install-dismissed";
 
+/**
+ * Faixa no topo de todas as telas convidando a baixar o app. Some de vez quando o app está instalado
+ * (aberto pelo ícone). Fechar esconde só nesta visita.
+ */
+export function InstallBar() {
+  const { info, prompt, install } = useInstall();
+  const [hidden, setHidden] = useState(true);
+  useEffect(() => {
+    try {
+      setHidden(sessionStorage.getItem(DISMISS_KEY) === "1");
+    } catch {
+      setHidden(false);
+    }
+  }, []);
+  if (!info || info.installed || hidden) return null;
+  return (
+    <div className="flex items-center gap-3 border-b border-primary/30 bg-primary/10 px-4 py-2 text-sm" role="status">
+      <Smartphone size={16} className="shrink-0 text-primary" />
+      <span className="min-w-0 flex-1">Baixe o app do Eduvia: abre mais rápido e avisa a hora de estudar.</span>
+      {prompt ? (
+        <Button size="sm" onClick={install}><Download size={14} /> Baixar</Button>
+      ) : (
+        <Link href="/instalar" className={buttonClass("primary", "sm")}><Download size={14} /> Baixar</Link>
+      )}
+      <button
+        type="button"
+        aria-label="Fechar"
+        className="text-muted hover:text-foreground"
+        onClick={() => {
+          setHidden(true);
+          try {
+            sessionStorage.setItem(DISMISS_KEY, "1");
+          } catch {}
+        }}
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
+/** Botão "Baixar o app" (some quando o app já está instalado). Serve para o topo e para a página inicial. */
+export function InstallButton({ className, label = "Baixar o app", compact = false, href = "/instalar" }: { className?: string; label?: string; compact?: boolean; href?: string }) {
+  const { info, prompt, install } = useInstall();
+  if (info?.installed) return null;
+  if (compact) {
+    return prompt ? (
+      <button type="button" onClick={install} aria-label={label} className={className}><Download size={18} /></button>
+    ) : (
+      <Link href={href} aria-label={label} className={className}><Download size={18} /></Link>
+    );
+  }
+  return prompt ? (
+    <Button onClick={install} className={className}><Download size={16} /> {label}</Button>
+  ) : (
+    <Link href={href} className={buttonClass("outline", "md", className)}><Download size={16} /> {label}</Link>
+  );
+}
+
 /** Convite para instalar o app: aparece em toda visita até instalar (fechar esconde só nesta visita). */
 export function InstallAppBanner() {
   const { info, prompt, install } = useInstall();

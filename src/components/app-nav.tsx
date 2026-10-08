@@ -1,12 +1,12 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, BarChart3, BookOpen, LifeBuoy, CreditCard, GraduationCap, Home, Menu, PenLine, Settings, Shield, Target } from "lucide-react";
+import { Users, BarChart3, BookOpen, LifeBuoy, CreditCard, Download, GraduationCap, Home, Menu, PenLine, Settings, Shield, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { href: "/inicio", label: "Início", icon: Home },
-  { href: "/preparacoes", label: "Preparações", icon: BookOpen },
+  { href: "/enem", label: "Estudar ENEM", icon: BookOpen },
   { href: "/praticar", label: "Praticar", icon: Target },
   { href: "/professor", label: "Professor IA", icon: GraduationCap },
   { href: "/redacao", label: "Redação", icon: PenLine },
@@ -15,24 +15,25 @@ const ITEMS = [
   { href: "/assinatura", label: "Assinatura", icon: CreditCard },
   { href: "/suporte", label: "Suporte", icon: LifeBuoy },
   { href: "/configuracoes", label: "Ajustes", icon: Settings },
+  { href: "/instalar", label: "Baixar o app", icon: Download },
 ];
 
 const MOBILE = [
   { href: "/inicio", label: "Início", icon: Home },
-  { href: "/preparacoes", label: "Estudar", icon: BookOpen },
+  { href: "/enem", label: "Estudar", icon: BookOpen },
   { href: "/praticar", label: "Praticar", icon: Target },
   { href: "/professor", label: "Professor", icon: GraduationCap },
   { href: "/mais", label: "Mais", icon: Menu },
 ];
 
 const PRACTICE = ["/praticar", "/revisoes", "/teste-rapido", "/simulados"];
-const MORE = ["/mais", "/minha-ia", "/descanse", "/suporte", "/instalar", "/redacao", "/desempenho", "/assinatura", "/configuracoes", "/admin", "/grupos", "/perfil", "/u", "/notificacoes"];
+const MORE = ["/mais", "/minha-ia", "/descanse", "/suporte", "/redacao", "/desempenho", "/assinatura", "/configuracoes", "/admin", "/grupos", "/perfil", "/u", "/notificacoes"];
 
 function useActive() {
   const path = usePathname();
   const under = (p: string) => path === p || path.startsWith(p + "/");
   return (href: string) =>
-    href === "/praticar" ? PRACTICE.some(under) : href === "/mais" ? MORE.some(under) : under(href) || (href === "/preparacoes" && under("/estudar"));
+    href === "/praticar" ? PRACTICE.some(under) : href === "/mais" ? MORE.some(under) : under(href) || (href === "/enem" && under("/estudar"));
 }
 
 /** Bolinha com número (ex.: convites de grupo pendentes). */

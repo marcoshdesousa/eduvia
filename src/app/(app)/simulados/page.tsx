@@ -26,9 +26,9 @@ export default async function Page() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Simulados</h1>
-          <p className="text-sm text-muted">Provas cronometradas com questões do seu material.</p>
+          <p className="text-sm text-muted">Provas com questões reais do ENEM e o tempo da prova.</p>
         </div>
-        <Link href="/simulados/novo" className={buttonClass("primary")}><Plus size={16} /> Novo</Link>
+        <Link href="/simulados/enem" className={buttonClass("primary")}><Plus size={16} /> Novo</Link>
       </div>
 
       <Link href="/simulados/enem" className="block" aria-label="Simulado ENEM">
@@ -60,8 +60,8 @@ export default async function Page() {
       {!exams.length && (
         <Card className="text-center">
           <p className="font-medium">Nenhum simulado ainda</p>
-          <p className="mt-1 text-sm text-muted">Monte uma prova com as disciplinas que quiser e veja sua nota no final.</p>
-          <Link href="/simulados/novo" className={buttonClass("primary", "md", "mt-4")}>Criar simulado</Link>
+          <p className="mt-1 text-sm text-muted">Faça a prova do 1º ou do 2º dia do ENEM (ou de uma área) e veja sua nota no final.</p>
+          <Link href="/simulados/enem" className={buttonClass("primary", "md", "mt-4")}>Fazer simulado ENEM</Link>
         </Card>
       )}
       <div className="space-y-3">

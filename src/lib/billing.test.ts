@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addPeriod, localDayStart, localMonthStart } from "./billing";
-import { DEFAULT_PLANS, INTERVALS, normalizeLimits, planFeatures, TRIAL_DAYS } from "./plans";
+import { DEFAULT_PLANS, INTERVALS, lessonsAllowed, normalizeLimits, planFeatures, planRank } from "./plans";
 import { isValidCnpj, isValidCpf } from "./core/cpf";
 import { normalizePhone } from "./core/phone";
 
@@ -40,31 +40,46 @@ describe("assinatura", () => {
 
 describe("planos", () => {
   it("completa limites faltando com os padrões e aceita ilimitado", () => {
-    const l = normalizeLimits({ gamesPerDay: -1, groups: "sim", examsPerMonth: 2.4 }, "eduvia");
+    const l = normalizeLimits({ gamesPerDay: -1, groups: "sim", examsPerMonth: 2.4 }, "basico");
     expect(l.gamesPerDay).toBe(-1);
-    expect(l.groups).toBe(true);
+    expect(l.groups).toBe(false);
     expect(l.examsPerMonth).toBe(2);
-    expect(l.tutorMessagesPerDay).toBe(20);
+    expect(l.tutorMessagesPerDay).toBe(10);
+    expect(l.lessonsPct).toBe(50);
+  });
+  it("planos antigos usam os limites do plano novo equivalente", () => {
+    expect(normalizeLimits({ examsPerMonth: 4 }, "eduvia").lessonsPct).toBe(50);
+    expect(normalizeLimits({}, "ilimitado").lessonsPct).toBe(100);
+    expect(planRank("avancado")).toBe(2);
   });
   it("lista os benefícios do plano", () => {
-    const f = planFeatures(DEFAULT_PLANS[0].limits);
-    expect(f).toContain("Sem grupos");
-    expect(f).toContain("1 teste rápido por dia");
-    expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("3 guias de estudo por mês");
-    expect(planFeatures(DEFAULT_PLANS[1].limits)).toContain("Professor IA: 20 mensagens por dia");
-    expect(planFeatures(DEFAULT_PLANS[3].limits)).toContain("Testes rápidos à vontade");
-  });
-  it("três planos mensais (9,90, 19,90 e 34,90) e teste grátis de 3 dias, todos com arquivos sem limite", () => {
     const by = Object.fromEntries(DEFAULT_PLANS.map((p) => [p.slug, p]));
-    const paid = [by.eduvia, by.avancado, by.ilimitado];
-    expect(paid.map((p) => p.priceMonthCents)).toEqual([990, 1990, 3490]);
-    expect(paid.every((p) => p.priceWeekCents === 0 && p.priceFortnightCents === 0)).toBe(true);
+    const free = planFeatures(by.gratis.limits);
+    expect(free).toContain("Todas as matérias, com 10% das aulas");
+    expect(free).toContain("1 simulado ENEM por mês");
+    expect(free).toContain("Sem grupos de estudo");
+    expect(planFeatures(by.basico.limits)).toContain("Todas as matérias, com metade das aulas");
+    expect(planFeatures(by.basico.limits)).toContain("2 redações corrigidas por dia");
+    expect(planFeatures(by.basico.limits)).toContain("Professor IA: 10 perguntas por dia");
+    expect(planFeatures(by.completo.limits)).toContain("Testes rápidos à vontade");
+    expect(planFeatures(by.completo.limits)).toContain("3 simulados ENEM por dia");
+    expect(planFeatures(by.completo.limits)).toContain("Grupos de estudo e torneios");
+  });
+  it("Grátis, Básico R$ 9,90, Completo R$ 19,90 e Indicação (igual ao Completo)", () => {
+    const by = Object.fromEntries(DEFAULT_PLANS.map((p) => [p.slug, p]));
+    expect(DEFAULT_PLANS.map((p) => p.slug)).toEqual(["gratis", "basico", "completo", "indicacao"]);
+    expect([by.basico.priceMonthCents, by.completo.priceMonthCents, by.indicacao.priceMonthCents]).toEqual([990, 1990, 990]);
+    expect(by.indicacao.limits).toEqual(by.completo.limits);
     expect(INTERVALS.map((i) => i.key)).toEqual(["MONTH"]);
-    expect(TRIAL_DAYS).toBe(3);
-    expect(DEFAULT_PLANS.every((p) => p.limits.materials === -1 && p.limits.pagesPerPdf === -1 && p.limits.pagesPerDay === -1)).toBe(true);
-    expect(by.ilimitado.limits.essaysPerDay).toBe(-1);
-    expect(by.gratis.limits.essaysPerDay).toBe(1);
-    expect(by.gratis.limits.examsPerMonth).toBe(1);
-    expect(DEFAULT_PLANS.filter((p) => p.slug !== "gratis").map((p) => p.slug)).toEqual(["eduvia", "avancado", "ilimitado"]);
+    expect([by.gratis.limits.lessonsPct, by.basico.limits.lessonsPct, by.completo.limits.lessonsPct]).toEqual([10, 50, 100]);
+    expect(by.basico.limits.groups).toBe(false);
+    expect(by.completo.limits.groups).toBe(true);
+  });
+  it("parte das aulas liberada (pelo menos 1)", () => {
+    expect(lessonsAllowed(10, 10)).toBe(1);
+    expect(lessonsAllowed(40, 10)).toBe(4);
+    expect(lessonsAllowed(3, 10)).toBe(1);
+    expect(lessonsAllowed(9, 50)).toBe(5);
+    expect(lessonsAllowed(9, 100)).toBe(9);
   });
 });

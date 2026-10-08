@@ -1,4 +1,5 @@
 "use client";
+import { QuestionText, isRichQuestion } from "@/components/rich-text";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
@@ -122,8 +123,8 @@ export function QuickTestPlayer({
       </div>
       <Card className="space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-lg font-medium">{q.statement}</p>
-          <span className="shrink-0 rounded-md bg-surface-2 px-2 py-1 font-mono text-sm font-bold tabular-nums">{Math.ceil(left / 1000)}s</span>
+          <QuestionText text={q.statement} rich={isRichQuestion(q.id)} className="min-w-0 flex-1" />
+          <span className="shrink-0 rounded-md bg-surface-2 px-2 py-1 font-mono text-sm font-bold tabular-nums">{fmtLeft(Math.ceil(left / 1000))}</span>
         </div>
         <div className="grid gap-2">
           {options.map((opt, i) => {
@@ -144,7 +145,7 @@ export function QuickTestPlayer({
                 )}
               >
                 <span className="grid size-6 shrink-0 place-items-center rounded-md bg-surface-2 text-xs font-bold">{LETTERS[i]}</span>
-                {opt}
+                <QuestionText text={opt} rich={isRichQuestion(q.id)} className="min-w-0 flex-1" />
               </button>
             );
           })}
@@ -155,4 +156,9 @@ export function QuickTestPlayer({
       </Card>
     </div>
   );
+}
+
+/** "45s" ou "1:45". */
+function fmtLeft(s: number) {
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }

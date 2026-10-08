@@ -12,7 +12,10 @@ export const providerLabel = (p: AiProvider) => (p === "gemini" ? "Gemini" : EXT
 const DISABLED_KEY = "ai-disabled";
 let cache: { at: number; disabled: AiProvider[] } | null = null;
 
-/** IAs desligadas pelo admin (saem do cadastro e não são usadas). */
+/** O Eduvia usa só a Gemini do aluno (Groq e OpenRouter ficam desligadas para todo mundo). */
+const ALWAYS_OFF: AiProvider[] = ["groq", "openrouter"];
+
+/** IAs desligadas (saem do cadastro e não são usadas). */
 export async function disabledProviders(): Promise<AiProvider[]> {
   if (cache && Date.now() - cache.at < 30_000) return cache.disabled;
   const row = await db.siteSetting.findUnique({ where: { key: DISABLED_KEY } }).catch(() => null);
@@ -20,6 +23,7 @@ export async function disabledProviders(): Promise<AiProvider[]> {
   try {
     disabled = row ? (JSON.parse(row.value) as AiProvider[]).filter((p) => ALL_PROVIDERS.includes(p)) : [];
   } catch {}
+  disabled = [...new Set([...disabled, ...ALWAYS_OFF])];
   cache = { at: Date.now(), disabled };
   return disabled;
 }

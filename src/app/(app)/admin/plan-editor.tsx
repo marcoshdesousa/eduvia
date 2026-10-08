@@ -27,9 +27,11 @@ export function PlanEditor({ plan }: { plan: Plan }) {
           <Field label="Nome" htmlFor={`${plan.slug}-name`}><Input id={`${plan.slug}-name`} name="name" defaultValue={plan.name} /></Field>
           {!isFree && (
             <>
-              <Field label="Preço 7 dias (R$)" htmlFor={`${plan.slug}-w`}><Input id={`${plan.slug}-w`} name="priceWeek" inputMode="decimal" defaultValue={money(plan.priceWeekCents)} /></Field>
-              <Field label="Preço 15 dias (R$)" htmlFor={`${plan.slug}-f`}><Input id={`${plan.slug}-f`} name="priceFortnight" inputMode="decimal" defaultValue={money(plan.priceFortnightCents)} /></Field>
-              <Field label="Preço 30 dias (R$)" htmlFor={`${plan.slug}-m`}><Input id={`${plan.slug}-m`} name="priceMonth" inputMode="decimal" defaultValue={money(plan.priceMonthCents)} /></Field>
+              <input type="hidden" name="priceWeek" value={money(plan.priceWeekCents)} />
+              <input type="hidden" name="priceFortnight" value={money(plan.priceFortnightCents)} />
+              <Field label={plan.slug === "indicacao" ? "Preço 30 dias a partir da 2ª vez (R$)" : "Preço 30 dias (R$)"} htmlFor={`${plan.slug}-m`}>
+                <Input id={`${plan.slug}-m`} name="priceMonth" inputMode="decimal" defaultValue={money(plan.priceMonthCents)} />
+              </Field>
             </>
           )}
         </div>
@@ -53,7 +55,11 @@ export function PlanEditor({ plan }: { plan: Plan }) {
             Mostrar este plano na página de assinatura
           </label>
         )}
-        <p className="text-xs text-muted">Preço 0 esconde aquele período. Use -1 para ilimitado. As mudanças valem na hora para todos os alunos deste plano.</p>
+        <p className="text-xs text-muted">
+          Use -1 para ilimitado (nos limites por dia e por mês vale o que acabar primeiro). As mudanças valem na hora para todos os alunos deste plano.
+          {plan.slug === "completo" && " Promoção: R$ 14,90 nos 3 primeiros meses de cada CPF."}
+          {plan.slug === "indicacao" && " A primeira vez (com 3 indicações) custa R$ 7,90."}
+        </p>
       </ActionForm>
     </Card>
   );

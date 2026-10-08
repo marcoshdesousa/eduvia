@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { BookOpenCheck, ChevronRight, Info, PlayCircle, Timer } from "lucide-react";
 import { requireReadyUser } from "@/lib/session";
+import { getAccess } from "@/lib/billing";
+import { lessonsAllowed } from "@/lib/plans";
 import { AREAS, ENEM_TITLE, MATERIAS } from "@/lib/enem/catalog";
 import { ensureEnemCatalog } from "@/lib/enem/bank";
 import { lessonStates } from "@/lib/enem/progress";
@@ -14,19 +16,19 @@ export const metadata = { title: ENEM_TITLE };
 export default async function Page() {
   const user = await requireReadyUser();
   await ensureEnemCatalog();
-  const states = await lessonStates(user.id);
+  const access = await getAccess(user);
+  const states = await lessonStates(user.id, undefined, access.limits.lessonsPct);
   const all = [...states.values()].flat();
   const passed = all.filter((l) => l.passed).length;
 
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/preparacoes" className="text-sm text-muted hover:text-foreground">← Preparações</Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{ENEM_TITLE}</h1>
-          <Badge tone="primary">Da plataforma</Badge>
+          <Badge tone="primary">{access.limits.lessonsPct >= 100 ? "Todas as aulas liberadas" : `${access.limits.lessonsPct}% das aulas liberadas`}</Badge>
         </div>
-        <p className="text-sm text-muted">Aulas de todas as matérias do ENEM e questões reais das provas (2009 a 2023). As aulas são para todo mundo e não contam nos limites do seu plano.</p>
+        <p className="text-sm text-muted">Aulas de todas as matérias do ENEM e de redação, com quiz em cada aula, e questões reais das provas (2009 a 2023) nos simulados.</p>
       </div>
 
       <Card className="flex gap-3 border-primary/40 bg-primary/5 text-sm">
@@ -34,9 +36,9 @@ export default async function Page() {
         <div className="space-y-1">
           <p className="font-semibold">Como estudar aqui</p>
           <p className="text-muted">
-            No ENEM não dá para saber qual assunto vai cair. Por isso, a ideia é estudar as aulas de cada matéria e treinar com questões reais:
-            em cada pergunta, entenda o tema e por que a resposta certa é a certa. As questões das aulas são do conteúdo geral da matéria, como no
-            ENEM (não só do que você acabou de ler). Tire pelo menos 75% para liberar a próxima aula. O que errar vai para o banco de erros.
+            Estude as aulas de cada matéria: leia o texto (ou ouça o robô) e responda o quiz da aula, com perguntas de marcar e de escrever
+            sobre o que você estudou. Tire pelo menos 75% para liberar a próxima aula. O que errar vai para o banco de erros. Depois, treine
+            com os simulados, que têm questões reais do ENEM e o tempo da prova.
           </p>
         </div>
       </Card>
@@ -57,8 +59,8 @@ export default async function Page() {
         <Progress value={all.length ? passed / all.length : 0} />
       </Card>
 
-      {AREAS.map((area) => {
-        const materias = MATERIAS.filter((m) => m.area === area.key);
+      {[{ key: "redacao", name: "Redação" }, ...AREAS].map((area) => {
+        const materias = MATERIAS.filter((m) => (area.key === "redacao" ? m.slug === "redacao" : m.area === area.key && m.slug !== "redacao"));
         if (!materias.length) return null;
         return (
           <section key={area.key} className="space-y-3">
@@ -67,6 +69,7 @@ export default async function Page() {
               {materias.map((m) => {
                 const ls = states.get(m.slug) ?? [];
                 const done = ls.filter((l) => l.passed).length;
+                const free = lessonsAllowed(ls.length, access.limits.lessonsPct);
                 return (
                   <Link key={m.slug} href={`/enem/${m.slug}`} aria-label={`Matéria ${m.name}`}>
                     <Card className="h-full space-y-3 transition-colors hover:border-primary/50">
@@ -76,7 +79,7 @@ export default async function Page() {
                       </div>
                       <div>
                         <div className="mb-1 flex justify-between text-xs text-muted">
-                          <span>{ls.length} aulas</span>
+                          <span>{ls.length} aulas{free < ls.length ? ` · ${free} liberadas` : ""}</span>
                           <span>{done}/{ls.length} concluídas · {Math.round((done / Math.max(1, ls.length)) * 100)}%</span>
                         </div>
                         <Progress value={done / Math.max(1, ls.length)} />

@@ -1,64 +1,51 @@
-// Troca de plano: desconto pelos dias que o aluno não usou do plano atual (cálculo por dia).
+// Troca de plano: só dá para subir de plano (paga o preço cheio do novo, sem desconto pelos dias que sobraram).
+import { planRank } from "@/lib/plans";
+
 const DAY_MS = 86_400_000;
-/** Menor valor de um Pix (troca para um plano mais barato com muito crédito sobrando). */
-const MIN_PIX_CENTS = 100;
 
 export type PlanQuote = {
   priceCents: number;
-  /** desconto pelos dias não usados do plano atual (só na troca de plano) */
-  creditCents: number;
-  /** valor do Pix */
+  /** valor do Pix (sempre o preço cheio do mês: não há desconto na troca) */
   payCents: number;
   /** dias que o pagamento libera */
   days: number;
-  /** troca de plano: qual era e quantos dias sobravam */
-  change: { fromName: string; unusedDays: number } | null;
+  /** subindo de plano: de qual plano (o anterior acaba na hora) */
+  change: { fromName: string } | null;
 };
 
-/**
- * Quanto custa assinar o plano agora.
- * - Sem plano ou mesmo plano (renovação): preço cheio, 30 dias (na renovação, somam ao final).
- * - Troca de plano: o novo plano vale 30 dias a partir de agora e o aluno ganha desconto pelos dias que
- *   não usou do plano atual (preço do plano atual ÷ 30 × dias que sobraram). Se o crédito for maior que o
- *   preço (troca para um plano mais barato), paga o mínimo e o que sobrar vira dias a mais no plano novo.
- */
+/** Quanto custa assinar o plano agora: o preço do mês, 30 dias (na renovação, somam ao final do plano atual). */
 export function quotePlan(
   plan: { slug: string; name: string; priceCents: number },
-  current: { planSlug: string; planName: string; priceCents: number; currentPeriodEnd: Date } | null,
+  current: { planSlug: string; planName: string; currentPeriodEnd: Date } | null,
   now = new Date(),
 ): PlanQuote {
-  const price = plan.priceCents;
-  if (!current || current.planSlug === plan.slug || current.currentPeriodEnd <= now) {
-    return { priceCents: price, creditCents: 0, payCents: price, days: 30, change: null };
-  }
-  const unusedDays = Math.max(0, Math.min(30, Math.floor((current.currentPeriodEnd.getTime() - now.getTime()) / DAY_MS)));
-  const credit = Math.round((current.priceCents / 30) * unusedDays);
-  const pay = Math.max(Math.min(price, MIN_PIX_CENTS), price - credit);
-  const used = price - pay; // parte do crédito usada como desconto
-  const extraDays = price > 0 ? Math.floor((credit - used) / (price / 30)) : 0;
-  return { priceCents: price, creditCents: used, payCents: pay, days: 30 + Math.max(0, extraDays), change: { fromName: current.planName, unusedDays } };
+  const upgrade = !!current && current.currentPeriodEnd > now && planRank(plan.slug) > planRank(current.planSlug);
+  return { priceCents: plan.priceCents, payCents: plan.priceCents, days: 30, change: upgrade ? { fromName: current!.planName } : null };
 }
-
 
 export type PlanOption =
   | { kind: "buy" } // sem plano ativo: compra normal
-  | { kind: "upgrade" } // plano mais caro que o atual: troca com desconto
-  | { kind: "renew" } // o próprio plano, nos dias antes de vencer
+  | { kind: "upgrade" } // plano maior que o atual: paga o novo e ele vale a partir de agora
+  | { kind: "renew" } // o próprio plano (ou o do mesmo nível), nos dias antes de vencer
   | { kind: "current"; until: Date } // o próprio plano, longe de vencer: nada a pagar
-  | { kind: "lower"; availableAt: Date }; // plano mais barato: só depois que o atual acabar
+  | { kind: "lower"; availableAt: Date }; // plano menor (ou do mesmo nível): só mais perto do fim do atual
 
 /**
- * O que o aluno pode fazer com cada plano: com um plano ativo, só dá para subir de plano (com desconto)
- * ou renovar o mesmo perto de vencer. Plano mais barato fica indisponível até o atual acabar.
+ * O que o aluno pode fazer com cada plano: com um plano ativo, só dá para subir de plano ou renovar perto de vencer
+ * (o próprio plano ou outro do mesmo nível, como Completo ↔ Indicação). Plano menor fica indisponível até o atual acabar.
  */
 export function planOption(
-  plan: { slug: string; priceCents: number },
-  current: { planSlug: string; priceCents: number; currentPeriodEnd: Date } | null,
+  plan: { slug: string },
+  current: { planSlug: string; currentPeriodEnd: Date } | null,
   renewOpen: boolean,
   now = new Date(),
+  renewDays = 2,
 ): PlanOption {
   if (!current || current.currentPeriodEnd <= now) return { kind: "buy" };
+  const rank = planRank(plan.slug);
+  const cur = planRank(current.planSlug);
   if (current.planSlug === plan.slug) return renewOpen ? { kind: "renew" } : { kind: "current", until: current.currentPeriodEnd };
-  if (plan.priceCents > current.priceCents) return { kind: "upgrade" };
+  if (rank > cur) return { kind: "upgrade" };
+  if (rank === cur) return renewOpen ? { kind: "renew" } : { kind: "lower", availableAt: new Date(current.currentPeriodEnd.getTime() - renewDays * DAY_MS) };
   return { kind: "lower", availableAt: current.currentPeriodEnd };
 }

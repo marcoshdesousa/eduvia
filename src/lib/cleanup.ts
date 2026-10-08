@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { deleteObject } from "@/lib/storage";
 
 /** Apaga blobs sem nenhum material apontando para eles (arquivo + trechos). */
-async function deleteOrphanBlobs(blobIds: string[]) {
+export async function deleteOrphanBlobs(blobIds: string[]) {
   for (const id of blobIds) {
     const used = await db.material.count({ where: { blobId: id } });
     if (used) continue;

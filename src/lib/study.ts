@@ -12,7 +12,7 @@ import { addXp, registerStudy, XP } from "@/lib/gamification";
 import { checkAchievementsSafe } from "@/lib/achievements";
 import { canAccessQuestion } from "@/lib/groups";
 import { findLesson } from "@/lib/enem/catalog";
-import { pickLessonQuestions } from "@/lib/enem/bank";
+import { lessonQuestionIds } from "@/lib/enem/bank";
 
 export type { SourceRef } from "@/lib/sources";
 import type { SourceRef } from "@/lib/sources";
@@ -243,15 +243,22 @@ export async function answerQuestion(input: {
   if (question.type === "OPEN_RECALL") {
     const cacheKey = `grade:${PROMPT_VERSION}:${question.id}:${createHash("sha256").update(input.answer.trim().toLowerCase()).digest("hex")}`;
     const cached = await db.aiCache.findUnique({ where: { key: cacheKey } });
-    const grade = (cached?.value as Awaited<ReturnType<typeof gradeOpenAnswer>> | undefined) ??
+    let aiFailed = false;
+    const grade =
+      (cached?.value as Awaited<ReturnType<typeof gradeOpenAnswer>> | undefined) ??
       (await gradeOpenAnswer({
         userId: input.userId,
         voice: profileVoice(prep.studentType, (prep.details ?? {}) as Record<string, unknown>),
         question: question.statement,
         expectedAnswer: question.correctAnswer,
         answer: input.answer,
+      }).catch((e) => {
+        // a IA do aluno falhou (sem chave, no limite, fora do ar): corrige de um jeito simples para não travar a aula
+        console.error("[correção] IA indisponível, usando a correção simples", e instanceof Error ? e.message : e);
+        aiFailed = true;
+        return simpleGrade(question.correctAnswer, input.answer);
       }));
-    if (!cached && input.answer.trim()) {
+    if (!cached && !aiFailed && input.answer.trim()) {
       await db.aiCache.create({ data: { key: cacheKey, task: "grade", value: grade } }).catch(() => {});
     }
     result = {
@@ -316,6 +323,34 @@ export async function answerQuestion(input: {
   return result;
 }
 
+const STOP = new Set("a o as os um uma uns umas de da do das dos em na no nas nos por para com sem que se e ou é ao à às pelo pela pelos pelas como mais menos mas também seu sua seus suas ele ela eles elas isso esse essa este esta são ser foi era há tem ter".split(" "));
+const words = (t: string) =>
+  t
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2 && !STOP.has(w));
+
+/**
+ * Correção simples (sem IA), usada quando a IA do aluno não responde: compara as palavras importantes da
+ * resposta esperada com as da resposta do aluno. É generosa de propósito, para não travar a aula.
+ */
+export function simpleGrade(expected: string, answer: string) {
+  const want = [...new Set(words(expected))];
+  const got = new Set(words(answer).map((w) => w.slice(0, 6)));
+  const hit = want.filter((w) => got.has(w.slice(0, 6))).length;
+  const ratio = want.length ? hit / want.length : 0;
+  const score = answer.trim().split(/\s+/).length < 3 ? Math.min(0.3, ratio) : Math.min(1, ratio * 1.6);
+  const verdict = score >= 0.75 ? "CORRETA" : score >= 0.4 ? "PARCIAL" : "INCORRETA";
+  return {
+    score,
+    verdict: verdict as "CORRETA" | "PARCIAL" | "INCORRETA",
+    feedback: "A IA não respondeu agora, então fizemos uma correção simples comparando com a resposta esperada. Confira abaixo o que era esperado.",
+    missingPoints: [],
+  };
+}
+
 async function updateMastery(userId: string, topicId: string, score: number) {
   const m = await db.topicMastery.findUnique({ where: { userId_topicId: { userId, topicId } } });
   const attempts = (m?.attempts ?? 0) + 1;
@@ -375,9 +410,9 @@ export async function nextLesson(preparationId: string) {
 export async function retakeSession(sessionId: string, userId: string) {
   const session = await db.studySession.findFirst({ where: { id: sessionId, userId } });
   if (!session) return null;
-  // Estudar ENEM: cada tentativa vem com outras 10 questões do ENEM (para não decorar as mesmas)
+  // Estudar ENEM: o quiz da aula (em outra ordem); aula sem quiz próprio vem com outras questões do ENEM
   const enem = findLesson(session.topicId);
-  const questionIds = enem ? await pickLessonQuestions(userId, enem.materia) : undefined;
+  const questionIds = enem ? await lessonQuestionIds(userId, session.topicId) : undefined;
   return db.studySession.update({ where: { id: sessionId }, data: { roundStartedAt: new Date(), completedAt: null, roundPulses: 0, ...(questionIds?.length ? { questionIds } : {}) } });
 }
 

@@ -6,8 +6,7 @@ import { auth, internalEmail } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { checkHandleAvailable } from "@/lib/handles";
 import { requireUser } from "@/lib/session";
-import { TRIAL_DAYS } from "@/lib/plans";
-import { getAccess } from "@/lib/billing";
+import { ensureReferralCode, findReferrer, recordReferral } from "@/lib/referral";
 import { TERMS_VERSION } from "@/lib/terms";
 import { isValidCpf, onlyDigits } from "@/lib/core/cpf";
 import { normalizePhone } from "@/lib/core/phone";
@@ -45,6 +44,10 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
   if (!(await allowAttempt(`signup:${await clientIp()}`, 10, 60))) return { error: "Muitas tentativas. Tente de novo mais tarde." };
   const p = await validateProfile(f);
   if ("error" in p) return { error: p.error };
+  // código de indicação (cupom) de quem convidou: opcional, mas se for digitado precisa existir
+  const coupon = field(f, "coupon").replace(/\D/g, "");
+  const referrer = coupon ? await findReferrer(coupon) : null;
+  if (coupon && !referrer) return { error: "Código de indicação não encontrado. Confira os 6 números ou deixe em branco." };
 
   // a primeira conta de um banco vazio vira administradora (depois: npm run admin -- @usuario)
   const firstAccount = (await db.user.count({ where: { cpf: { not: null } } })) === 0;
@@ -65,7 +68,6 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
         handle: p.handle,
         termsAcceptedAt: new Date(),
         termsVersion: TERMS_VERSION,
-        trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 3600_000),
         isAdmin: firstAccount,
       },
     });
@@ -76,7 +78,9 @@ export async function signUpAction(_: FormState, f: FormData): Promise<FormState
     }
     throw e;
   }
-  // passo 2: conectar as IAs (a conta já está salva; se sair no meio, continua de onde parou)
+  await ensureReferralCode(userId).catch((e) => console.error("[indicação] código", e));
+  if (referrer) await recordReferral(referrer.id, { id: userId, cpf: p.cpf }).catch((e) => console.error("[indicação] registrar", e));
+  // passo 2: conectar a IA (a conta já está salva; se sair no meio, continua de onde parou)
   redirect("/conectar-ia");
 }
 
@@ -90,7 +94,7 @@ export async function signInAction(_: FormState, f: FormData): Promise<FormState
   const key = byCpf ? digits : identifier.replace(/^@/, "").toLowerCase();
   if (!(await allowAttempt(`login:${key}`, 10, 15))) return { error: "Muitas tentativas. Aguarde 15 minutos ou redefina a senha." };
 
-  const user = await db.user.findUnique({ where: byCpf ? { cpf: digits } : { handle: key }, select: { id: true, email: true, isAdmin: true, createdAt: true, trialEndsAt: true } });
+  const user = await db.user.findUnique({ where: byCpf ? { cpf: digits } : { handle: key }, select: { id: true, email: true } });
   const fail = { error: "CPF/@ ou senha incorretos." };
   if (!user) return fail;
   try {
@@ -100,9 +104,7 @@ export async function signInAction(_: FormState, f: FormData): Promise<FormState
     throw e;
   }
   await clearAttempts(`login:${key}`);
-  // plano vencido (ou teste encerrado): entra direto na tela de pagar (pagou, libera na hora)
-  const access = await getAccess(user).catch(() => null);
-  redirect(access?.reason === "expired" ? "/assinatura" : "/inicio");
+  redirect("/inicio");
 }
 
 /**

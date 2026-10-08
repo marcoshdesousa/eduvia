@@ -11,10 +11,10 @@ import { PasswordPair } from "@/components/masked-inputs";
 import { cn } from "@/lib/utils";
 
 /**
- * Cadastro: 1) dados da conta (a conta já fica salva); 2) conectar as IAs, em /conectar-ia.
+ * Cadastro: 1) dados da conta (a conta já fica salva); 2) conectar a Gemini, em /conectar-ia.
  * Se o aluno sair no meio do passo 2, entra de novo e continua de onde parou.
  */
-export function SignupForm() {
+export function SignupForm({ coupon = "" }: { coupon?: string }) {
   const [state, action, pending] = useActionState(signUpAction, undefined);
   return (
     <div className="space-y-4">
@@ -26,6 +26,9 @@ export function SignupForm() {
         </Field>
         <ProfileFields />
         <PasswordPair />
+        <Field label="Código de indicação (opcional)" htmlFor="coupon" hint="Recebeu o código de alguém? Digite os 6 números. Ele ajuda quem te convidou.">
+          <Input id="coupon" name="coupon" inputMode="numeric" maxLength={6} pattern="\d{6}" defaultValue={coupon} placeholder="000000" autoComplete="off" />
+        </Field>
         <Button className="w-full" disabled={pending}>
           {pending ? "Criando sua conta..." : <>Continuar <ArrowRight size={16} /></>}
         </Button>
@@ -38,7 +41,7 @@ export function SignupForm() {
 }
 
 export function Steps({ step }: { step: 1 | 2 }) {
-  const items = ["Seus dados", "Conectar IAs"];
+  const items = ["Seus dados", "Conectar a IA"];
   return (
     <ol className="flex items-center gap-2 text-xs font-medium">
       {items.map((label, i) => (

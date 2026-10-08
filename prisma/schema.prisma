@@ -62,6 +62,10 @@ model User {
   aiPausedUntil         DateTime?
   /// Foto de perfil: um dos personagens de /public/avatars (ex.: "gata").
   avatar                String?
+  /// Código de indicação (6 números, único): quem cria a conta com ele conta como indicação desta pessoa.
+  referralCode          String?       @unique
+  /// Quem indicou esta conta (código usado no cadastro).
+  referredById          String?
 
   xp            Int       @default(0)
   currentStreak Int       @default(0)
@@ -719,6 +723,8 @@ model Payment {
   periodDays        Int           @default(30)
   /// Pago com o preço de promoção (conta um dos meses de promoção do CPF quando é pago).
   promo             Boolean       @default(false)
+  /// Pago com o preço do plano por indicação (R$ 7,90 na primeira vez; R$ 9,90 nas próximas).
+  referral          Boolean       @default(false)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -1114,4 +1120,14 @@ model PromoUse {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@id([cpfHash, planSlug])
+}
+
+/// Indicações: cada CPF só conta uma vez (guardado como código), mesmo se a conta for apagada e criada de novo.
+model ReferralUse {
+  cpfHash        String   @id
+  referrerId     String
+  referredUserId String?
+  createdAt      DateTime @default(now())
+
+  @@index([referrerId, createdAt])
 }

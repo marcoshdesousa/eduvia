@@ -91,7 +91,7 @@ export async function updatePlanAction(slug: string, _: unknown, f: FormData) {
   return { ok: true, message: `Plano ${name} atualizado.` };
 }
 
-export type PixResult = { ok: true; paymentId: string; pixCode: string; qr: string; valueCents: number; planName: string; days: number; creditCents: number } | { ok: false; error: string };
+export type PixResult = { ok: true; paymentId: string; pixCode: string; qr: string; valueCents: number; planName: string; days: number } | { ok: false; error: string };
 
 /** Aluno escolhe o plano mensal: cria o Pix na SyncPay e devolve o QR Code e o "copia e cola". */
 export async function createPixAction(planSlug: string): Promise<PixResult> {
