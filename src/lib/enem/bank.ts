@@ -38,7 +38,8 @@ const LANG_LABEL = { ingles: " (Inglês)", espanhol: " (Espanhol)" };
 
 /** Texto de "comentário" de uma questão real (o ENEM não publica resolução): de onde veio e qual é o gabarito. */
 export function bankExplanation(q: Pick<BankQuestion, "year" | "number" | "area" | "lang" | "answer">) {
-  return `Questão ${q.number} do ENEM ${q.year} — ${AREA_LABEL[q.area]}${q.lang ? LANG_LABEL[q.lang] : ""}. Gabarito oficial (INEP): letra ${"ABCDE"[q.answer]}.`;
+  // number 0: prova sem o número da questão no caderno (texto do INEP sem a posição)
+  return `${q.number ? `Questão ${q.number} do ENEM` : "ENEM"} ${q.year} — ${AREA_LABEL[q.area]}${q.lang ? LANG_LABEL[q.lang] : ""}. Gabarito oficial (INEP): letra ${"ABCDE"[q.answer]}.`;
 }
 
 let ensuring: Promise<void> | null = null;

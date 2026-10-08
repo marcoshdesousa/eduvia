@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { AI_KEYS, connectAis, PASSWORD, signUp, sql } from "./helpers";
 
-const uid = Date.now().toString(36);
+// sem algarismos: a busca do admin também procura por CPF/telefone quando o texto tem 4+ números
+const uid = Date.now().toString(36).replace(/\d/g, (d) => "abcdefghij"[Number(d)]);
 
 // Requer BILLING_ENFORCED diferente de "false" e AI_MODE=mock no servidor.
 test("Grátis (10% das aulas, só a Gemini) → admin libera o Básico (50%) e o Completo (tudo)", async ({ page, browser }) => {

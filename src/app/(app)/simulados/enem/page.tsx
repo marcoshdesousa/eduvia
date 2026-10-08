@@ -19,7 +19,7 @@ export default async function Page() {
       <div>
         <Link href="/simulados" className="text-sm text-muted hover:text-foreground">← Simulados</Link>
         <h1 className="mt-2 text-2xl font-bold">Simulado ENEM</h1>
-        <p className="text-sm text-muted">Questões reais das provas do ENEM (2009 a 2023), com a quantidade de questões e o tempo da prova de verdade. Pode terminar antes; quando o tempo acaba, a prova é entregue sozinha.</p>
+        <p className="text-sm text-muted">Questões reais das provas do ENEM (2009 a 2025), com a quantidade de questões e o tempo da prova de verdade. Pode terminar antes; quando o tempo acaba, a prova é entregue sozinha.</p>
       </div>
 
       <Card className="flex gap-3 text-sm">

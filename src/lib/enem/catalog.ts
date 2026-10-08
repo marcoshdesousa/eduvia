@@ -1,5 +1,5 @@
 // Estudar ENEM: preparação fixa da plataforma (igual para todo mundo, sem IA). Cada aluno tem o próprio progresso.
-// As aulas são textos prontos (com o robô narrador) e as perguntas são questões reais das provas do ENEM (INEP, 2009–2023).
+// As aulas são textos prontos (com o robô narrador) e as perguntas são questões reais das provas do ENEM (INEP, 2009–2025).
 import type { EnemLesson } from "./content/types";
 import { LINGUAGENS } from "./content/linguagens";
 import { HUMANAS } from "./content/humanas";

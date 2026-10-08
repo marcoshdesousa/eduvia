@@ -178,7 +178,7 @@ export function planFeatures(l: PlanLimits): string[] {
   const tutor = perPeriod(l.tutorMessagesPerDay, l.tutorMessagesPerMonth, "pergunta", "perguntas", "à vontade");
   return [
     lessons,
-    "Questões reais do ENEM (2009 a 2023)",
+    "Questões reais do ENEM (2009 a 2025)",
     exams || "Sem simulados",
     essays || "Sem correção de redação",
     games || "Sem testes rápidos",

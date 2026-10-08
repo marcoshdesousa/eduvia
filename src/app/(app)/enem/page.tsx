@@ -28,7 +28,7 @@ export default async function Page() {
           <h1 className="text-2xl font-bold">{ENEM_TITLE}</h1>
           <Badge tone="primary">{access.limits.lessonsPct >= 100 ? "Todas as aulas liberadas" : `${access.limits.lessonsPct}% das aulas liberadas`}</Badge>
         </div>
-        <p className="text-sm text-muted">Aulas de todas as matérias do ENEM e de redação, com quiz em cada aula, e questões reais das provas (2009 a 2023) nos simulados.</p>
+        <p className="text-sm text-muted">Aulas de todas as matérias do ENEM e de redação, com quiz em cada aula, e questões reais das provas (2009 a 2025) nos simulados.</p>
       </div>
 
       <Card className="flex gap-3 border-primary/40 bg-primary/5 text-sm">
