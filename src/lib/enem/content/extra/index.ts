@@ -32,6 +32,7 @@ import { MATEMATICA_5 } from "./matematica-5";
 import { INGLES_2 } from "./ingles-2";
 import { ESPANHOL_2 } from "./espanhol-2";
 import { ARTES_2 } from "./artes-2";
+import { GEOGRAFIA_3 } from "./geografia-3";
 
 /** Aulas novas de cada matéria (entram no fim da lista: o número e o id das aulas antigas não mudam). */
 export const EXTRA: Record<string, EnemLesson[]> = {
@@ -40,7 +41,7 @@ export const EXTRA: Record<string, EnemLesson[]> = {
   fisica: [...FISICA_1, ...FISICA_2],
   quimica: [...QUIMICA_1, ...QUIMICA_2],
   historia: [...HISTORIA_1, ...HISTORIA_2, ...HISTORIA_3],
-  geografia: [...GEOGRAFIA_1, ...GEOGRAFIA_2],
+  geografia: [...GEOGRAFIA_1, ...GEOGRAFIA_2, ...GEOGRAFIA_3],
   portugues: [...PORTUGUES_1, ...PORTUGUES_2],
   literatura: [...LITERATURA_1, ...LITERATURA_2],
   filosofia: [...FILOSOFIA_1, ...FILOSOFIA_2],
