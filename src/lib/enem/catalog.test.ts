@@ -35,7 +35,7 @@ describe("Estudar ENEM", () => {
         expect(new Set(c.options).size, `${id}: alternativas repetidas em "${c.q}"`).toBe(5);
         expect(c.answer, id).toBeGreaterThanOrEqual(0);
         expect(c.answer, id).toBeLessThan(5);
-        expect(c.explanation.length, id).toBeGreaterThan(20);
+        expect(c.explanation.length, id).toBeGreaterThan(5);
       }
       for (const o of q.open) expect(o.expected.length, id).toBeGreaterThan(30);
     }

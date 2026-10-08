@@ -10,6 +10,7 @@ import { MORE_HUMANAS } from "./content/more-humanas";
 import { MORE_NATUREZA } from "./content/more-natureza";
 import { MORE_MATEMATICA } from "./content/more-matematica";
 import { REDACAO } from "./content/redacao";
+import { EXTRA } from "./content/extra";
 
 export const ENEM_PREP_ID = "enem";
 /** Dono técnico da preparação fixa (não é uma conta de verdade: sem CPF, não entra em listas nem no login). */
@@ -38,7 +39,7 @@ export type Materia = {
 
 // aulas a mais entram DEPOIS das primeiras: o número (e o id) de cada aula não muda e ninguém perde o progresso
 const MORE = { ...MORE_LINGUAGENS, ...MORE_HUMANAS, ...MORE_NATUREZA, ...MORE_MATEMATICA };
-export const MATERIAS: Materia[] = [...LINGUAGENS, ...HUMANAS, ...NATUREZA, ...MATEMATICA, ...REDACAO].map((m) => ({ ...m, lessons: [...m.lessons, ...(MORE[m.slug] ?? [])] }));
+export const MATERIAS: Materia[] = [...LINGUAGENS, ...HUMANAS, ...NATUREZA, ...MATEMATICA, ...REDACAO].map((m) => ({ ...m, lessons: [...m.lessons, ...(MORE[m.slug] ?? []), ...(EXTRA[m.slug] ?? [])] }));
 
 export const materiaSubjectId = (slug: string) => `enem-m-${slug}`;
 export const lessonTopicId = (materia: string, lesson: number) => `enem-a-${materia}-${lesson + 1}`;
