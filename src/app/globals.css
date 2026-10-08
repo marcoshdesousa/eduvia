@@ -304,3 +304,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .lv-blobs i, .lv-cover > *, .lv-cover-art, .lv-bigplay, .lv-opening *, .lv-tr-0, .lv-tr-1, .lv-tr-2, .lv-tr-3, .lv-now, .lv-term, .lv-eq-bars i, .lv-slide .lv-title, .lv-slide .lv-badge { animation: none !important; }
 }
+
+/* tela cheia com o celular em pé onde o site não pode girar o celular: o vídeo é desenhado deitado */
+.lv-full.lv-turn { top: 0; left: 100vw; left: 100dvw; right: auto; bottom: auto; width: 100vh; width: 100dvh; height: 100vw; height: 100dvw; transform: rotate(90deg); transform-origin: top left; }
+.lv-turn .lv-stage { font-size: clamp(13px, 1.75cqw, 18px); }
+.lv-turn .lv-controls { gap: 4px; padding-top: 6px; }
+.lv-turn .lv-btn { width: 36px; height: 36px; }
+.lv-turn .lv-btn-main { width: 44px; height: 44px; }
+.lv-turn .lv-times { display: none; }

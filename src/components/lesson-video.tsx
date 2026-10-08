@@ -147,23 +147,69 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
     return () => clearInterval(id);
   }, [phase]);
 
-  // tela cheia de verdade (Android/computador); no iPhone, a tela cheia é o vídeo por cima de tudo
+  // Tela cheia: o vídeo fica deitado, como no YouTube. No Android o celular gira sozinho (tela cheia de verdade +
+  // trava na horizontal). Onde o site não pode girar o celular (iPhone), o vídeo é desenhado deitado ocupando
+  // a tela toda: é só virar o celular. Se a pessoa já estiver com o celular deitado, nada é girado.
+  const [turn, setTurn] = useState(false);
+  const locked = useRef(false);
+  // tela cheia do próprio app (sem a do navegador): onde o celular não gira sozinho
+  const pseudo = useRef(false);
+  type Orient = ScreenOrientation & { lock?: (o: string) => Promise<void>; unlock?: () => void };
+  const portraitPhone = () => window.innerHeight > window.innerWidth && window.matchMedia("(pointer: coarse)").matches;
   useEffect(() => {
-    const on = () => setFull(document.fullscreenElement === box.current);
+    const on = () => {
+      if (pseudo.current) return;
+      const isFull = document.fullscreenElement === box.current;
+      if (!isFull) {
+        locked.current = false;
+        (screen.orientation as Orient | undefined)?.unlock?.();
+      }
+      setFull(isFull);
+    };
     document.addEventListener("fullscreenchange", on);
     return () => document.removeEventListener("fullscreenchange", on);
   }, []);
+  useEffect(() => {
+    if (!full) return setTurn(false);
+    const check = () => setTurn(!locked.current && portraitPhone());
+    check();
+    window.addEventListener("resize", check);
+    // a página de trás não rola enquanto o vídeo ocupa a tela
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("resize", check);
+      document.body.style.overflow = overflow;
+    };
+  }, [full]);
   const toggleFull = async () => {
     const el = box.current;
     if (!el) return;
-    if (document.fullscreenElement) return void document.exitFullscreen().catch(() => {});
-    if (full) return setFull(false);
-    try {
-      await el.requestFullscreen();
-      await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.("landscape").catch(() => {});
-    } catch {
-      setFull(true);
+    if (full) {
+      pseudo.current = false;
+      locked.current = false;
+      (screen.orientation as Orient | undefined)?.unlock?.();
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+      setFull(false);
+      return;
     }
+    const real = await el.requestFullscreen?.({ navigationUI: "hide" }).then(() => true, () => false);
+    try {
+      await (screen.orientation as Orient).lock!("landscape");
+      locked.current = true;
+    } catch {
+      locked.current = false;
+    }
+    if (!locked.current && portraitPhone()) {
+      // o celular não girou: na tela cheia do navegador não dá para desenhar deitado, então usa a do app
+      pseudo.current = true;
+      if (real && document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+      setFull(true);
+      setTurn(true);
+      return;
+    }
+    setFull(true);
+    setTurn(false);
   };
 
   const follow = useCallback((w: WholeAudio, a: HTMLAudioElement) => {
@@ -429,7 +475,7 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
   );
 
   return (
-    <div ref={box} tabIndex={-1} className={cn("lv outline-none", full && "lv-full")} data-full={full || undefined} style={accent} aria-label={`Vídeo da aula: ${info.title}`}>
+    <div ref={box} tabIndex={-1} className={cn("lv outline-none", full && "lv-full", turn && "lv-turn")} data-full={full || undefined} style={accent} aria-label={`Vídeo da aula: ${info.title}`}>
       {phase === "done" ? (
         <div className="lv-end space-y-4 rounded-2xl border border-border bg-surface p-4 sm:p-6">
           <div className="flex flex-col items-center gap-2 text-center">
