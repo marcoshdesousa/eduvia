@@ -86,7 +86,8 @@ async function seed() {
       create: { id: subjectId, preparationId: ENEM_PREP_ID, name: m.name, order: mi },
       update: { name: m.name, order: mi },
     });
-    for (const [li, l] of m.lessons.entries()) {
+    // várias aulas ao mesmo tempo (com centenas de aulas, uma de cada vez deixava a primeira visita lenta)
+    await inBatches([...m.lessons.entries()], 8, async ([li, l]) => {
       const topicId = lessonTopicId(m.slug, li);
       await db.topic.upsert({
         where: { id: topicId },
@@ -107,7 +108,7 @@ async function seed() {
         const row = { topicId, studyTextId: text.id, type: "OPEN_RECALL" as const, statement: q.q, correctAnswer: q.expected, explanation: q.expected, difficulty: 2 };
         await db.question.upsert({ where: { id }, create: { id, ...row }, update: row });
       }
-    }
+    });
   }
 
   // bancos das áreas (as questões reais ficam aqui; no simulado, a nota sai por área, como no ENEM)
@@ -146,6 +147,11 @@ async function seed() {
 
   await db.siteSetting.upsert({ where: { key: "enem-catalog" }, create: { key: "enem-catalog", value: version }, update: { value: version } });
   console.log(`[enem] preparação fixa pronta: ${MATERIAS.length} matérias, ${MATERIAS.reduce((s, m) => s + m.lessons.length, 0)} aulas, ${bank.length} questões (${fresh.length} novas) em ${Date.now() - t0} ms`);
+}
+
+/** Roda `fn` em cada item, `size` por vez. */
+async function inBatches<T>(items: T[], size: number, fn: (item: T) => Promise<unknown>) {
+  for (let i = 0; i < items.length; i += size) await Promise.all(items.slice(i, i + size).map(fn));
 }
 
 function shuffle<T>(arr: T[]) {
