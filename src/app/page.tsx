@@ -57,11 +57,11 @@ const FAQ = [
   },
   {
     q: "Preciso pagar alguma coisa para começar?",
-    a: "Não. O plano Grátis é para sempre e não pede cartão: você estuda todas as matérias, com 10% das aulas de cada uma, e faz 1 simulado, 1 redação e 1 teste rápido por mês. No cadastro você conecta a Gemini, a IA grátis do Google (o passo a passo aparece lá). Quando quiser mais, é só assinar um plano.",
+    a: "Não. Você cria sua conta grátis, sem cartão, e já começa a estudar. No cadastro você conecta a Gemini, a IA grátis do Google (o passo a passo aparece lá). Quando quiser liberar mais aulas e atividades, é só assinar um plano.",
   },
   {
     q: "Quanto custa?",
-    a: "O Grátis não custa nada. O Básico custa R$ 9,90 e libera metade das aulas de cada matéria. O Completo custa R$ 19,90 (nos 3 primeiros meses, R$ 14,90) e libera tudo. E tem o plano Indicação: compartilhe o seu código e, quando 3 pessoas criarem a conta com ele, você tem tudo do Completo por R$ 7,90. O pagamento é por Pix, direto no site: o plano libera sozinho assim que o Pix cai. Cada pagamento vale 30 dias e não há renovação automática.",
+    a: "Criar a conta é grátis. O Básico custa R$ 9,90 e libera metade das aulas de cada matéria. O Completo custa R$ 19,90 (nos 3 primeiros meses, R$ 14,90) e libera tudo. E tem o plano Indicação: compartilhe o seu código e, quando 3 pessoas criarem a conta com ele, você tem tudo do Completo por R$ 7,90. O pagamento é por Pix, direto no site: o plano libera sozinho assim que o Pix cai. Cada pagamento vale 30 dias e não há renovação automática.",
   },
   {
     q: "Meus dados ficam seguros?",
@@ -85,7 +85,6 @@ export default async function Home() {
   if (await getCurrentUser()) redirect("/inicio");
   const all = await listPlans();
   const plans = all.filter((p) => p.slug !== "gratis" && p.slug !== "indicacao" && p.active && p.priceMonthCents > 0);
-  const free = all.find((p) => p.slug === "gratis");
   const referral = all.find((p) => p.slug === "indicacao" && p.active);
   const lessons = MATERIAS.reduce((n, m) => n + m.lessons.length, 0);
 
@@ -174,9 +173,8 @@ export default async function Home() {
 
         {/* ── Preço */}
         <section id="preco" className="scroll-mt-20 py-14">
-          <SectionTitle kicker="Preço" title="Planos que cabem no bolso" subtitle="Comece grátis. Os planos de 30 dias liberam mais aulas e mais atividades. Pagamento por Pix, sem renovação automática." />
-          <div className="mx-auto mt-10 grid max-w-6xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {free && <PriceCard label="Grátis" price={formatBRL(0)} period="para sempre" features={planFeatures(free.limits).filter((f) => !f.startsWith("Sem "))} />}
+          <SectionTitle kicker="Preço" title="Planos que cabem no bolso" subtitle="Crie sua conta grátis e assine quando quiser liberar mais aulas e atividades. Planos de 30 dias, pagos com Pix, sem renovação automática." />
+          <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {plans.map((p) => (
               <PriceCard
                 key={p.slug}
