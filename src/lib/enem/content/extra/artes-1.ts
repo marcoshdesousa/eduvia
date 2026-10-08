@@ -575,7 +575,7 @@ A tragédia grega provoca catarse. Anchieta usou o teatro para catequizar. Suass
     [
       ["O Teatro do Oprimido foi criado por:", ["Nelson Rodrigues", "Augusto Boal", "Ariano Suassuna", "Martins Pena", "Anchieta"], 1, "Inspirado em Paulo Freire."],
       ["No Teatro do Oprimido, o público:", ["só assiste em silêncio", "entra em cena e propõe soluções", "não existe", "paga para atuar", "escreve críticas depois"], 1, "Espect-ator."],
-      ["O Auto da Compadecida é obra de:", ["Ariano Suassuna", "Gil Vicente", "Sófocles", "Brecht", "Machado de Assis"], 0, "1955."],
+      ["O Auto da Compadecida é obra de:", ["Ariano Suassuna", "Gil Vicente", "Sófocles", "Brecht", "Machado de Assis"], 0, "Peça de 1955, com João Grilo e Chicó."],
       ["Para Aristóteles, a tragédia provoca:", ["distanciamento", "catarse", "riso", "tédio", "ignorância"], 1, "Purificação das emoções."],
       ["O padre José de Anchieta usou o teatro para:", ["divertir a corte", "catequizar os indígenas", "criticar a Igreja", "defender a independência", "ensinar matemática"], 1, "Teatro jesuítico."],
     ],

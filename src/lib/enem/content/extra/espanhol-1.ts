@@ -635,7 +635,7 @@ Notícia informa; anúncio vende; campanha conscientiza. O imperativo (Cuida, No
       ["Um cartaz com \"No tires basura en la playa\" é:", ["um anúncio de venda", "uma campanha social", "uma receita", "uma biografia", "um poema"], 1, "Conscientização ambiental."],
       ["\"No tires basura\" significa:", ["Não tire o lixo.", "Não jogue lixo.", "Não compre lixo.", "Não recicle.", "Não limpe."], 1, "tirar = jogar/atirar."],
       ["\"Vacúnate\" é:", ["um substantivo", "um verbo no imperativo com pronome", "um adjetivo", "um verbo no passado", "um advérbio"], 1, "Vacine-se: imperativo com o pronome colado."],
-      ["O primeiro parágrafo de uma notícia, com o essencial, chama-se:", ["titular", "entradilla", "cuerpo", "firma", "slogan"], 1, "Lide."],
+      ["O primeiro parágrafo de uma notícia, com o essencial, chama-se:", ["titular", "entradilla", "cuerpo", "firma", "slogan"], 1, "É o lide da notícia."],
       ["\"Atentamente\" no fim de um e-mail indica:", ["informalidade", "uma despedida formal", "uma pergunta", "uma ordem", "um erro"], 1, "Fecho formal."],
     ],
     [["Qual a diferença entre um anúncio publicitário e uma campanha social?", "O anúncio publicitário busca vender um produto ou promover uma marca; a campanha social busca conscientizar o público e mudar comportamentos, como cuidar da água ou se vacinar."]],
