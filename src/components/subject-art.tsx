@@ -129,3 +129,22 @@ export function SubjectArt({ slug, className }: { slug: string; className?: stri
     </svg>
   );
 }
+
+/** Cor de destaque de cada matéria (o fundo animado do vídeo usa essa cor). */
+const ACCENT: Record<string, string> = {
+  portugues: "#fb923c",
+  literatura: "#f472b6",
+  artes: "#c084fc",
+  ingles: "#38bdf8",
+  espanhol: "#facc15",
+  historia: "#f59e0b",
+  geografia: "#22d3ee",
+  filosofia: "#a78bfa",
+  sociologia: "#fb7185",
+  biologia: "#4ade80",
+  quimica: "#2dd4bf",
+  fisica: "#60a5fa",
+  matematica: "#818cf8",
+  redacao: "#fb923c",
+};
+export const subjectAccent = (slug: string) => ACCENT[slug] ?? "#fb923c";

@@ -95,3 +95,20 @@ export async function testVoiceAction(): Promise<VoiceTestResult> {
   const r = await piperStatus();
   return r.ok ? { ...r, memoryMb } : { ok: false, error: [r.error, r.lastError].filter(Boolean).join(" · "), memoryMb };
 }
+
+/** Admin: testa a voz do modo vídeo (Francisca, voz neural) de verdade e mostra o motivo se falhar. */
+export async function testVideoVoiceAction(): Promise<VoiceTestResult> {
+  const user = await requireUser();
+  const memoryMb = Math.round(process.memoryUsage().rss / 1_048_576);
+  if (!user.isAdmin) return { ok: false, error: "Só para administradores.", memoryMb };
+  const { neuralSpeak, VIDEO_VOICES } = await import("@/lib/ai/neural-voice");
+  const { mp3Duration } = await import("@/lib/ai/tts");
+  const t0 = Date.now();
+  try {
+    // texto com a hora: não vem do que ficou guardado, testa o serviço de verdade
+    const r = await neuralSpeak(`Olá! Esta é a voz do vídeo do Eduvia. Teste das ${new Date().toLocaleTimeString("pt-BR")}.`, "f");
+    return { ok: true, voice: VIDEO_VOICES.f.name, ms: Date.now() - t0, seconds: Math.round(mp3Duration(r.mp3) * 10) / 10, memoryMb };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message, memoryMb };
+  }
+}

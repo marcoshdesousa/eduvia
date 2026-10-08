@@ -245,6 +245,8 @@ export class LessonAudio {
     private blocks: { text: string; from: number; to: number }[],
     private wordOffset: number[],
     private stopped: () => boolean,
+    /** Voz: a do robô (padrão) ou a do vídeo ("video-f" / "video-m"). */
+    private voice?: string,
   ) {}
 
   private fetchBlock(i: number): Promise<Chunk> {
@@ -255,7 +257,7 @@ export class LessonAudio {
       let lastError: Error | null = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         if (this.stopped()) throw new Error("cancelado");
-        const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: b.text }) }).catch((e: Error) => e);
+        const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: b.text, voice: this.voice }) }).catch((e: Error) => e);
         if (r instanceof Response && r.ok) {
           const mp3 = await r.arrayBuffer();
           const seconds = Number(r.headers.get("x-audio-seconds")) || mp3.byteLength / 6000;

@@ -1,42 +1,96 @@
 "use client";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BookOpen, Captions, CheckCircle2, Maximize, Minimize, Pause, Play, RotateCcw, RotateCw, Zap } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { BookOpen, Captions, CheckCircle2, Lightbulb, Maximize, Mic, Minimize, Pause, Play, RotateCcw, RotateCw, Zap } from "lucide-react";
 import { FoxShape } from "@/components/brand";
-import { SubjectArt } from "@/components/subject-art";
+import { SubjectArt, subjectAccent } from "@/components/subject-art";
 import { Button } from "@/components/ui/button";
 import { LessonAudio, wordOffsets, type WholeAudio } from "@/components/lesson-narrator";
-import { lessonVideo, slideOfPart, type SlideEl } from "@/lib/lesson-slides";
+import { lessonVideo, slideOfPart, type Slide, type SlideEl } from "@/lib/lesson-slides";
 import { splitWords } from "@/lib/speech-align";
 import { toBlocks } from "@/lib/speech-text";
 import { cn } from "@/lib/utils";
 
-/** Atraso entre o tempo do tocador e o som que se ouve (igual ao do "Ouvir"). */
+/** Atraso entre o tempo do tocador e o som que se ouve. */
 const SOUND_LAG = 0.12;
 const SPEEDS = [1, 1.25, 1.5, 0.85];
-const LOADING = ["Preparando o vídeo da aula…", "Preparando a voz do robô…", "Montando os slides…", "Estamos quase lá…", "Só mais um instante…"];
+const LOADING = ["Preparando o vídeo da aula…", "Preparando a voz…", "Montando os slides…", "Estamos quase lá…", "Só mais um instante…"];
+/** Vozes do vídeo: Francisca e Antônio (neurais); "robo" é a reserva, se elas não responderem. */
+type VoiceKind = "f" | "m" | "robo";
+const VOICE_NAME: Record<VoiceKind, string> = { f: "Francisca", m: "Antônio", robo: "Robô" };
+const TERM_SECONDS = 7;
 
 type Phase = "cover" | "loading" | "playing" | "paused" | "done";
-export type VideoInfo = { slug: string; materia: string; lesson: number; title: string; highlights: string[] };
+export type VideoInfo = { slug: string; materia: string; lesson: number; title: string; highlights: string[]; keyPoints?: { term: string; explanation: string }[] };
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+const norm = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+const WORD = /([\p{L}\p{N}][\p{L}\p{N}'’-]*)/u;
 
 /** Negrito e itálico simples (o texto das aulas só usa isso). */
+function segments(md: string) {
+  return md
+    .split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g)
+    .filter(Boolean)
+    .map((t) =>
+      t.startsWith("**") && t.endsWith("**") && t.length > 4 ? { text: t.slice(2, -2), bold: true, italic: false } : t.startsWith("*") && t.endsWith("*") && t.length > 2 ? { text: t.slice(1, -1), bold: false, italic: true } : { text: t, bold: false, italic: false },
+    );
+}
 function inline(md: string): ReactNode[] {
-  return md.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g).map((t, i) =>
-    t.startsWith("**") && t.endsWith("**") && t.length > 4 ? <b key={i}>{t.slice(2, -2)}</b> : t.startsWith("*") && t.endsWith("*") && t.length > 2 ? <em key={i}>{t.slice(1, -1)}</em> : <Fragment key={i}>{t}</Fragment>,
+  return segments(md).map((s, i) => (s.bold ? <b key={i}>{s.text}</b> : s.italic ? <em key={i}>{s.text}</em> : <Fragment key={i}>{s.text}</Fragment>));
+}
+
+/**
+ * Texto de um pedaço do slide, palavra por palavra: as já faladas acesas, a atual em laranja, as próximas mais
+ * apagadas. O negrito vira "marca-texto" quando a voz chega nele (e fica marcado depois).
+ * firstWord: número (na aula toda) da primeira palavra deste pedaço; word: palavra falada agora.
+ */
+function Karaoke({ md, firstWord, word, live }: { md: string; firstWord: number; word: number; live: boolean }) {
+  let k = firstWord;
+  return (
+    <>
+      {segments(md).map((s, si) => {
+        const pieces = s.text.split(WORD);
+        const start = k;
+        const nodes = pieces.map((p, pi) => {
+          if (pi % 2 === 0) return <Fragment key={pi}>{p}</Fragment>;
+          const w = k++;
+          if (!live) return <Fragment key={pi}>{p}</Fragment>;
+          return <span key={pi} className={w === word ? "lv-cw" : w > word ? "lv-nw" : undefined}>{p}</span>;
+        });
+        if (s.bold) return <b key={si} className={cn("lv-mark", (!live || start <= word) && "lv-mark-on")}>{nodes}</b>;
+        if (s.italic) return <em key={si}>{nodes}</em>;
+        return <Fragment key={si}>{nodes}</Fragment>;
+      })}
+    </>
   );
 }
 
 /**
- * Modo vídeo da aula: o texto vira slides animados, com a voz do robô, legenda que grifa a palavra falada,
- * pausa, voltar/avançar 10 s, velocidade, partes e tela cheia. Não é arquivo de vídeo: roda na hora, no aparelho.
+ * Modo vídeo da aula: o texto vira slides animados com uma voz natural (Francisca ou Antônio). Cada parte abre com
+ * um cartão; os tópicos entram quando a voz chega neles e acendem palavra por palavra; o negrito ganha marca-texto;
+ * os termos importantes aparecem em cartões. Tem pausa, ±10 s, velocidade, partes, legenda e tela cheia.
+ * Não é arquivo de vídeo: roda na hora, no aparelho.
  */
 export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: string; info: VideoInfo; onQuiz: () => void; onRead: () => void; quizLabel: string }) {
   const v = useMemo(() => lessonVideo(text, info.title), [text, info.title]);
   const blocks = useMemo(() => toBlocks(v.parts), [v.parts]);
   const offsets = useMemo(() => wordOffsets(v.parts), [v.parts]);
   const stopped = useRef(false);
-  const loader = useMemo(() => new LessonAudio(v.parts, blocks, offsets, () => stopped.current), [v.parts, blocks, offsets]);
+  // uma "baixadora" de áudio por voz (trocar de voz não perde o que já baixou)
+  const loaders = useRef(new Map<VoiceKind, LessonAudio>());
+  const loaderFor = useCallback(
+    (k: VoiceKind) => {
+      let l = loaders.current.get(k);
+      if (!l) {
+        l = new LessonAudio(v.parts, blocks, offsets, () => stopped.current, k === "robo" ? undefined : `video-${k}`);
+        loaders.current.set(k, l);
+      }
+      return l;
+    },
+    [v.parts, blocks, offsets],
+  );
+  const [voice, setVoiceState] = useState<VoiceKind>("f");
+  const voiceRef = useRef<VoiceKind>("f");
   const [phase, setPhase] = useState<Phase>("cover");
   const [pct, setPct] = useState(0);
   const [msg, setMsg] = useState(0);
@@ -45,31 +99,43 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
   const [word, setWord] = useState(-1);
   const [time, setTime] = useState(0);
   const [rate, setRate] = useState(1);
-  const [subs, setSubs] = useState(true);
+  const [subs, setSubs] = useState(false);
   const [full, setFull] = useState(false);
   const [device, setDevice] = useState(false);
+  const [term, setTerm] = useState<{ term: string; explanation: string } | null>(null);
+  const shownTerms = useRef(new Set<string>());
   const audio = useRef<HTMLAudioElement | null>(null);
   const whole = useRef<WholeAudio | null>(null);
   const raf = useRef(0);
   const box = useRef<HTMLDivElement>(null);
   const slideBox = useRef<HTMLDivElement>(null);
   const devicePart = useRef(0);
-
-  // começo (em segundos) de cada frase no áudio
   const startsRef = useRef<number[]>([]);
   const duration = whole.current?.seconds ?? 0;
   // estimativa antes do áudio chegar (para a capa): ~2,6 palavras por segundo
   const estMin = Math.max(1, Math.round(offsets.length ? (offsets.at(-1)! + splitWords(v.parts.at(-1) ?? "").length) / 2.6 / 60 : 1));
 
+  // a voz escolhida fica guardada neste aparelho
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem("eduvia:voz-video");
+      if (saved === "f" || saved === "m") {
+        voiceRef.current = saved;
+        setVoiceState(saved);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    const made = loaders.current;
     return () => {
       stopped.current = true;
       cancelAnimationFrame(raf.current);
       audio.current?.pause();
       if ("speechSynthesis" in window) speechSynthesis.cancel();
-      loader.dispose();
+      for (const l of made.values()) l.dispose();
     };
-  }, [loader]);
+  }, []);
 
   useEffect(() => {
     if (audio.current) audio.current.playbackRate = rate;
@@ -127,7 +193,7 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
     raf.current = requestAnimationFrame(tick);
   }, []);
 
-  /** Voz do aparelho (reserva, quando a voz do robô não responde): lê frase por frase. */
+  /** Voz do aparelho (última reserva): lê frase por frase. */
   const speakDevice = (i: number) => {
     if (!("speechSynthesis" in window)) {
       setNote("Seu navegador não tem leitura em voz alta.");
@@ -141,8 +207,8 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
     setWord(offsets[i]);
     const u = new SpeechSynthesisUtterance(v.parts[i]);
     u.lang = "pt-BR";
-    const voice = speechSynthesis.getVoices().find((x) => x.lang.toLowerCase() === "pt-br");
-    if (voice) u.voice = voice;
+    const pt = speechSynthesis.getVoices().find((x) => x.lang.toLowerCase() === "pt-br");
+    if (pt) u.voice = pt;
     u.rate = rate * 0.95;
     u.onboundary = (e) => {
       if (e.name && e.name !== "word") return;
@@ -158,7 +224,7 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
     speechSynthesis.speak(u);
   };
 
-  const start = async (from = 0) => {
+  const start = async (from = 0): Promise<void> => {
     stopped.current = false;
     if (device) return speakDevice(from);
     // cria o tocador já no toque (o iPhone só libera áudio iniciado por um toque)
@@ -168,10 +234,18 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
     let w = whole.current;
     if (!w) {
       setPhase("loading");
+      const kind = voiceRef.current;
       try {
-        w = await loader.prepare(setPct);
+        w = await loaderFor(kind).prepare(setPct);
       } catch (e) {
         if (stopped.current || (e as Error).message === "cancelado") return;
+        if (kind !== "robo") {
+          // a voz do vídeo não respondeu: segue com a voz do robô, sem travar a aula
+          voiceRef.current = "robo";
+          setVoiceState("robo");
+          setNote("A voz do vídeo não respondeu agora. Usando a voz do robô.");
+          return start(from);
+        }
         setDevice(true);
         setNote(`${(e as Error).message} Usando a voz do aparelho.`);
         return speakDevice(from);
@@ -210,15 +284,39 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
   const resume = () => {
     if (device) return speakDevice(devicePart.current);
     const a = audio.current;
-    if (!a || !whole.current) return void start();
-    void a.play().then(() => {
-      setPhase("playing");
-      follow(whole.current!, a);
-    }).catch(() => {});
+    if (!a || !whole.current) return void start(part);
+    void a
+      .play()
+      .then(() => {
+        setPhase("playing");
+        follow(whole.current!, a);
+      })
+      .catch(() => {});
   };
   const toggle = () => (phase === "playing" ? pause() : phase === "paused" ? resume() : phase === "loading" ? undefined : void start());
 
-  /** Vai para um momento (segundos) do vídeo; o slide e a legenda já mudam, mesmo pausado. */
+  /** Troca a voz (Francisca/Antônio): continua da mesma frase com a voz nova. */
+  const chooseVoice = (k: "f" | "m") => {
+    if (k === voiceRef.current) return;
+    try {
+      localStorage.setItem("eduvia:voz-video", k);
+    } catch {}
+    voiceRef.current = k;
+    setVoiceState(k);
+    setNote(null);
+    if (phase === "cover" || phase === "done") {
+      whole.current = null;
+      return;
+    }
+    const wasPlaying = phase === "playing";
+    cancelAnimationFrame(raf.current);
+    audio.current?.pause();
+    whole.current = null;
+    if (wasPlaying) void start(part);
+    else setPhase("paused");
+  };
+
+  /** Vai para um momento (segundos) do vídeo; o slide e o texto já mudam, mesmo pausado. */
   const seekTime = (t: number) => {
     const a = audio.current;
     if (!a || !whole.current) return;
@@ -256,15 +354,35 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
   });
 
   const slideIndex = slideOfPart(v, Math.max(0, part));
-  const slide = v.slides[slideIndex];
+  const slide: Slide = v.slides[slideIndex];
   const started = phase !== "cover" && !(phase === "loading" && !whole.current);
+  const sectionNow = slide?.section ?? 0;
+  // enquanto a voz lê o título da parte, aparece o cartão de abertura da parte
+  const firstEl = slide?.els[0]?.from ?? slide?.to ?? 0;
+  const opening = started && slide && slide.cont === 0 && firstEl > slide.from && part < firstEl;
+
+  // termos importantes da aula: quando a voz fala um deles pela primeira vez, aparece um cartão
+  const keyTerms = useMemo(() => (info.keyPoints ?? []).filter((k) => norm(k.term).length >= 4).map((k) => ({ ...k, n: norm(k.term) })), [info.keyPoints]);
+  useEffect(() => {
+    if (!started || phase !== "playing") return;
+    const said = ` ${norm(v.parts[part] ?? "")} `;
+    // começo de palavra: "produtor" também vale para "produtores"
+    const hit = keyTerms.find((k) => !shownTerms.current.has(k.n) && said.includes(` ${k.n}`));
+    if (!hit) return;
+    shownTerms.current.add(hit.n);
+    setTerm({ term: hit.term, explanation: hit.explanation });
+  }, [part, started, phase, keyTerms, v.parts]);
+  useEffect(() => {
+    if (!term || phase !== "playing") return;
+    const id = setTimeout(() => setTerm(null), (TERM_SECONDS * 1000) / rate);
+    return () => clearTimeout(id);
+  }, [term, phase, rate]);
 
   // o pedaço que está sendo falado fica sempre à vista dentro do slide
   useEffect(() => {
     const c = slideBox.current;
     const now = c?.querySelector<HTMLElement>("[data-now]");
     if (!c || !now) return;
-    // o primeiro pedaço do slide: mostra o título junto
     if (now === c.querySelector(".lv-el")) return void c.scrollTo({ top: 0, behavior: "smooth" });
     const top = now.offsetTop - c.offsetTop;
     if (top < c.scrollTop || top + now.offsetHeight > c.scrollTop + c.clientHeight) c.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
@@ -272,7 +390,6 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
 
   // a parte atual fica sempre à vista na lista de partes (sem rolar a página)
   const chapters = useRef<HTMLElement>(null);
-  const sectionNow = v.slides[slideIndex]?.section ?? 0;
   useEffect(() => {
     const c = chapters.current;
     const on = c?.children[sectionNow] as HTMLElement | undefined;
@@ -284,8 +401,7 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
     const p = v.parts[part];
     if (!p) return null;
     const ws = splitWords(p);
-    const j = word - offsets[part];
-    const w = ws[j];
+    const w = ws[word - offsets[part]];
     if (!w) return <span className="lv-said">{p}</span>;
     return (
       <>
@@ -299,21 +415,25 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
   // na voz do aparelho não há tempo exato: a barra anda por frase
   const shownTime = device ? part : time;
   const total = device ? v.parts.length - 1 : duration;
-  const sectionOf = sectionNow;
   const summary = v.summary.length ? v.summary : info.highlights.slice(0, 3);
+  const accent = { "--lv-accent": subjectAccent(info.slug) } as CSSProperties;
+  const voicePicker = (
+    <div className="lv-voices" role="radiogroup" aria-label="Voz do vídeo">
+      <Mic size={14} aria-hidden />
+      {(["f", "m"] as const).map((k) => (
+        <button key={k} type="button" role="radio" aria-checked={voice === k} className={cn("lv-voice", voice === k && "lv-voice-on")} onClick={() => chooseVoice(k)}>
+          {VOICE_NAME[k]}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
-    <div
-      ref={box}
-      tabIndex={-1}
-      className={cn("lv outline-none", full && "lv-full")}
-      data-full={full || undefined}
-      aria-label={`Vídeo da aula: ${info.title}`}
-    >
+    <div ref={box} tabIndex={-1} className={cn("lv outline-none", full && "lv-full")} data-full={full || undefined} style={accent} aria-label={`Vídeo da aula: ${info.title}`}>
       {phase === "done" ? (
-        <div className="space-y-4 rounded-2xl border border-border bg-surface p-4 sm:p-6">
+        <div className="lv-end space-y-4 rounded-2xl border border-border bg-surface p-4 sm:p-6">
           <div className="flex flex-col items-center gap-2 text-center">
-            <CheckCircle2 className="text-success" size={52} />
+            <CheckCircle2 className="lv-pop text-success" size={52} />
             <p className="text-xl font-bold">Vídeo assistido!</p>
             <p className="text-sm text-muted">Agora é a hora do quiz para liberar a próxima aula.</p>
           </div>
@@ -336,10 +456,12 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
         </div>
       ) : (
         <>
-          <div className="lv-stage" onClick={(e) => e.target === e.currentTarget && toggle()}>
-            <SubjectArt slug={info.slug} className="lv-bgart" />
+          <div className={cn("lv-stage", phase === "playing" && "lv-talking")} onClick={(e) => e.target === e.currentTarget && toggle()}>
+            <div className="lv-blobs" aria-hidden><i /><i /><i /></div>
+            {started && <div className="lv-topbar" aria-hidden><i style={{ width: `${total ? (shownTime / total) * 100 : 0}%` }} /></div>}
             {!started ? (
               <div className="lv-cover">
+                <SubjectArt slug={info.slug} className="lv-cover-art" />
                 <span className="lv-logo lv-logo-big"><svg viewBox="0 0 64 64"><FoxShape /></svg></span>
                 <span className="lv-kicker">{info.materia} · Aula {info.lesson}</span>
                 <span className="lv-cover-title">{info.title}</span>
@@ -350,50 +472,86 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
                     <div><i style={{ width: `${pct}%` }} /></div>
                   </div>
                 ) : (
-                  <button type="button" className="lv-bigplay" onClick={() => void start()} aria-label="Assistir à aula">
-                    <Play size={30} fill="currentColor" /> Assistir
-                  </button>
+                  <>
+                    <button type="button" className="lv-bigplay" onClick={() => void start()} aria-label="Assistir à aula">
+                      <Play size={30} fill="currentColor" /> Assistir
+                    </button>
+                    {voicePicker}
+                  </>
                 )}
               </div>
             ) : (
               <>
+                {!opening && <SubjectArt slug={info.slug} className="lv-bgart" />}
                 <div className="lv-top">
-                  <span className="lv-tag"><span className="lv-logo"><svg viewBox="0 0 64 64"><FoxShape /></svg></span>{info.materia}</span>
-                  <span className="lv-count">parte {sectionOf + 1} de {v.sections.length}</span>
+                  <span className="lv-tag">
+                    <span className="lv-logo"><svg viewBox="0 0 64 64"><FoxShape /></svg></span>
+                    {info.materia}
+                    <span className="lv-eq-bars" aria-hidden><i /><i /><i /><i /></span>
+                  </span>
+                  <span className="lv-count">parte {sectionNow + 1} de {v.sections.length}</span>
                 </div>
-                <div className="lv-body">
-                  <div key={slideIndex} ref={slideBox} className="lv-slide">
+                {opening ? (
+                  <div key={`open-${slideIndex}`} className="lv-opening">
+                    <SubjectArt slug={info.slug} className="lv-opening-art" />
+                    <span className="lv-opening-num">Parte {sectionNow + 1}</span>
+                    <span className="lv-opening-title">{slide.title}</span>
                     {slide.enem && <span className="lv-badge"><Zap size={14} fill="currentColor" /> Cai muito no ENEM</span>}
-                    <h2 className="lv-title">{slide.title}{slide.cont > 0 && <span className="lv-cont"> (continuação)</span>}</h2>
-                    {slide.els.map((el, i) => {
-                      const st = elState(el);
-                      const common = { "data-now": st === "now" || undefined, className: cn("lv-el", `lv-${el.kind}`, `lv-${st}`) };
-                      if (el.kind === "table")
+                  </div>
+                ) : (
+                  <div className="lv-body">
+                    <div key={slideIndex} ref={slideBox} className={cn("lv-slide", `lv-tr-${slideIndex % 4}`)}>
+                      {slide.enem && <span className="lv-badge"><Zap size={14} fill="currentColor" /> Cai muito no ENEM</span>}
+                      <h2 className="lv-title">{slide.title}{slide.cont > 0 && <span className="lv-cont"> (continuação)</span>}</h2>
+                      {slide.els.map((el, i) => {
+                        const st = elState(el);
+                        const common = { "data-now": st === "now" || undefined, className: cn("lv-el", `lv-${el.kind}`, `lv-${st}`) };
+                        if (el.kind === "table")
+                          return (
+                            <div key={i} {...common}>
+                              <table>
+                                <tbody>{el.rows.map((r, ri) => <tr key={ri}>{r.map((c, ci) => (ri === 0 ? <th key={ci}>{inline(c)}</th> : <td key={ci}>{inline(c)}</td>))}</tr>)}</tbody>
+                              </table>
+                            </div>
+                          );
+                        // a primeira palavra deste pedaço na aula (o número do item "1." também é falado)
+                        const first = offsets[el.from] + (el.kind === "num" && el.n ? splitWords(el.n).length : 0);
                         return (
                           <div key={i} {...common}>
-                            <table>
-                              <tbody>{el.rows.map((r, ri) => <tr key={ri}>{r.map((c, ci) => (ri === 0 ? <th key={ci}>{inline(c)}</th> : <td key={ci}>{inline(c)}</td>))}</tr>)}</tbody>
-                            </table>
+                            {(el.kind === "bullet" || el.kind === "num") && <span className="lv-dot">{el.kind === "num" ? el.n : "•"}</span>}
+                            {el.kind === "enem" && <Zap className="lv-zap" size={18} fill="currentColor" />}
+                            <span><Karaoke md={el.md} firstWord={first} word={word} live={st === "now"} /></span>
                           </div>
                         );
-                      return (
-                        <div key={i} {...common}>
-                          {(el.kind === "bullet" || el.kind === "num") && <span className="lv-dot">{el.kind === "num" ? el.n : "•"}</span>}
-                          {el.kind === "enem" && <Zap className="lv-zap" size={18} fill="currentColor" />}
-                          <span>{inline(el.md)}</span>
+                      })}
+                    </div>
+                    <div className="lv-side">
+                      {term ? (
+                        <div key={term.term} className="lv-term lv-term-side">
+                          <span className="lv-term-k"><Lightbulb size={14} /> Termo importante</span>
+                          <b>{term.term}</b>
+                          <span>{term.explanation}</span>
                         </div>
-                      );
-                    })}
+                      ) : (
+                        <SubjectArt slug={info.slug} className="lv-art" />
+                      )}
+                    </div>
                   </div>
-                  <div className="lv-side"><SubjectArt slug={info.slug} className="lv-art" /></div>
-                </div>
+                )}
+                {term && !opening && (
+                  <div key={term.term} className={cn("lv-term lv-term-float", subs && "lv-term-up")}>
+                    <span className="lv-term-k"><Lightbulb size={14} /> Termo importante</span>
+                    <b>{term.term}</b>
+                    <span>{term.explanation}</span>
+                  </div>
+                )}
                 {subs && subtitle && <div className="lv-sub">{subtitle}</div>}
                 {phase === "paused" && (
                   <button type="button" className="lv-paused" onClick={resume} aria-label="Continuar">
                     <Play size={34} fill="currentColor" />
                   </button>
                 )}
-                {phase === "loading" && <div className="lv-paused" aria-hidden>…</div>}
+                {phase === "loading" && <div className="lv-paused lv-spin" aria-hidden />}
               </>
             )}
           </div>
@@ -415,7 +573,7 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
               {device ? <span>frase {part + 1} de {v.parts.length}</span> : <><span>{mmss(shownTime)}</span><span>{total ? mmss(total) : `~${estMin}:00`}</span></>}
             </div>
             <div className="lv-buttons">
-              <button type="button" className={cn("lv-btn", !subs && "opacity-50")} onClick={() => setSubs(!subs)} aria-label={subs ? "Esconder a legenda" : "Mostrar a legenda"} aria-pressed={subs}><Captions size={20} /></button>
+              <button type="button" className={cn("lv-btn", subs && "lv-btn-on")} onClick={() => setSubs(!subs)} aria-label={subs ? "Esconder a legenda" : "Mostrar a legenda"} aria-pressed={subs}><Captions size={20} /></button>
               <button type="button" className="lv-btn" onClick={() => skip(-10)} disabled={!started} aria-label="Voltar 10 segundos"><RotateCcw size={20} /></button>
               <button type="button" className="lv-btn lv-btn-main" onClick={toggle} disabled={phase === "loading"} aria-label={phase === "playing" ? "Pausar" : "Assistir"}>
                 {phase === "playing" ? <Pause size={26} fill="currentColor" /> : <Play size={26} fill="currentColor" />}
@@ -430,12 +588,13 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
                   type="button"
                   key={i}
                   onClick={() => seekPart(v.slides[s.slide].from)}
-                  className={cn("lv-chap", started && i === sectionOf && "lv-chap-on", started && i < sectionOf && "lv-chap-ok")}
+                  className={cn("lv-chap", started && i === sectionNow && "lv-chap-on", started && i < sectionNow && "lv-chap-ok")}
                 >
-                  {started && i < sectionOf ? "✓ " : ""}{s.title}
+                  {started && i < sectionNow ? "✓ " : ""}{s.title}
                 </button>
               ))}
             </nav>
+            {started && voice !== "robo" && <div className="lv-voice-row">{voicePicker}</div>}
             {note && <p className="text-xs text-warning">{note}</p>}
           </div>
         </>
