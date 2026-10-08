@@ -6,6 +6,7 @@ import { BIOLOGIA_1 } from "./biologia-1";
 import { BIOLOGIA_2 } from "./biologia-2";
 import { FISICA_1 } from "./fisica-1";
 import { QUIMICA_1 } from "./quimica-1";
+import { HISTORIA_1 } from "./historia-1";
 
 /** Aulas novas de cada matéria (entram no fim da lista: o número e o id das aulas antigas não mudam). */
 export const EXTRA: Record<string, EnemLesson[]> = {
@@ -13,4 +14,5 @@ export const EXTRA: Record<string, EnemLesson[]> = {
   biologia: [...BIOLOGIA_1, ...BIOLOGIA_2],
   fisica: [...FISICA_1],
   quimica: [...QUIMICA_1],
+  historia: [...HISTORIA_1],
 };
