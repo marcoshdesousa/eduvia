@@ -90,7 +90,8 @@ test("Estudar ENEM: aulas com quiz e 75%, refazer, banco de erros e simulado do 
   expect(quiz.choice.every((id) => id.startsWith("enem-quiz-redacao-1-m"))).toBe(true);
   await page.getByRole("button", { name: "Concluir e ver a nota" }).click();
   await expect(page.getByText("Aula aprovada! Próxima aula liberada.")).toBeVisible();
-  const n = (await sql<{ n: string }>(`SELECT count(*)::text AS n FROM "Topic" WHERE id LIKE 'enem-a-redacao-%'`))[0].n;
+  // a 13ª aula de Redação (Prática: tecnologia e saúde mental) tem uma redação para escrever
+  const n = "13";
   await sql(
     `INSERT INTO "StudySession" (id, "userId", "topicId", kind, "questionIds", "passedAt", "bestScore", "completedAt")
      SELECT 'e2e_r_' || u.id || '_' || g, u.id, 'enem-a-redacao-' || g, 'STUDY', '{}', now(), 1, now() FROM "user" u, generate_series(2, $2::int - 1) g WHERE u.handle = $1`,

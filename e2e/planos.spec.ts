@@ -44,7 +44,8 @@ test("Grátis (10% das aulas, só a Gemini) → admin libera o Básico (50%) e o
   const n = Number(total[0].n);
   await page.goto(`/enem/aula/enem-a-portugues-${n}`);
   await expect(page.getByText("Aula do plano Completo")).toBeVisible();
-  await page.goto("/enem/aula/enem-a-portugues-2");
+  // a 1ª aula depois das liberadas no Grátis (10%, arredondando para cima)
+  await page.goto(`/enem/aula/enem-a-portugues-${Math.ceil(n / 10) + 1}`);
   await expect(page.getByText(/Aula do plano (Básico|Completo)/)).toBeVisible();
 
   // assinatura: Grátis + Básico R$ 9,90, Completo (R$ 14,90 nos 3 primeiros meses) e Indicação (código de 6 números)
