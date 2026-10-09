@@ -26,7 +26,7 @@ beforeAll(async () => {
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       const j = JSON.parse(body) as { input: { text: string }; voice: { name: string } };
-      seen.push({ key: String(req.headers["x-goog-api-key"]), voice: j.voice.name, chars: j.input.text.length });
+      seen.push({ key: String(req.headers["x-goog-api-key"]), voice: j.voice.name, chars: Buffer.byteLength(j.input.text) });
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ audioContent: wavFor(j.input.text).toString("base64") }));
     });
@@ -35,6 +35,20 @@ beforeAll(async () => {
   process.env.GOOGLE_TTS_API_BASE = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 });
 afterAll(() => server.close());
+
+describe("ordem da gravação", () => {
+  it("todas as matérias na mesma proporção: as últimas aulas de cada uma ficam por último", async () => {
+    const { lessonOrder } = await import("./video-voice");
+    const order = lessonOrder();
+    expect(order).toHaveLength(508);
+    expect(new Set(order).size).toBe(508);
+    const firstHalf = order.slice(0, 254);
+    // metade da fila = mais ou menos metade de cada matéria
+    expect(firstHalf.filter((id) => id.startsWith("enem-a-matematica-")).length).toBe(36);
+    expect(firstHalf.filter((id) => id.startsWith("enem-a-artes-")).length).toBe(13);
+    expect(order.at(-1)).toMatch(/-(\d+)$/);
+  });
+});
 
 describe("voz das aulas pelo Google Cloud", () => {
   it("grava com a voz Kore, conta as letras do mês e respeita a trava", async () => {
@@ -51,6 +65,12 @@ describe("voz das aulas pelo Google Cloud", () => {
     const sent = seen.length;
     await expect(mod.testVideoVoice("ninguem")).rejects.toBeInstanceOf(MonthCapError);
     expect(seen.length).toBe(sent);
+
+    // aula sem voz com a trava atingida: bloqueada até o dia 1º do mês que vem (mês do Google)
+    const { lessonTopicId } = await import("./catalog");
+    const notice = await mod.recordingNotice(lessonTopicId("matematica", 71));
+    const [y, m] = mod.googleMonth().split("-").map(Number);
+    expect(notice?.readyOn?.toISOString().slice(0, 10)).toBe(`${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`);
     delete process.env.GOOGLE_TTS_MAX_CHARS_MONTH;
 
   });

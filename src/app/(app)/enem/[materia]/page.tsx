@@ -7,6 +7,7 @@ import { requireReadyUser } from "@/lib/session";
 import { areaOf, ENEM_TITLE, findMateria } from "@/lib/enem/catalog";
 import { ensureEnemCatalog } from "@/lib/enem/bank";
 import { lessonStates } from "@/lib/enem/progress";
+import { recordingActive, videoVoiceStatus } from "@/lib/enem/video-voice";
 import { Badge, Progress } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -27,6 +28,9 @@ export default async function Page({ params }: { params: Promise<{ materia: stri
   const access = await getAccess(user);
   const lessons = (await lessonStates(user.id, [m], access.limits.lessonsPct)).get(m.slug) ?? [];
   const allowed = lessonsAllowed(lessons.length, access.limits.lessonsPct);
+  // aulas cuja voz ainda está sendo gravada (só enquanto a gravação de todas as aulas está ligada)
+  const recordingIds = new Set<string>();
+  if (recordingActive()) for (const l of lessons) if (!(await videoVoiceStatus(l.topicId))?.ready) recordingIds.add(l.topicId);
   const done = lessons.filter((l) => l.passed).length;
   const graded = lessons.filter((l) => l.best !== null);
   const avg = graded.length ? graded.reduce((s, l) => s + (l.best ?? 0), 0) / graded.length : null;
@@ -45,7 +49,7 @@ export default async function Page({ params }: { params: Promise<{ materia: stri
           {avg !== null && <span className="text-muted">Média das suas notas: {pct(avg)}</span>}
         </div>
         <Progress value={done / Math.max(1, lessons.length)} />
-        <p className="text-xs text-muted">Cada aula tem um texto (com o robô lendo para você) e um quiz sobre o que você estudou. Tire 75% ou mais para liberar a próxima. Pode refazer quando quiser para melhorar a nota.</p>
+        <p className="text-xs text-muted">Cada aula tem um texto (com a voz lendo para você) e um modo vídeo, além de um quiz sobre o que você estudou. Tire 75% ou mais para liberar a próxima. Pode refazer quando quiser para melhorar a nota.</p>
       </Card>
 
       {allowed < lessons.length && (
@@ -70,6 +74,8 @@ export default async function Page({ params }: { params: Promise<{ materia: stri
                 <p className="text-xs text-muted">
                   {l.planLock
                     ? `Bloqueada: faz parte do plano ${l.planLock}`
+                    : recordingIds.has(l.topicId)
+                    ? "🎙️ Sendo gravada: fica pronta em breve"
                     : !l.unlocked
                     ? "Bloqueada: tire 75% na aula anterior"
                     : l.best === null
@@ -80,6 +86,8 @@ export default async function Page({ params }: { params: Promise<{ materia: stri
               {l.passed ? <Badge tone="success">Aprovada</Badge> : l.best !== null ? <Badge tone="warning">Abaixo de 75%</Badge> : null}
               {l.planLock ? (
                 <Link href="/assinatura" className={buttonClass("outline", "sm")}><Crown size={14} /> Liberar</Link>
+              ) : l.unlocked && recordingIds.has(l.topicId) ? (
+                <Link href={`/enem/aula/${l.topicId}`} className={buttonClass("outline", "sm")}>🎙️ Em gravação</Link>
               ) : l.unlocked && (
                 <Link href={`/enem/aula/${l.topicId}`} className={buttonClass(l.passed ? "outline" : "primary", "sm")}>
                   {l.passed ? <><RotateCcw size={14} /> Rever / refazer</> : l.sessionId ? <><PlayCircle size={14} /> Continuar</> : <><PlayCircle size={14} /> Começar</>}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
-import { BookOpen, Crown, Lock, PenLine } from "lucide-react";
+import { BookOpen, Crown, Lock, Mic, PenLine, Timer, Trophy } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireReadyUser } from "@/lib/session";
 import { warmLesson } from "@/lib/ai/tts";
@@ -9,6 +9,7 @@ import { getAccess, lessonPlanLock } from "@/lib/billing";
 import { ENEM_TITLE, findLesson, LESSON_MINUTES, LESSON_QUESTIONS, lessonTopicId } from "@/lib/enem/catalog";
 import { ensureEnemCatalog } from "@/lib/enem/bank";
 import { enemSession, lessonUnlocked } from "@/lib/enem/progress";
+import { recordingNotice } from "@/lib/enem/video-voice";
 import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SessionView, type SessionQuestion } from "../../../estudar/[plannedId]/session-view";
@@ -73,6 +74,33 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
           <p className="font-semibold">Aula bloqueada</p>
           <p className="text-sm text-muted">Para liberar esta aula, faça antes <strong className="text-foreground">{materia.lessons[index - 1]?.title}</strong> e tire pelo menos 75%.</p>
           <Link href={`/enem/aula/${lessonTopicId(materia.slug, index - 1)}`} className={buttonClass("primary")}>Ir para a aula anterior</Link>
+        </Card>
+      </div>
+    );
+  }
+
+  // voz da aula ainda sendo gravada (gravação de todas as aulas em andamento): aula bloqueada, com aviso e o que fazer
+  const recording = await recordingNotice(topicId);
+  if (recording) {
+    const when = recording.readyOn
+      ? `no dia ${recording.readyOn.toLocaleDateString("pt-BR", { day: "numeric", month: "long", timeZone: "UTC" }).replace(/^1 /, "1º ")}`
+      : "hoje mesmo, em instantes";
+    return (
+      <div className="mx-auto max-w-xl space-y-4">
+        {title}
+        <Card className="space-y-3 text-center">
+          <Mic className="mx-auto text-primary" size={32} />
+          <p className="font-semibold">Esta aula está sendo gravada</p>
+          <p className="text-sm text-muted">
+            Estamos gravando a voz desta aula para ela ficar ainda melhor. Ela fica pronta <strong className="text-foreground">{when}</strong>.
+          </p>
+          <p className="text-sm text-muted">Você já estudou bastante este tema por agora. Que tal colocar em prática o que aprendeu?</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Link href="/redacao/nova" className={buttonClass("primary")}><PenLine size={16} /> Fazer redação</Link>
+            <Link href="/teste-rapido" className={buttonClass("secondary")}><Timer size={16} /> Teste rápido</Link>
+            <Link href="/simulados/novo" className={buttonClass("secondary")}><Trophy size={16} /> Simulado</Link>
+          </div>
+          <Link href={back} className="block text-sm text-muted hover:text-foreground">Ver outras aulas de {materia.name}</Link>
         </Card>
       </div>
     );

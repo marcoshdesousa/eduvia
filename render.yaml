@@ -47,7 +47,7 @@ services:
       # IA: Google Gemini com a chave de cada aluno (informada no cadastro). Nada a configurar aqui.
       # Voz do robô: Piper (grátis, sem limite), baixado sozinho para /var/data/piper na primeira partida.
       # Voz das aulas (Google Cloud Text-to-Speech, voz Chirp 3 HD Kore): com a chave, o site grava a voz de todas as
-      # aulas de uma vez e guarda no disco (trava: no máximo 985 mil letras por mês, dentro do grátis do Google).
+      # aulas de uma vez e guarda no disco (trava: no máximo 950 mil letras por mês, contando acento como 2, dentro do grátis do Google).
       # Depois de tudo gravado, pode apagar a chave: os áudios continuam no site.
       - key: GOOGLE_TTS_API_KEY
         sync: false

@@ -227,19 +227,31 @@ async function speakGemini(key: string, text: string): Promise<{ pcm: Buffer; ra
 // ---------- Google Cloud Text-to-Speech (Chirp 3 HD) ----------
 const cloudKey = () => process.env.GOOGLE_TTS_API_KEY?.trim() || "";
 export const CLOUD_VOICE = "pt-BR-Chirp3-HD-Kore";
-/** Trava: no máximo tantas letras por mês (o grátis do Google é 1 milhão). Chegou nela, continua no mês seguinte. */
-const monthCap = () => Number(process.env.GOOGLE_TTS_MAX_CHARS_MONTH) || 985_000;
+/**
+ * Trava: no máximo tantas letras por mês (o grátis do Google é 1 milhão). A conta é a mais cautelosa possível:
+ * letra com acento conta como 2 (bytes), e toda tentativa conta. Chegou na trava, para e continua no mês seguinte.
+ */
+const monthCap = () => Number(process.env.GOOGLE_TTS_MAX_CHARS_MONTH) || 950_000;
 export class MonthCapError extends Error {}
-const usageKey = () => `video-voz/uso-${new Date().toISOString().slice(0, 7)}.json`;
-/** Letras já enviadas ao Google neste mês (todas as tentativas contam: o Google cobra cada pedido). */
-export const monthUsage = () => readObject(usageKey()).then((b) => (JSON.parse(b.toString()) as { chars: number }).chars, () => 0);
+/** O mês do Google (a cobrança do Google Cloud vira o mês no horário do Pacífico, não no do Brasil). */
+const TZ = "America/Los_Angeles";
+export const googleMonth = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit" }).format(d).slice(0, 7);
+const usageKey = () => `video-voz/uso-${googleMonth()}.json`;
+type Usage = { chars: number; full?: boolean };
+const readUsage = () => readObject(usageKey()).then((b) => JSON.parse(b.toString()) as Usage, () => ({ chars: 0 }) as Usage);
+/** Letras (contando acento como 2) já enviadas ao Google neste mês. */
+export const monthUsage = () => readUsage().then((u) => u.chars);
 let usageChain: Promise<unknown> = Promise.resolve();
 /** Reserva as letras de um pedido antes de mandar (um de cada vez, para a conta nunca passar da trava). */
-function reserve(chars: number): Promise<void> {
+function reserve(text: string): Promise<void> {
+  const chars = Buffer.byteLength(text, "utf8");
   const job = usageChain.then(async () => {
-    const used = await monthUsage();
-    if (used + chars > monthCap()) throw new MonthCapError(`Trava do mês: ${used.toLocaleString("pt-BR")} letras já usadas (limite ${monthCap().toLocaleString("pt-BR")}). Continua no mês que vem.`);
-    await writeObject(usageKey(), Buffer.from(JSON.stringify({ chars: used + chars })), "application/json");
+    const used = await readUsage();
+    if (used.chars + chars > monthCap()) {
+      if (!used.full) await writeObject(usageKey(), Buffer.from(JSON.stringify({ ...used, full: true })), "application/json");
+      throw new MonthCapError(`Trava do mês: ${used.chars.toLocaleString("pt-BR")} letras já usadas (limite ${monthCap().toLocaleString("pt-BR")}). Continua no mês que vem.`);
+    }
+    await writeObject(usageKey(), Buffer.from(JSON.stringify({ ...used, chars: used.chars + chars })), "application/json");
   });
   usageChain = job.catch(() => {});
   return job;
@@ -268,7 +280,7 @@ export const cloudSpeaker: Speaker = async (text) => {
   if (isMockAi()) return { pcm: mockPcm(text), rate: RATE };
   let last = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    await reserve(text.length);
+    await reserve(text);
     const res = await fetch(`${process.env.GOOGLE_TTS_API_BASE || "https://texttospeech.googleapis.com"}/v1/text:synthesize`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": cloudKey() },
@@ -284,12 +296,29 @@ export const cloudSpeaker: Speaker = async (text) => {
   throw new Error(`Google Cloud (voz): ${last}`);
 };
 
-/** As aulas na ordem de gravação: a 1ª de cada matéria, depois a 2ª... (as mais vistas ficam prontas primeiro). */
-function lessonOrder() {
-  const out: string[] = [];
-  const longest = Math.max(...MATERIAS.map((m) => m.lessons.length));
-  for (let li = 0; li < longest; li++) for (const m of MATERIAS) if (m.lessons[li]) out.push(lessonTopicId(m.slug, li));
-  return out;
+/**
+ * As aulas na ordem de gravação: cada matéria vai na mesma proporção (as primeiras aulas de todas, depois as do
+ * meio, depois as do fim). Se a trava do mês parar no meio, todas as matérias ficam com a mesma parte gravada.
+ */
+export function lessonOrder() {
+  const all = MATERIAS.flatMap((m, mi) => m.lessons.map((_, i) => ({ id: lessonTopicId(m.slug, i), at: (i + 0.5) / m.lessons.length, mi })));
+  return all.sort((a, b) => a.at - b.at || a.mi - b.mi).map((x) => x.id);
+}
+
+/** A gravação das aulas está ligada (chave do Google Cloud no Render). */
+export const recordingActive = () => !!cloudKey();
+
+/**
+ * Aula ainda sem voz enquanto a gravação está ligada: fica bloqueada com aviso. Diz quando fica pronta:
+ * hoje mesmo (a gravação está andando) ou no dia 1º do mês que vem (a trava deste mês já foi atingida).
+ */
+export async function recordingNotice(topicId: string): Promise<{ readyOn: Date | null } | null> {
+  if (!recordingActive()) return null;
+  const s = await videoVoiceStatus(topicId);
+  if (!s || s.ready) return null;
+  if (!(await readUsage()).full) return { readyOn: null };
+  const [y, m] = googleMonth().split("-").map(Number);
+  return { readyOn: new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1, 12)) };
 }
 
 /**
