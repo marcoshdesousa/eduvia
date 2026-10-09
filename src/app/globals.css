@@ -288,15 +288,6 @@ body {
 @keyframes lv-card { from { opacity: 0; transform: translateY(24px) rotate(-2deg) scale(.95); } to { opacity: 1; transform: none; } }
 @container lv (min-width: 620px) { .lv-term-float { display: none; } }
 
-/* escolha da voz */
-.lv-voices { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 9px; border-radius: 99px; background: rgb(15 23 42 / .55); color: #cbd5e1; font-size: 12px; }
-.lv-voice { padding: 4px 10px; border-radius: 99px; font-weight: 700; color: #cbd5e1; }
-.lv-voice-on { background: #fb923c; color: #0f172a; }
-.lv-voice-row { display: flex; justify-content: center; }
-.lv-voice-row .lv-voices { background: var(--surface-2); color: var(--muted); }
-.lv-voice-row .lv-voice { color: var(--muted); }
-.lv-voice-row .lv-voice-on { background: var(--primary); color: var(--primary-foreground); }
-.lv-full .lv-voice-row, .lv[data-full] .lv-voice-row { display: none; }
 .lv-btn-on { background: rgb(251 146 60 / .18); color: var(--primary); }
 .lv-spin { background: transparent !important; box-shadow: none !important; border: 4px solid rgb(255 255 255 / .2); border-top-color: #fb923c; animation: lv-rot .8s linear infinite; width: 48px !important; height: 48px !important; }
 @keyframes lv-rot { to { transform: rotate(360deg); } }

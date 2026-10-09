@@ -28,6 +28,9 @@ if (process.env.RUN_WORKER_IN_WEB === "true") {
 // só quando ninguém está usando a voz.
 if (process.env.AI_MODE !== "mock" && process.env.NODE_ENV === "production") {
   void import("./lib/enem/audio").then((m) => m.prewarmEnemAudio()).catch((e) => console.error("[voz] pré-preparo ENEM", e));
+  // Voz do modo vídeo (Gemini): grava, aos poucos, as aulas que ainda não têm voz. Fica no processo do site, o
+  // mesmo que grava quando um aluno abre uma aula sem voz: as duas nunca gravam a mesma aula ao mesmo tempo.
+  void import("./lib/enem/video-voice").then((m) => m.videoVoiceFactory()).catch((e) => console.error("[voz do vídeo] fábrica", e));
 }
 
 // Aulas do Estudar ENEM: com o worker junto do site, ele já grava o catálogo ao ligar. Sem ele, o site faz isso

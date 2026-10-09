@@ -143,7 +143,7 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
       completed={!!session.completedAt}
       text={text ? { content: text.content, highlights: text.highlights as string[], keyPoints: text.keyPoints as { term: string; explanation: string }[], refs: [] } : null}
       questions={ordered}
-      video={{ slug: materia.slug, materia: materia.name, lesson: index + 1, title: lesson.title, highlights: lesson.highlights, keyPoints: lesson.keyPoints }}
+      video={{ topicId, slug: materia.slug, materia: materia.name, lesson: index + 1, title: lesson.title, highlights: lesson.highlights, keyPoints: lesson.keyPoints }}
     />
   );
   if (!lesson.essay) return view;

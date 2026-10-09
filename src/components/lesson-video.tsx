@@ -1,26 +1,26 @@
 "use client";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { BookOpen, Captions, CheckCircle2, Lightbulb, Maximize, Mic, Minimize, Pause, Play, RotateCcw, RotateCw, Zap } from "lucide-react";
+import { BookOpen, Captions, CheckCircle2, Lightbulb, Maximize, Minimize, Pause, Play, RotateCcw, RotateCw, Zap } from "lucide-react";
 import { FoxShape } from "@/components/brand";
 import { SubjectArt, subjectAccent } from "@/components/subject-art";
 import { Button } from "@/components/ui/button";
-import { LessonAudio, wordOffsets, type WholeAudio } from "@/components/lesson-narrator";
+import { wordOffsets, type WholeAudio } from "@/components/lesson-narrator";
 import { lessonVideo, slideOfPart, type Slide, type SlideEl } from "@/lib/lesson-slides";
 import { splitWords } from "@/lib/speech-align";
-import { toBlocks } from "@/lib/speech-text";
 import { cn } from "@/lib/utils";
 
 /** Atraso entre o tempo do tocador e o som que se ouve. */
 const SOUND_LAG = 0.12;
 const SPEEDS = [1, 1.25, 1.5, 0.85];
-const LOADING = ["Preparando o vídeo da aula…", "Preparando a voz…", "Montando os slides…", "Estamos quase lá…", "Só mais um instante…"];
-/** Vozes do vídeo: Francisca e Antônio (neurais); "robo" é a reserva, se elas não responderem. */
-type VoiceKind = "f" | "m" | "robo";
-const VOICE_NAME: Record<VoiceKind, string> = { f: "Francisca", m: "Antônio", robo: "Robô" };
+/** Aula ainda sem voz gravada: a 1ª pessoa que abre espera a gravação (uma vez só; depois é na hora para todos). */
+const RECORDING = ["Gravando a voz desta aula pela primeira vez…", "Isso só acontece uma vez: depois abre na hora…", "A voz está ficando pronta…", "Estamos quase lá…"];
+/** Esperou demais pela gravação: segue com a voz do aparelho (a gravação continua para a próxima vez). */
+const RECORD_WAIT_MS = 4 * 60_000;
+type VoiceStatus = { ready: true; url: string; seconds: number; times: number[] } | { ready: false; done: number; total: number; error?: string };
 const TERM_SECONDS = 7;
 
 type Phase = "cover" | "loading" | "playing" | "paused" | "done";
-export type VideoInfo = { slug: string; materia: string; lesson: number; title: string; highlights: string[]; keyPoints?: { term: string; explanation: string }[] };
+export type VideoInfo = { topicId: string; slug: string; materia: string; lesson: number; title: string; highlights: string[]; keyPoints?: { term: string; explanation: string }[] };
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const norm = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -73,24 +73,8 @@ function Karaoke({ md, firstWord, word, live }: { md: string; firstWord: number;
  */
 export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: string; info: VideoInfo; onQuiz: () => void; onRead: () => void; quizLabel: string }) {
   const v = useMemo(() => lessonVideo(text, info.title), [text, info.title]);
-  const blocks = useMemo(() => toBlocks(v.parts), [v.parts]);
   const offsets = useMemo(() => wordOffsets(v.parts), [v.parts]);
   const stopped = useRef(false);
-  // uma "baixadora" de áudio por voz (trocar de voz não perde o que já baixou)
-  const loaders = useRef(new Map<VoiceKind, LessonAudio>());
-  const loaderFor = useCallback(
-    (k: VoiceKind) => {
-      let l = loaders.current.get(k);
-      if (!l) {
-        l = new LessonAudio(v.parts, blocks, offsets, () => stopped.current, k === "robo" ? undefined : `video-${k}`);
-        loaders.current.set(k, l);
-      }
-      return l;
-    },
-    [v.parts, blocks, offsets],
-  );
-  const [voice, setVoiceState] = useState<VoiceKind>("f");
-  const voiceRef = useRef<VoiceKind>("f");
   const [phase, setPhase] = useState<Phase>("cover");
   const [pct, setPct] = useState(0);
   const [msg, setMsg] = useState(0);
@@ -115,25 +99,23 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
   // estimativa antes do áudio chegar (para a capa): ~2,6 palavras por segundo
   const estMin = Math.max(1, Math.round(offsets.length ? (offsets.at(-1)! + splitWords(v.parts.at(-1) ?? "").length) / 2.6 / 60 : 1));
 
-  // a voz escolhida fica guardada neste aparelho
+  // a voz do vídeo é gravada uma vez por aula e guardada: ao abrir, já confere (e, se faltar, já começa a gravar,
+  // para estar pronta quando o aluno tocar em "Assistir")
+  const status = useCallback(async (method: "GET" | "POST" = "GET"): Promise<VoiceStatus | null> => {
+    const r = await fetch(`/api/aulas/video-voz?aula=${encodeURIComponent(info.topicId)}`, { method }).catch(() => null);
+    return r?.ok ? ((await r.json()) as VoiceStatus) : null;
+  }, [info.topicId]);
+  const first = useRef<Promise<VoiceStatus | null> | null>(null);
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("eduvia:voz-video");
-      if (saved === "f" || saved === "m") {
-        voiceRef.current = saved;
-        setVoiceState(saved);
-      }
-    } catch {}
-  }, []);
+    first.current = status().then((s) => (s && !s.ready && !s.error ? status("POST") : s));
+  }, [status]);
 
   useEffect(() => {
-    const made = loaders.current;
     return () => {
       stopped.current = true;
       cancelAnimationFrame(raf.current);
       audio.current?.pause();
       if ("speechSynthesis" in window) speechSynthesis.cancel();
-      for (const l of made.values()) l.dispose();
     };
   }, []);
 
@@ -143,7 +125,7 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
 
   useEffect(() => {
     if (phase !== "loading") return;
-    const id = setInterval(() => setMsg((m) => (m + 1) % LOADING.length), 3000);
+    const id = setInterval(() => setMsg((m) => (m + 1) % RECORDING.length), 4000);
     return () => clearInterval(id);
   }, [phase]);
 
@@ -280,28 +262,36 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
     let w = whole.current;
     if (!w) {
       setPhase("loading");
-      const kind = voiceRef.current;
-      try {
-        w = await loaderFor(kind).prepare(setPct);
-      } catch (e) {
-        if (stopped.current || (e as Error).message === "cancelado") return;
-        if (kind !== "robo") {
-          // a voz do vídeo não respondeu: segue com a voz do robô, sem travar a aula
-          voiceRef.current = "robo";
-          setVoiceState("robo");
-          setNote("A voz do vídeo não respondeu agora. Usando a voz do robô.");
-          return start(from);
+      setPct(0);
+      // voz da aula: já gravada (abre na hora) ou sendo gravada agora (só na 1ª vez); espera mostrando quanto falta
+      const began = Date.now();
+      let st = await (first.current ?? status());
+      let asked = false;
+      while (st && !st.ready && !st.error && Date.now() - began < RECORD_WAIT_MS && !stopped.current) {
+        if (!asked) {
+          asked = true;
+          st = await status("POST");
+          continue;
         }
-        setDevice(true);
-        setNote(`${(e as Error).message} Usando a voz do aparelho.`);
-        return speakDevice(from);
+        setPct(Math.round((st.done / Math.max(1, st.total)) * 100));
+        await new Promise((r) => setTimeout(r, 2000));
+        st = await status();
       }
       if (stopped.current) return;
+      if (!st?.ready) {
+        // não deu para gravar agora (sem cota da voz, sem internet...): segue com a voz do aparelho
+        setDevice(true);
+        setNote("A voz desta aula ainda está sendo preparada. Por enquanto, usando a voz do aparelho.");
+        return speakDevice(from);
+      }
+      const words: WholeAudio["words"] = [];
+      v.parts.forEach((p, si) => splitWords(p).forEach((_, j) => words.push({ k: offsets[si] + j, s: si, t: st.times[offsets[si] + j] ?? 0 })));
+      w = { url: st.url, words, seconds: st.seconds };
       whole.current = w;
-      const st: number[] = [];
-      for (const x of w.words) if (st[x.s] === undefined) st[x.s] = x.t;
-      for (let i = 0; i < v.parts.length; i++) st[i] ??= st[i - 1] ?? 0;
-      startsRef.current = st;
+      const starts: number[] = [];
+      for (const x of w.words) if (starts[x.s] === undefined) starts[x.s] = x.t;
+      for (let i = 0; i < v.parts.length; i++) starts[i] ??= starts[i - 1] ?? 0;
+      startsRef.current = starts;
       a.src = w.url;
       a.onended = () => {
         cancelAnimationFrame(raf.current);
@@ -340,27 +330,6 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
       .catch(() => {});
   };
   const toggle = () => (phase === "playing" ? pause() : phase === "paused" ? resume() : phase === "loading" ? undefined : void start());
-
-  /** Troca a voz (Francisca/Antônio): continua da mesma frase com a voz nova. */
-  const chooseVoice = (k: "f" | "m") => {
-    if (k === voiceRef.current) return;
-    try {
-      localStorage.setItem("eduvia:voz-video", k);
-    } catch {}
-    voiceRef.current = k;
-    setVoiceState(k);
-    setNote(null);
-    if (phase === "cover" || phase === "done") {
-      whole.current = null;
-      return;
-    }
-    const wasPlaying = phase === "playing";
-    cancelAnimationFrame(raf.current);
-    audio.current?.pause();
-    whole.current = null;
-    if (wasPlaying) void start(part);
-    else setPhase("paused");
-  };
 
   /** Vai para um momento (segundos) do vídeo; o slide e o texto já mudam, mesmo pausado. */
   const seekTime = (t: number) => {
@@ -463,16 +432,6 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
   const total = device ? v.parts.length - 1 : duration;
   const summary = v.summary.length ? v.summary : info.highlights.slice(0, 3);
   const accent = { "--lv-accent": subjectAccent(info.slug) } as CSSProperties;
-  const voicePicker = (
-    <div className="lv-voices" role="radiogroup" aria-label="Voz do vídeo">
-      <Mic size={14} aria-hidden />
-      {(["f", "m"] as const).map((k) => (
-        <button key={k} type="button" role="radio" aria-checked={voice === k} className={cn("lv-voice", voice === k && "lv-voice-on")} onClick={() => chooseVoice(k)}>
-          {VOICE_NAME[k]}
-        </button>
-      ))}
-    </div>
-  );
 
   return (
     <div ref={box} tabIndex={-1} className={cn("lv outline-none", full && "lv-full", turn && "lv-turn")} data-full={full || undefined} style={accent} aria-label={`Vídeo da aula: ${info.title}`}>
@@ -514,7 +473,7 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
                 <span className="lv-meta">{v.sections.length} partes · cerca de {estMin} min</span>
                 {phase === "loading" ? (
                   <div className="lv-loading" role="progressbar" aria-label="Preparando o vídeo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
-                    <span aria-live="polite">{LOADING[msg]} {pct}%</span>
+                    <span aria-live="polite">{RECORDING[msg]} {pct}%</span>
                     <div><i style={{ width: `${pct}%` }} /></div>
                   </div>
                 ) : (
@@ -522,7 +481,6 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
                     <button type="button" className="lv-bigplay" onClick={() => void start()} aria-label="Assistir à aula">
                       <Play size={30} fill="currentColor" /> Assistir
                     </button>
-                    {voicePicker}
                   </>
                 )}
               </div>
@@ -640,7 +598,6 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
                 </button>
               ))}
             </nav>
-            {started && voice !== "robo" && <div className="lv-voice-row">{voicePicker}</div>}
             {note && <p className="text-xs text-warning">{note}</p>}
           </div>
         </>
