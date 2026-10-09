@@ -1,9 +1,11 @@
-// Voz do MODO VÍDEO das aulas do ENEM: a voz natural do Gemini (Kore), gravada UMA VEZ por aula e guardada.
-// As aulas são iguais para todo mundo: depois de gravada, a aula toca na hora para qualquer aluno (é só um arquivo
-// MP3 pronto, sem gerar nada quando o aluno clica). Quem grava:
-// - a "fábrica" (no processo de fundo), com a chave do Gemini do admin, aos poucos, respeitando o limite grátis;
-// - o próprio aluno, quando abre uma aula que ainda não foi gravada (usa a cota de voz da chave dele, uma vez).
-// O texto falado é exatamente o dos slides (lessonVideo), então a marcação das palavras bate com o vídeo.
+// Voz das aulas do ENEM (modo vídeo e "Ler e ouvir"): voz natural do Google (Kore), gravada UMA VEZ por aula e
+// guardada. As aulas são iguais para todo mundo: depois de gravada, a aula toca na hora para qualquer aluno (é só um
+// arquivo MP3 pronto, sem gerar nada quando o aluno clica e sem usar a chave do aluno).
+// Quem grava é a "fábrica", no processo do site:
+// - com GOOGLE_TTS_API_KEY (Google Cloud Text-to-Speech, voz Chirp 3 HD Kore): grava todas as aulas de uma vez
+//   (cerca de 1 hora), com uma trava de letras por mês para nunca passar do grátis do Google;
+// - sem ela: com a chave do Gemini do admin (mesma voz Kore), aos poucos, respeitando o limite grátis do dia.
+// O texto falado é exatamente o dos slides (lessonVideo) e o do "Ler e ouvir" (são as mesmas frases).
 import { createHash } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { AiQuotaError, GEMINI_API, isMockAi, parseQuota, userGeminiKey } from "@/lib/ai/client";
@@ -79,12 +81,15 @@ export async function videoVoiceAudio(topicId: string, v: string): Promise<Buffe
   return readObject(`${p.key}.mp3`).catch(() => null);
 }
 
-/** Começa a gravar a voz da aula com esta chave do Gemini (se já não estiver gravando). */
-export function recordVideoVoice(topicId: string, key: string): Promise<void> {
+/** Grava um pedaço de texto e devolve o áudio (PCM 16 bits mono). */
+type Speaker = (text: string) => Promise<{ pcm: Buffer; rate: number }>;
+
+/** Começa a gravar a voz da aula (se já não estiver gravando). */
+export function recordVideoVoice(topicId: string, speaker: Speaker): Promise<void> {
   let job = jobs.get(topicId);
   if (!job) {
     failed.delete(topicId);
-    job = record(topicId, key)
+    job = record(topicId, speaker)
       .catch((e) => {
         failed.set(topicId, { error: (e as Error).message, at: Date.now() });
         throw e;
@@ -95,23 +100,13 @@ export function recordVideoVoice(topicId: string, key: string): Promise<void> {
   return job;
 }
 
-/** O aluno abriu a aula e ela ainda não tem voz: grava com a chave dele (uma vez; depois serve para todos). */
-export async function recordVideoVoiceForUser(topicId: string, userId: string) {
-  const key = await userGeminiKey(userId).catch(() => (isMockAi() ? "mock" : null));
-  if (!key) {
-    failed.set(topicId, { error: "Sem a chave do Gemini.", at: Date.now() });
-    return;
-  }
-  void recordVideoVoice(topicId, key).catch(() => {});
-}
-
-async function record(topicId: string, key: string) {
+async function record(topicId: string, speaker: Speaker) {
   const p = plan(topicId);
   if (!p) return;
   if (await exists(`${p.key}.json`)) return;
   for (const b of p.blocks) {
     if (await exists(`${blockKey(b)}.json`)) continue;
-    const { pcm, rate } = await speakBlock(key, b);
+    const { pcm, rate } = await speaker(b);
     const clean = cleanPcm(pcm, rate);
     const mp3 = await toMp3(Buffer.concat([clean, Buffer.alloc(Math.round(rate * GAP_S) * 2)]), rate);
     // o .json por último: ele marca que o pedaço está completo
@@ -173,6 +168,7 @@ async function ttsModels(key: string) {
 }
 
 /** Fala de teste (modo sem IA): um "bip" por palavra, com pausas nas vírgulas e pontos. */
+export const mockSpeaker: Speaker = async (text) => ({ pcm: mockPcm(text), rate: RATE });
 function mockPcm(text: string) {
   const out: Buffer[] = [];
   for (const m of text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)) {
@@ -189,7 +185,8 @@ function mockPcm(text: string) {
  * Grava um pedaço com a voz do Gemini, sempre em português do Brasil. Confere se o tamanho do áudio combina com o
  * tamanho do texto (a voz às vezes pula ou repete um trecho): se não combinar, grava de novo.
  */
-async function speakBlock(key: string, text: string): Promise<{ pcm: Buffer; rate: number }> {
+const geminiSpeaker = (key: string): Speaker => (text) => speakGemini(key, text);
+async function speakGemini(key: string, text: string): Promise<{ pcm: Buffer; rate: number }> {
   if (isMockAi()) return { pcm: mockPcm(text), rate: RATE };
   const errors: string[] = [];
   for (const model of await ttsModels(key)) {
@@ -227,44 +224,132 @@ async function speakBlock(key: string, text: string): Promise<{ pcm: Buffer; rat
   throw new Error(`A voz do Gemini não gravou: ${errors.join(" | ")}`);
 }
 
+// ---------- Google Cloud Text-to-Speech (Chirp 3 HD) ----------
+const cloudKey = () => process.env.GOOGLE_TTS_API_KEY?.trim() || "";
+export const CLOUD_VOICE = "pt-BR-Chirp3-HD-Kore";
+/** Trava: no máximo tantas letras por mês (o grátis do Google é 1 milhão). Chegou nela, continua no mês seguinte. */
+const monthCap = () => Number(process.env.GOOGLE_TTS_MAX_CHARS_MONTH) || 985_000;
+export class MonthCapError extends Error {}
+const usageKey = () => `video-voz/uso-${new Date().toISOString().slice(0, 7)}.json`;
+/** Letras já enviadas ao Google neste mês (todas as tentativas contam: o Google cobra cada pedido). */
+export const monthUsage = () => readObject(usageKey()).then((b) => (JSON.parse(b.toString()) as { chars: number }).chars, () => 0);
+let usageChain: Promise<unknown> = Promise.resolve();
+/** Reserva as letras de um pedido antes de mandar (um de cada vez, para a conta nunca passar da trava). */
+function reserve(chars: number): Promise<void> {
+  const job = usageChain.then(async () => {
+    const used = await monthUsage();
+    if (used + chars > monthCap()) throw new MonthCapError(`Trava do mês: ${used.toLocaleString("pt-BR")} letras já usadas (limite ${monthCap().toLocaleString("pt-BR")}). Continua no mês que vem.`);
+    await writeObject(usageKey(), Buffer.from(JSON.stringify({ chars: used + chars })), "application/json");
+  });
+  usageChain = job.catch(() => {});
+  return job;
+}
+
+/** WAV (o que o Google devolve em LINEAR16) → PCM e taxa. */
+export function fromWav(wav: Buffer): { pcm: Buffer; rate: number } {
+  if (wav.toString("ascii", 0, 4) !== "RIFF") return { pcm: wav, rate: RATE };
+  let rate = RATE;
+  for (let off = 12; off + 8 <= wav.length; ) {
+    const id = wav.toString("ascii", off, off + 4);
+    const size = wav.readUInt32LE(off + 4);
+    if (id === "fmt ") rate = wav.readUInt32LE(off + 12);
+    if (id === "data") return { pcm: wav.subarray(off + 8, Math.min(wav.length, off + 8 + size)), rate };
+    off += 8 + size + (size % 2);
+  }
+  return { pcm: wav.subarray(44), rate };
+}
+
+const okLength = (text: string, pcm: Buffer, rate: number) => {
+  const perSecond = text.length / (pcm.length / 2 / rate);
+  return perSecond > 6 && perSecond < 32;
+};
+
+export const cloudSpeaker: Speaker = async (text) => {
+  if (isMockAi()) return { pcm: mockPcm(text), rate: RATE };
+  let last = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await reserve(text.length);
+    const res = await fetch(`${process.env.GOOGLE_TTS_API_BASE || "https://texttospeech.googleapis.com"}/v1/text:synthesize`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": cloudKey() },
+      body: JSON.stringify({ input: { text }, voice: { languageCode: "pt-BR", name: CLOUD_VOICE }, audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: RATE } }),
+      signal: AbortSignal.timeout(120_000),
+    }).catch((e: Error) => new Response(JSON.stringify({ error: { message: e.message } }), { status: 599 }));
+    const body = (await res.json().catch(() => ({}))) as { audioContent?: string; error?: { message?: string } };
+    if (!res.ok || !body.audioContent) throw new Error(`Google Cloud (voz): ${res.status} ${body.error?.message ?? "sem áudio"}`);
+    const { pcm, rate } = fromWav(Buffer.from(body.audioContent, "base64"));
+    if (okLength(text, pcm, rate)) return { pcm, rate };
+    last = "áudio fora do tamanho esperado";
+  }
+  throw new Error(`Google Cloud (voz): ${last}`);
+};
+
+/** As aulas na ordem de gravação: a 1ª de cada matéria, depois a 2ª... (as mais vistas ficam prontas primeiro). */
+function lessonOrder() {
+  const out: string[] = [];
+  const longest = Math.max(...MATERIAS.map((m) => m.lessons.length));
+  for (let li = 0; li < longest; li++) for (const m of MATERIAS) if (m.lessons[li]) out.push(lessonTopicId(m.slug, li));
+  return out;
+}
+
 /**
- * Fábrica (processo de fundo): grava, uma por uma, as aulas que ainda não têm voz — primeiro a 1ª aula de cada
- * matéria, depois a 2ª... — com a chave do Gemini do admin. Respeita o limite grátis (poucos pedidos por minuto);
- * quando a cota do dia acaba, espera e continua depois. Nunca apaga nada.
+ * Fábrica (no processo do site): grava as aulas que ainda não têm voz. Com a chave do Google Cloud, grava todas de
+ * uma vez (4 ao mesmo tempo), parando na trava do mês. Sem ela, usa a chave do Gemini do admin, aos poucos.
+ * Nunca apaga nada; aula já gravada é pulada.
  */
 export async function videoVoiceFactory() {
-  await sleep(90_000); // deixa o servidor terminar de subir
+  await sleep(isMockAi() ? 1000 : 60_000); // deixa o servidor terminar de subir
   for (;;) {
+    const pending: string[] = [];
+    for (const id of lessonOrder()) {
+      const s = await videoVoiceStatus(id);
+      if (s && !s.ready) pending.push(id);
+    }
+    if (!pending.length) {
+      await sleep(6 * 3600_000);
+      continue;
+    }
+    if (cloudKey() || isMockAi()) {
+      let capped = false;
+      let made = 0;
+      let next = 0;
+      const worker = async () => {
+        while (!capped && next < pending.length) {
+          const id = pending[next++];
+          try {
+            await recordVideoVoice(id, cloudSpeaker);
+            made++;
+          } catch (e) {
+            if (e instanceof MonthCapError) capped = true;
+            console.warn(`[voz das aulas] ${id}: ${(e as Error).message}`);
+          }
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      console.log(`[voz das aulas] ${made} aula(s) gravada(s) com o Google Cloud${capped ? " (parou na trava do mês)" : ""}`);
+      await sleep(capped ? 6 * 3600_000 : 15 * 60_000);
+      continue;
+    }
+    // sem a chave do Google Cloud: chave do Gemini do admin, aos poucos (limite grátis por minuto e por dia)
     const admin = await db.user.findFirst({ where: { isAdmin: true, geminiKey: { not: null } }, select: { id: true }, orderBy: { createdAt: "asc" } }).catch(() => null);
     const key = admin ? await userGeminiKey(admin.id).catch(() => null) : null;
     if (!key) {
       await sleep(3600_000);
       continue;
     }
-    let pending = 0;
-    let made = 0;
     try {
-      const longest = Math.max(...MATERIAS.map((m) => m.lessons.length));
-      for (let li = 0; li < longest; li++) {
-        for (const m of MATERIAS) {
-          if (!m.lessons[li]) continue;
-          const topicId = lessonTopicId(m.slug, li);
-          const s = await videoVoiceStatus(topicId);
-          if (!s || s.ready) continue;
-          pending++;
-          await recordVideoVoice(topicId, key);
-          made++;
-          await sleep(25_000); // limite grátis: poucos pedidos por minuto
-        }
+      for (const id of pending) {
+        if (cloudKey()) break; // a chave do Google Cloud chegou: a próxima volta grava tudo de uma vez
+        await recordVideoVoice(id, geminiSpeaker(key));
+        await sleep(25_000);
       }
     } catch (e) {
-      const quota = e instanceof AiQuotaError;
-      console.warn(`[voz do vídeo] fábrica parou: ${(e as Error).message}`);
-      await sleep(quota ? Math.max(15 * 60_000, (e as AiQuotaError).retryAt.getTime() - Date.now()) : 15 * 60_000);
+      console.warn(`[voz das aulas] fábrica (Gemini) parou: ${(e as Error).message}`);
+      const retry = e instanceof AiQuotaError ? Math.max(15 * 60_000, e.retryAt.getTime() - Date.now()) : 15 * 60_000;
+      await sleep(Math.min(retry, 6 * 3600_000));
       continue;
     }
-    if (made) console.log(`[voz do vídeo] fábrica: ${made} aula(s) gravada(s)`);
-    await sleep(pending ? 60_000 : 6 * 3600_000);
+    await sleep(60_000);
   }
 }
 
@@ -281,9 +366,10 @@ export async function videoVoiceProgress() {
   return { ready, total };
 }
 
-/** Teste do admin: grava uma frase curta com a chave do Gemini dele (não guarda) e diz quantos segundos deu. */
+/** Teste do admin: grava uma frase curta (não guarda) e diz quantos segundos deu e com qual serviço. */
 export async function testVideoVoice(userId: string) {
-  const key = await userGeminiKey(userId);
-  const { pcm, rate } = await speakBlock(key, "Olá! Esta é a voz das aulas em vídeo do Eduvia.");
-  return Math.round((pcm.length / 2 / rate) * 10) / 10;
+  const text = "Olá! Esta é a voz das aulas do Eduvia.";
+  const cloud = !!cloudKey();
+  const { pcm, rate } = cloud ? await cloudSpeaker(text) : await speakGemini(await userGeminiKey(userId), text);
+  return { seconds: Math.round((pcm.length / 2 / rate) * 10) / 10, via: cloud ? `Google Cloud (${CLOUD_VOICE})` : `Gemini (${VIDEO_VOICE}, chave do admin)` };
 }

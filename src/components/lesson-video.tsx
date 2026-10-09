@@ -12,10 +12,6 @@ import { cn } from "@/lib/utils";
 /** Atraso entre o tempo do tocador e o som que se ouve. */
 const SOUND_LAG = 0.12;
 const SPEEDS = [1, 1.25, 1.5, 0.85];
-/** Aula ainda sem voz gravada: a 1ª pessoa que abre espera a gravação (uma vez só; depois é na hora para todos). */
-const RECORDING = ["Gravando a voz desta aula pela primeira vez…", "Isso só acontece uma vez: depois abre na hora…", "A voz está ficando pronta…", "Estamos quase lá…"];
-/** Esperou demais pela gravação: segue com a voz do aparelho (a gravação continua para a próxima vez). */
-const RECORD_WAIT_MS = 4 * 60_000;
 type VoiceStatus = { ready: true; url: string; seconds: number; times: number[] } | { ready: false; done: number; total: number; error?: string };
 const TERM_SECONDS = 7;
 
@@ -76,8 +72,6 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
   const offsets = useMemo(() => wordOffsets(v.parts), [v.parts]);
   const stopped = useRef(false);
   const [phase, setPhase] = useState<Phase>("cover");
-  const [pct, setPct] = useState(0);
-  const [msg, setMsg] = useState(0);
   const [note, setNote] = useState<string | null>(null);
   const [part, setPart] = useState(0);
   const [word, setWord] = useState(-1);
@@ -99,15 +93,14 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
   // estimativa antes do áudio chegar (para a capa): ~2,6 palavras por segundo
   const estMin = Math.max(1, Math.round(offsets.length ? (offsets.at(-1)! + splitWords(v.parts.at(-1) ?? "").length) / 2.6 / 60 : 1));
 
-  // a voz do vídeo é gravada uma vez por aula e guardada: ao abrir, já confere (e, se faltar, já começa a gravar,
-  // para estar pronta quando o aluno tocar em "Assistir")
-  const status = useCallback(async (method: "GET" | "POST" = "GET"): Promise<VoiceStatus | null> => {
-    const r = await fetch(`/api/aulas/video-voz?aula=${encodeURIComponent(info.topicId)}`, { method }).catch(() => null);
+  // a voz é gravada uma vez por aula e guardada: ao abrir, já confere se está pronta
+  const status = useCallback(async (): Promise<VoiceStatus | null> => {
+    const r = await fetch(`/api/aulas/video-voz?aula=${encodeURIComponent(info.topicId)}`).catch(() => null);
     return r?.ok ? ((await r.json()) as VoiceStatus) : null;
   }, [info.topicId]);
   const first = useRef<Promise<VoiceStatus | null> | null>(null);
   useEffect(() => {
-    first.current = status().then((s) => (s && !s.ready && !s.error ? status("POST") : s));
+    first.current = status();
   }, [status]);
 
   useEffect(() => {
@@ -123,11 +116,6 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
     if (audio.current) audio.current.playbackRate = rate;
   }, [rate]);
 
-  useEffect(() => {
-    if (phase !== "loading") return;
-    const id = setInterval(() => setMsg((m) => (m + 1) % RECORDING.length), 4000);
-    return () => clearInterval(id);
-  }, [phase]);
 
   // Tela cheia: o vídeo fica deitado, como no YouTube. No Android o celular gira sozinho (tela cheia de verdade +
   // trava na horizontal). Onde o site não pode girar o celular (iPhone), o vídeo é desenhado deitado ocupando
@@ -262,26 +250,12 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
     let w = whole.current;
     if (!w) {
       setPhase("loading");
-      setPct(0);
-      // voz da aula: já gravada (abre na hora) ou sendo gravada agora (só na 1ª vez); espera mostrando quanto falta
-      const began = Date.now();
-      let st = await (first.current ?? status());
-      let asked = false;
-      while (st && !st.ready && !st.error && Date.now() - began < RECORD_WAIT_MS && !stopped.current) {
-        if (!asked) {
-          asked = true;
-          st = await status("POST");
-          continue;
-        }
-        setPct(Math.round((st.done / Math.max(1, st.total)) * 100));
-        await new Promise((r) => setTimeout(r, 2000));
-        st = await status();
-      }
+      // voz da aula: já gravada (abre na hora); se ainda não foi gravada, usa a voz do aparelho por enquanto
+      const st = await (first.current ?? status());
       if (stopped.current) return;
       if (!st?.ready) {
-        // não deu para gravar agora (sem cota da voz, sem internet...): segue com a voz do aparelho
         setDevice(true);
-        setNote("A voz desta aula ainda está sendo preparada. Por enquanto, usando a voz do aparelho.");
+        setNote("A voz desta aula ainda está sendo gravada. Por enquanto, usando a voz do aparelho.");
         return speakDevice(from);
       }
       const words: WholeAudio["words"] = [];
@@ -472,9 +446,8 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
                 <span className="lv-cover-title">{info.title}</span>
                 <span className="lv-meta">{v.sections.length} partes · cerca de {estMin} min</span>
                 {phase === "loading" ? (
-                  <div className="lv-loading" role="progressbar" aria-label="Preparando o vídeo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
-                    <span aria-live="polite">{RECORDING[msg]} {pct}%</span>
-                    <div><i style={{ width: `${pct}%` }} /></div>
+                  <div className="lv-loading" role="status">
+                    <span aria-live="polite">Abrindo a aula…</span>
                   </div>
                 ) : (
                   <>

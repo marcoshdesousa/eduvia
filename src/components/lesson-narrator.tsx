@@ -319,6 +319,21 @@ export class LessonAudio {
   }
 }
 
+/**
+ * Voz já gravada da aula (aulas do ENEM: a mesma do modo vídeo, gravada uma vez e guardada no site).
+ * Devolve null se a aula ainda não foi gravada ou se as palavras não baterem com o texto.
+ */
+export async function recordedLessonAudio(topicId: string, parts: string[], offsets: number[]): Promise<WholeAudio | null> {
+  const r = await fetch(`/api/aulas/video-voz?aula=${encodeURIComponent(topicId)}`).catch(() => null);
+  const st = r?.ok ? ((await r.json()) as { ready: boolean; url?: string; seconds?: number; times?: number[] }) : null;
+  if (!st?.ready || !st.url || !st.times) return null;
+  const total = parts.reduce((n, p) => n + splitWords(p).length, 0);
+  if (st.times.length !== total) return null;
+  const words: WholeAudio["words"] = [];
+  parts.forEach((p, si) => splitWords(p).forEach((_, j) => words.push({ k: offsets[si] + j, s: si, t: st.times![offsets[si] + j] })));
+  return { url: st.url, words, seconds: st.seconds ?? 0 };
+}
+
 /** Onde começam as palavras de cada frase na lista de todas as palavras da aula. */
 export function wordOffsets(parts: string[]) {
   const off: number[] = [];
@@ -347,7 +362,7 @@ type State = "idle" | "loading" | "playing" | "paused";
  * (com porcentagem e mensagens enquanto espera), junta num áudio só e lê do começo ao fim sem parar.
  * Enquanto lê, a frase atual fica marcada em laranja no texto. Se a voz do servidor falhar, usa a voz do aparelho.
  */
-export function LessonNarrator({ text, labels = [], targetRef }: { text: string; labels?: string[]; targetRef?: RefObject<HTMLElement | null> }) {
+export function LessonNarrator({ text, labels = [], targetRef, recorded }: { text: string; labels?: string[]; targetRef?: RefObject<HTMLElement | null>; recorded?: string }) {
   const parts = useMemo(() => toSpeech(text, labels), [text, labels]);
   const blocks = useMemo(() => toBlocks(parts), [parts]);
   const wordOffset = useMemo(() => wordOffsets(parts), [parts]);
@@ -459,7 +474,9 @@ export function LessonNarrator({ text, labels = [], targetRef }: { text: string;
     setState("loading");
     let c: WholeAudio;
     try {
-      c = await loader.prepare((pct) => {
+      // aula com voz já gravada (a mesma do vídeo): toca na hora, sem baixar a voz do robô
+      const ready = recorded ? await recordedLessonAudio(recorded, parts, wordOffset).catch(() => null) : null;
+      c = ready ?? await loader.prepare((pct) => {
         setProgress(pct);
         if (pct === 0) setShown(0);
       });

@@ -149,7 +149,7 @@ export function SessionView({
 
       {current === "texto" && text && !(video && text.content && mode === "video") && (
         <div className="space-y-4">
-          {text.content && <LessonNarrator text={text.content} labels={text.refs.map((r) => r.label)} targetRef={articleRef} />}
+          {text.content && <LessonNarrator text={text.content} labels={text.refs.map((r) => r.label)} targetRef={articleRef} recorded={video?.topicId} />}
           {text.content && /\]\(\/fonte\//.test(linkSources(text.content, text.refs)) && (
             <p className="-mt-2 px-1 text-xs text-muted">
               ℹ️ As marcações pequenas como <span className="source-mark !align-baseline !text-xs">p.3</span> mostram de qual página do seu PDF veio cada

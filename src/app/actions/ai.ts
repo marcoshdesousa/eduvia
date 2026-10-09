@@ -96,19 +96,20 @@ export async function testVoiceAction(): Promise<VoiceTestResult> {
   return r.ok ? { ...r, memoryMb } : { ok: false, error: [r.error, r.lastError].filter(Boolean).join(" · "), memoryMb };
 }
 
-/** Admin: testa a voz do vídeo (Gemini, com a chave do admin) e mostra quantas aulas já têm a voz gravada. */
-export async function testVideoVoiceAction(): Promise<VoiceTestResult & { lessons?: string }> {
+/** Admin: testa a voz das aulas (Google Cloud ou Gemini) e mostra quantas aulas já estão gravadas. */
+export async function testVideoVoiceAction(): Promise<VoiceTestResult> {
   const user = await requireUser();
   const memoryMb = Math.round(process.memoryUsage().rss / 1_048_576);
   if (!user.isAdmin) return { ok: false, error: "Só para administradores.", memoryMb };
-  const { testVideoVoice, videoVoiceProgress, VIDEO_VOICE } = await import("@/lib/enem/video-voice");
+  const { monthUsage, testVideoVoice, videoVoiceProgress } = await import("@/lib/enem/video-voice");
   const p = await videoVoiceProgress();
-  const lessons = `${p.ready} de ${p.total} aulas já têm a voz gravada`;
+  const used = await monthUsage();
+  const info = `${p.ready} de ${p.total} aulas gravadas · ${used.toLocaleString("pt-BR")} letras usadas no Google Cloud este mês`;
   const t0 = Date.now();
   try {
-    const seconds = await testVideoVoice(user.id);
-    return { ok: true, voice: `Gemini ${VIDEO_VOICE} · ${lessons}`, ms: Date.now() - t0, seconds, memoryMb };
+    const r = await testVideoVoice(user.id);
+    return { ok: true, voice: `${r.via} · ${info}`, ms: Date.now() - t0, seconds: r.seconds, memoryMb };
   } catch (e) {
-    return { ok: false, error: `${(e as Error).message} (${lessons})`, memoryMb };
+    return { ok: false, error: `${(e as Error).message} (${info})`, memoryMb };
   }
 }
