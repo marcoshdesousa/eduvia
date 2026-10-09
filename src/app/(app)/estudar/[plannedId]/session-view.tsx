@@ -1,0 +1,322 @@
+"use client";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import { LessonNarrator } from "@/components/lesson-narrator";
+import { LessonVideo, type VideoInfo } from "@/components/lesson-video";
+import { ContentReadyToast, finishMessage, StudyTimer } from "./study-timer";
+import { BookOpen, Brain, CheckCircle2, Clock, Lightbulb, MonitorPlay, PartyPopper, RotateCcw, XCircle } from "lucide-react";
+import { MinutesPicker } from "./minutes-picker";
+import { completeSessionAction, retakeSessionAction, studyPulseAction } from "@/app/actions/study";
+import { useRouter } from "next/navigation";
+import { QuestionCard, SourceLinks, type QuestionData, type SourceRef } from "@/components/question-card";
+import { linkSources } from "@/lib/sources";
+import { Button, buttonClass } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/badge";
+import { cn, formatMinutes } from "@/lib/utils";
+
+export type SessionQuestion = QuestionData;
+
+type Header = { topic: string; subject: string; preparation: string; preparationId: string; kind: string; label: string; minutes: number; backHref?: string };
+type Text = { content: string | null; highlights: string[]; keyPoints: { term: string; explanation: string }[]; refs: SourceRef[] } | null;
+
+type Grade = { tries: number; best: number | null; last: number | null; passed: boolean } | null;
+const pct = (x: number) => `${Math.round(x * 100)}%`;
+
+export function SessionView({
+  header,
+  sessionId,
+  startedAt,
+  completed,
+  text,
+  questions,
+  grade,
+  minuteOptions,
+  video,
+}: {
+  minuteOptions?: { options: readonly number[]; suggested: number };
+  header: Header;
+  sessionId: string;
+  startedAt: string;
+  completed: boolean;
+  text: Text;
+  questions: SessionQuestion[];
+  grade: Grade;
+  /** Aulas do Estudar ENEM: dá para assistir à aula em "modo vídeo" (slides com a voz do robô). */
+  video?: VideoInfo;
+}) {
+  const router = useRouter();
+  const recall = questions.filter((q) => q.type === "OPEN_RECALL");
+  const objective = questions.filter((q) => q.type !== "OPEN_RECALL");
+  const steps = useMemo(
+    () => [
+      ...(text ? [{ key: "texto", label: header.kind === "REVIEW" ? "Relembre" : "Estude", icon: BookOpen }] : []),
+      ...(recall.length ? [{ key: "recall", label: "Recupere", icon: Brain }] : []),
+      ...(objective.length ? [{ key: "questoes", label: "Pratique", icon: Lightbulb }] : []),
+      { key: "fim", label: "Concluir", icon: CheckCircle2 },
+    ],
+    [text, recall.length, objective.length, header.kind],
+  );
+  const [step, setStep] = useState(completed ? steps.length - 1 : 0);
+  const [answeredIds, setAnsweredIds] = useState(() => new Set(questions.filter((q) => q.answered).map((q) => q.id)));
+  const [summary, setSummary] = useState<{ correct: number; total: number; score: number; passed: boolean; best: number; nextHref: string | null } | null>(null);
+  const [comfort, setComfort] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const current = steps[step].key;
+  const articleRef = useRef<HTMLElement>(null);
+  const [mode, setMode] = useState<"video" | "texto">(video ? "video" : "texto");
+  // a escolha (vídeo ou texto) fica guardada neste aparelho
+  useEffect(() => {
+    if (!video) return;
+    try {
+      const saved = localStorage.getItem("eduvia:modo-aula");
+      if (saved === "texto" || saved === "video") setMode(saved);
+    } catch {}
+  }, [video]);
+  const chooseMode = (m: "video" | "texto") => {
+    setMode(m);
+    try {
+      localStorage.setItem("eduvia:modo-aula", m);
+    } catch {}
+  };
+
+  // conta o tempo de estudo (1 min por minuto com a aula aberta na tela): a sequência vale com 5 min no dia
+  const active = !completed && !summary;
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") studyPulseAction(sessionId).catch(() => {});
+    }, 60_000);
+    return () => clearInterval(t);
+  }, [active, sessionId]);
+  const markAnswered = (id: string) => setAnsweredIds((s) => new Set(s).add(id));
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div>
+        <Link href={header.backHref ?? `/preparacoes/${header.preparationId}`} className="text-sm text-muted hover:text-foreground">← {header.preparation}</Link>
+        <p className="mt-2 text-sm text-muted">{header.subject} · {header.label} · {formatMinutes(header.minutes)}</p>
+        <h1 className="text-2xl font-bold">{header.topic}</h1>
+      </div>
+      {!completed && !summary && <StudyTimer startedAt={startedAt} minutes={header.minutes} />}
+      <ContentReadyToast />
+
+      <ol className="grid gap-2" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+        {steps.map((s, i) => (
+          <li key={s.key}>
+            <button
+              type="button"
+              onClick={() => (i <= step || completed) && setStep(i)}
+              className={cn("flex w-full flex-col items-center gap-1 rounded-lg p-2 text-xs font-medium", i === step ? "bg-primary/15 text-primary" : i < step ? "text-success" : "text-muted")}
+            >
+              <s.icon size={18} />
+              {s.label}
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      {current === "texto" && text && video && text.content && (
+        <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Como você quer estudar">
+          {([["video", "Vídeo", MonitorPlay], ["texto", "Ler e ouvir", BookOpen]] as const).map(([m, label, Icon]) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              onClick={() => chooseMode(m)}
+              className={cn("flex items-center justify-center gap-2 rounded-xl border-2 p-3 text-sm font-semibold transition", mode === m ? "border-primary bg-primary/10 text-primary" : "border-border bg-surface text-muted")}
+            >
+              <Icon size={18} /> {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {current === "texto" && text && video && text.content && mode === "video" && (
+        <div className="space-y-4">
+          <LessonVideo
+            text={text.content}
+            info={video}
+            quizLabel={questions.length ? "Fazer o quiz" : "Continuar"}
+            onQuiz={() => setStep(step + 1)}
+            onRead={() => chooseMode("texto")}
+          />
+          <Button variant="secondary" className="w-full sm:w-auto" onClick={() => setStep(step + 1)}>{questions.length ? "Ir para o quiz" : "Continuar"}</Button>
+        </div>
+      )}
+
+      {current === "texto" && text && !(video && text.content && mode === "video") && (
+        <div className="space-y-4">
+          {text.content && <LessonNarrator text={text.content} labels={text.refs.map((r) => r.label)} targetRef={articleRef} recorded={video?.topicId} />}
+          {text.content && /\]\(\/fonte\//.test(linkSources(text.content, text.refs)) && (
+            <p className="-mt-2 px-1 text-xs text-muted">
+              ℹ️ As marcações pequenas como <span className="source-mark !align-baseline !text-xs">p.3</span> mostram de qual página do seu PDF veio cada
+              informação. Toque nelas para abrir a página com o trecho grifado. O robô não lê essas marcações.
+            </p>
+          )}
+          {text.content && (
+            <Card>
+              <article ref={articleRef} className="prose-study">
+                <ReactMarkdown components={{ a: (p) => <a {...p} className="source-mark" /> }}>
+                  {linkSources(text.content, text.refs)}
+                </ReactMarkdown>
+              </article>
+            </Card>
+          )}
+          {text.highlights.length > 0 && (
+            <Card className="border-primary/40">
+              <CardTitle>Destaques</CardTitle>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed">{text.highlights.map((h, i) => <li key={i}>{h}</li>)}</ul>
+            </Card>
+          )}
+          {text.keyPoints.length > 0 && (
+            <Card>
+              <CardTitle>Para entender</CardTitle>
+              <dl className="mt-2 space-y-2 text-sm">
+                {text.keyPoints.map((k, i) => (
+                  <div key={i}><dt className="font-semibold">{k.term}</dt><dd className="text-muted">{k.explanation}</dd></div>
+                ))}
+              </dl>
+            </Card>
+          )}
+          {text.refs.length > 0 && (
+            <div className="space-y-1"><div className="text-xs font-medium text-muted">Fontes no seu material</div><SourceLinks refs={text.refs} /></div>
+          )}
+          <Button className="w-full sm:w-auto" onClick={() => setStep(step + 1)}>{recall.length ? "Já li — testar sem consultar" : "Continuar"}</Button>
+        </div>
+      )}
+
+      {current === "recall" && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted">Feche o material e responda com o que lembrar. Tentar lembrar é o que fixa o conteúdo — mesmo errando.</p>
+          {recall.map((q, i) => <QuestionCard key={q.id} q={q} index={i} sessionId={sessionId} onAnswered={() => markAnswered(q.id)} />)}
+          <Button disabled={!recall.every((q) => answeredIds.has(q.id))} onClick={() => setStep(step + 1)}>Continuar</Button>
+        </div>
+      )}
+
+      {current === "questoes" && (
+        <div className="space-y-4">
+          <div>
+            <div className="mb-1 flex justify-between text-xs text-muted"><span>Questões respondidas</span><span>{objective.filter((q) => answeredIds.has(q.id)).length}/{objective.length}</span></div>
+            <Progress value={objective.filter((q) => answeredIds.has(q.id)).length / objective.length} />
+          </div>
+          {objective.map((q, i) => <QuestionCard key={q.id} q={q} index={i} sessionId={sessionId} onAnswered={() => markAnswered(q.id)} />)}
+          <Button disabled={!objective.every((q) => answeredIds.has(q.id))} onClick={() => setStep(step + 1)}>Continuar</Button>
+        </div>
+      )}
+
+      {current === "fim" && (
+        <Card className="text-center">
+          {summary || completed ? (
+            <FinishCard
+              summary={summary}
+              grade={grade}
+              isLesson={header.kind === "STUDY"}
+              comfort={comfort}
+              pending={pending}
+              minuteOptions={minuteOptions}
+              onRetake={(minutes) =>
+                start(async () => {
+                  await retakeSessionAction(sessionId, minutes);
+                  router.refresh();
+                })
+              }
+            />
+          ) : (
+            <>
+              <p className="font-medium">Tudo pronto?</p>
+              <p className="mt-1 text-sm text-muted">
+                {header.kind === "STUDY" ? "Ao concluir, calculamos a sua nota. Com 75% ou mais, a próxima aula é liberada." : "Ao concluir, registramos seu progresso e agendamos as próximas revisões."}
+              </p>
+              <Button
+                className="mt-4"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    setComfort(finishMessage(startedAt, header.minutes));
+                    const r = await completeSessionAction(sessionId);
+                    if (r) setSummary(r);
+                  })
+                }
+              >
+                {pending ? "Calculando..." : "Concluir e ver a nota"}
+              </Button>
+            </>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function FinishCard({
+  summary,
+  grade,
+  isLesson,
+  comfort,
+  pending,
+  onRetake,
+  minuteOptions,
+}: {
+  summary: { correct: number; total: number; score: number; passed: boolean; best: number; nextHref: string | null } | null;
+  grade: Grade;
+  isLesson: boolean;
+  comfort: string | null;
+  pending: boolean;
+  onRetake: (minutes?: number) => void;
+  minuteOptions?: { options: readonly number[]; suggested: number };
+}) {
+  // refazer: na preparação do aluno, escolhe o tempo de novo (o cronômetro mostra o tempo escolhido)
+  const [picking, setPicking] = useState(false);
+  const [minutes, setMinutes] = useState(minuteOptions?.suggested ?? 15);
+  const retake = () => (minuteOptions ? setPicking(true) : onRetake());
+  if (picking && minuteOptions) {
+    return (
+      <div className="space-y-3 text-left">
+        <p className="flex items-center gap-2 font-semibold"><Clock size={18} className="text-primary" /> Quanto tempo você tem para refazer?</p>
+        <MinutesPicker options={minuteOptions.options} value={minutes} onChange={setMinutes} />
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={pending} onClick={() => onRetake(minutes)}>{pending ? "Abrindo..." : `Refazer em ${minutes} min`}</Button>
+          <Button variant="ghost" onClick={() => setPicking(false)}>Voltar</Button>
+        </div>
+      </div>
+    );
+  }
+  const score = summary?.score ?? grade?.last ?? null;
+  const passed = summary ? summary.passed : !isLesson || !!grade?.passed;
+  const best = summary?.best ?? grade?.best ?? null;
+  const next = summary?.nextHref;
+  return (
+    <div className="space-y-3">
+      {passed ? <PartyPopper className="mx-auto text-primary" size={32} /> : <XCircle className="mx-auto text-danger" size={32} />}
+      {isLesson && score !== null && (
+        <div>
+          <div className={cn("text-5xl font-extrabold", passed ? "text-success" : "text-danger")}>{pct(score)}</div>
+          <p className="text-xs text-muted">nota desta tentativa{best !== null && best > score ? ` · sua melhor nota: ${pct(best)}` : ""} · mínimo para passar: 75%</p>
+        </div>
+      )}
+      <p className="text-lg font-semibold">
+        {!isLesson ? "Sessão concluída!" : passed ? "Aula aprovada! Próxima aula liberada." : "Quase lá! Você ainda não passou nesta aula."}
+      </p>
+      {isLesson && !passed && (
+        <p className="mx-auto max-w-md text-sm text-muted">
+          Você precisa de pelo menos 75% para liberar a próxima aula. Releia o texto com calma (ele continua aqui) e refaça as perguntas. Errar faz parte de aprender!
+        </p>
+      )}
+      {summary && summary.total > 0 && <p className="text-sm text-muted">Você acertou {summary.correct} de {summary.total}. Os erros foram para o banco de erros.</p>}
+      {comfort && passed && <p className="mx-auto max-w-md text-sm">{comfort}</p>}
+      <div className="flex flex-wrap justify-center gap-2 pt-1">
+        {isLesson && !passed && (
+          <Button disabled={pending} onClick={retake}><RotateCcw size={16} /> Reestudar e refazer a aula</Button>
+        )}
+        {passed && next && <Link href={next} className={buttonClass("primary")}>{next.startsWith("/enem/aula/") || next.startsWith("/estudar/") ? "Próxima aula" : "Voltar à matéria"}</Link>}
+        {passed && !next && <Link href="/inicio" className={buttonClass("primary")}>Voltar ao início</Link>}
+        {isLesson && passed && (
+          <Button variant="outline" disabled={pending} onClick={retake}><RotateCcw size={16} /> Refazer para melhorar a nota</Button>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,72 @@
+# Blueprint do Render: um serviço web ("eduvia") (app + processamento em segundo plano) com disco
+# para os arquivos enviados, e o PostgreSQL.
+# No painel do Render: New → Blueprint → escolha este repositório.
+# Depois preencha as variáveis marcadas com sync: false (painel → eduvia → Environment).
+#
+# Quando o app crescer, dá para separar o worker (npm run worker) e mover os arquivos
+# para um armazenamento S3/Cloudflare R2 (STORAGE_DRIVER=s3) — ver README.
+
+services:
+  - type: web
+    # o nome vira o endereço gratuito: https://eduvia.onrender.com (se o nome estiver livre no Render)
+    name: eduvia
+    runtime: node
+    plan: standard # 2 GB: site + leitura de PDFs (discos persistentes exigem plano pago)
+    region: virginia
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npx prisma migrate deploy && npm run db:seed
+    startCommand: npm start
+    healthCheckPath: /termos
+    disk:
+      name: eduvia-arquivos
+      mountPath: /var/data
+      sizeGB: 5 # PDFs dos alunos; dá para aumentar depois no painel
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eduvia-db
+          property: connectionString
+      - key: NODE_VERSION
+        value: "22"
+      # O endereço do app é detectado sozinho (RENDER_EXTERNAL_URL). Só preencha APP_URL
+      # quando tiver domínio próprio (ex.: https://eduvia.com.br).
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      # processamento de PDFs, planos e lembretes no mesmo servidor, num processo separado do site
+      # (se um PDF pesado derrubar esse processo, ele reinicia sozinho e o site continua no ar)
+      - key: RUN_WORKER_IN_WEB
+        value: "true"
+      - key: WORKER_MAX_MB
+        value: "1024" # memória máxima do processo dos PDFs (o resto fica para o site)
+      - key: STORAGE_DRIVER
+        value: local
+      - key: STORAGE_LOCAL_DIR
+        value: /var/data/uploads
+      - key: BILLING_ENFORCED
+        value: "true" # sem assinatura, a conta fica no plano Grátis (limitado)
+      # IA: Google Gemini com a chave de cada aluno (informada no cadastro). Nada a configurar aqui.
+      # Voz do robô: Piper (grátis, sem limite), baixado sozinho para /var/data/piper na primeira partida.
+      # Voz das aulas (Google Cloud Text-to-Speech, voz Chirp 3 HD Kore): com a chave, o site grava a voz de todas as
+      # aulas de uma vez e guarda no disco (trava: no máximo 950 mil letras por mês, contando acento como 2, dentro do grátis do Google).
+      # Depois de tudo gravado, pode apagar a chave: os áudios continuam no site.
+      - key: GOOGLE_TTS_API_KEY
+        sync: false
+      # Pix automático (SyncPay): preencha no painel do Render. Sem elas, a assinatura continua pelo WhatsApp.
+      - key: SYNCPAY_CLIENT_ID
+        sync: false
+      - key: SYNCPAY_CLIENT_SECRET
+        sync: false
+      # notificações push: as chaves são geradas sozinhas e guardadas no banco na primeira vez.
+      # (Opcional) para usar chaves próprias, preencha VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY juntas.
+      - key: VAPID_PUBLIC_KEY
+        value: BAHR0NyTSbKzMlU5z66DwDtMNfv9ZFZaIN5ps1bBecDlsDDACe4LAR9Bu0zk4N2ZSIlm0_V8yYn87uphNOr9vYQ # pública (pode ficar no código)
+      - key: VAPID_PRIVATE_KEY
+        sync: false # opcional (ver acima)
+      - key: VAPID_SUBJECT
+        value: mailto:suporte@eduvia.app
+
+databases:
+  - name: eduvia-db
+    plan: basic-256mb
+    region: virginia
+    postgresMajorVersion: "16"
