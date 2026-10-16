@@ -4,7 +4,7 @@ import { isMockAi, streamText } from "@/lib/ai/client";
 import { profileVoice } from "@/lib/core/profiles";
 import { searchChunks } from "@/lib/rag";
 import type { SourceRef } from "@/lib/sources";
-import { ENEM_PREP_ID, lessonTopicId, MATERIAS } from "@/lib/enem/catalog";
+import { ENEM_MATERIAS as MATERIAS, ENEM_PREP_ID, lessonTopicId } from "@/lib/enem/catalog";
 
 export type Shortcut = "explicar" | "testar" | "questoes" | "erros" | null;
 

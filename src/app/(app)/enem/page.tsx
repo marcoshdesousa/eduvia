@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { BookOpenCheck, ChevronRight, Info, PlayCircle, Timer } from "lucide-react";
+import { BookOpenCheck, ChevronRight, Info, PlayCircle, Timer, Wrench } from "lucide-react";
 import { requireReadyUser } from "@/lib/session";
 import { getAccess } from "@/lib/billing";
 import { lessonsAllowed } from "@/lib/plans";
-import { AREAS, ENEM_TITLE, MATERIAS } from "@/lib/enem/catalog";
+import { AREAS, COURSES, ENEM_MATERIAS as MATERIAS, ENEM_TITLE } from "@/lib/enem/catalog";
 import { ensureEnemCatalog } from "@/lib/enem/bank";
 import { lessonStates } from "@/lib/enem/progress";
 import { studyGeneralAction } from "@/app/actions/enem";
@@ -18,7 +18,7 @@ export default async function Page() {
   await ensureEnemCatalog();
   const access = await getAccess(user);
   const states = await lessonStates(user.id, undefined, access.limits.lessonsPct);
-  const all = [...states.values()].flat();
+  const all = MATERIAS.flatMap((m) => states.get(m.slug) ?? []);
   const passed = all.filter((l) => l.passed).length;
 
   return (
@@ -42,6 +42,36 @@ export default async function Page() {
           </p>
         </div>
       </Card>
+
+      {COURSES.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-lg font-bold"><Wrench size={18} className="text-[#0d9488]" /> Cursos técnicos</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {COURSES.map((m) => {
+              const ls = states.get(m.slug) ?? [];
+              const done = ls.filter((l) => l.passed).length;
+              return (
+                <Link key={m.slug} href={`/enem/${m.slug}`} aria-label={`Curso ${m.name}`}>
+                  <Card className="course-card h-full space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2"><Wrench size={18} /> {m.name}</CardTitle>
+                      <ChevronRight size={18} />
+                    </div>
+                    <p className="text-sm opacity-90">{m.course!.tagline}</p>
+                    <div>
+                      <div className="mb-1 flex justify-between text-xs opacity-90">
+                        <span>{ls.length - 1} aulas + simulado final</span>
+                        <span>{done}/{ls.length} concluídas</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white/25"><div className="h-full rounded-full bg-white" style={{ width: `${(done / Math.max(1, ls.length)) * 100}%` }} /></div>
+                    </div>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <form action={studyGeneralAction}>

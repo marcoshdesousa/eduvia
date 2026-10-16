@@ -303,3 +303,17 @@ body {
 .lv-turn .lv-btn { width: 36px; height: 36px; }
 .lv-turn .lv-btn-main { width: 44px; height: 44px; }
 .lv-turn .lv-times { display: none; }
+
+/* imagens das aulas (cursos técnicos): no texto e no vídeo */
+.prose-study img { display: block; max-width: 100%; height: auto; margin: 0.75rem auto; border-radius: 12px; background: #fff; padding: 4px; box-shadow: 0 2px 10px rgb(0 0 0 / .12); }
+.lv-img { display: block; align-self: center; max-width: 100%; max-height: 34vh; width: auto; height: auto; border-radius: 12px; background: #fff; padding: 3px; box-shadow: 0 10px 24px rgb(0 0 0 / .35); animation: lv-zoom-in .5s ease both; }
+@container lv (min-width: 620px) { .lv-img { max-height: 42cqh; } }
+.lv-full .lv-img, .lv[data-full] .lv-img { max-height: 46vh; }
+
+/* cursos técnicos: cor própria (verde-azulado), para se diferenciar das matérias do ENEM */
+.course-card { background: linear-gradient(135deg, #0f766e, #0e7490); color: #fff; border-color: transparent; transition: transform .15s, box-shadow .15s; }
+.course-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgb(14 116 144 / .35); }
+.course-card :where(h1, h2, h3, h4, p, span, svg) { color: #fff; }
+/* simulado final do curso: outra cor (roxa), porque é uma atividade diferente e vai ser apagado depois */
+.exam-card { border-color: #a855f7 !important; background: linear-gradient(135deg, rgb(168 85 247 / .14), rgb(236 72 153 / .10)) !important; }
+.exam-badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; background: #9333ea; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; }

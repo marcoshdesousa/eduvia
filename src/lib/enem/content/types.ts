@@ -16,4 +16,6 @@ export type EnemLesson = {
   quiz?: { choices: QuizChoice[]; open: QuizOpen[] };
   /** Aula de prática de redação: além do quiz, propõe escrever uma redação sobre este tema. */
   essay?: { theme: string; instructions: string };
+  /** Aula que é só um simulado (curso técnico): sem texto, sem vídeo; só as perguntas do quiz. */
+  exam?: boolean;
 };

@@ -7,6 +7,7 @@ export const BLOCK_CHARS = 900;
 /** Tira a marcação de Markdown de um texto (linha por linha: cada linha continua sendo uma linha). */
 export function plainSpeech(markdown: string) {
   return markdown
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // imagens: o robô não lê
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/^#{1,6}\s*/gm, "")
     .replace(/[*_`>|]/g, "")

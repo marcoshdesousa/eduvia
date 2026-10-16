@@ -174,8 +174,9 @@ export async function sessionLimitError(_user: UserLike & { timezone: string }) 
  * Aula do ENEM fora do plano? Cada plano libera uma parte das aulas de cada matéria (Grátis 10%, Básico 50%,
  * Completo 100%). Devolve o nome do plano que libera a aula, ou null se já está liberada.
  */
-export function lessonPlanLock(access: Access, index: number, total: number): { needs: "Básico" | "Completo" } | null {
-  if (index < lessonsAllowed(total, access.limits.lessonsPct)) return null;
+export function lessonPlanLock(access: Access, index: number, total: number, course = false): { needs: "Básico" | "Completo" } | null {
+  // cursos técnicos ficam abertos para todos os planos
+  if (course || index < lessonsAllowed(total, access.limits.lessonsPct)) return null;
   return { needs: index < lessonsAllowed(total, 50) ? "Básico" : "Completo" };
 }
 

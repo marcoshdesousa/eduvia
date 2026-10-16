@@ -39,7 +39,7 @@ export default async function Page({ params }: { params: Promise<{ materia: stri
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <Link href="/enem" className="text-sm text-muted hover:text-foreground">← {ENEM_TITLE}</Link>
-        <p className="mt-2 text-sm text-muted">{areaOf(m.area).name}</p>
+        <p className="mt-2 text-sm text-muted">{m.course ? "Curso técnico" : areaOf(m.area).name}</p>
         <h1 className="text-2xl font-bold">{m.name}</h1>
       </div>
 
@@ -49,10 +49,15 @@ export default async function Page({ params }: { params: Promise<{ materia: stri
           {avg !== null && <span className="text-muted">Média das suas notas: {pct(avg)}</span>}
         </div>
         <Progress value={done / Math.max(1, lessons.length)} />
-        <p className="text-xs text-muted">Cada aula tem um texto (com a voz lendo para você) e um modo vídeo, além de um quiz sobre o que você estudou. Tire 75% ou mais para liberar a próxima. Pode refazer quando quiser para melhorar a nota.</p>
+        {m.course && <p className="text-sm">{m.course.tagline}</p>}
+        <p className="text-xs text-muted">
+          {m.course
+            ? "Cada aula tem o texto completo do material (com as imagens dos slides e a voz lendo para você), o modo vídeo e 10 perguntas de marcar. Tire 75% ou mais para liberar a próxima. Depois das 5 aulas vem o simulado final, com 100 perguntas. Pode refazer quando quiser."
+            : "Cada aula tem um texto (com a voz lendo para você) e um modo vídeo, além de um quiz sobre o que você estudou. Tire 75% ou mais para liberar a próxima. Pode refazer quando quiser para melhorar a nota."}
+        </p>
       </Card>
 
-      {allowed < lessons.length && (
+      {!m.course && allowed < lessons.length && (
         <Card className="flex flex-wrap items-center gap-3 border-primary/40 bg-primary/5 text-sm">
           <Crown size={18} className="shrink-0 text-primary" />
           <p className="min-w-0 flex-1">
@@ -65,12 +70,14 @@ export default async function Page({ params }: { params: Promise<{ materia: stri
       <ol className="space-y-3">
         {lessons.map((l) => (
           <li key={l.topicId}>
-            <Card className={cn("flex flex-wrap items-center gap-3", (!l.unlocked || l.planLock) && "opacity-70")}>
+            <Card className={cn("flex flex-wrap items-center gap-3", m.lessons[l.index]?.exam && "exam-card", (!l.unlocked || l.planLock) && "opacity-70")}>
               <span className={cn("grid size-9 shrink-0 place-items-center rounded-full text-sm font-bold", l.passed ? "bg-success/15 text-success" : l.planLock ? "bg-surface-2 text-primary" : l.unlocked ? "bg-primary/15 text-primary" : "bg-surface-2 text-muted")}>
                 {l.passed ? <CheckCircle2 size={18} /> : l.planLock ? <Crown size={16} /> : !l.unlocked ? <Lock size={16} /> : l.index + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="font-medium">Aula {l.index + 1} · {l.title}</p>
+                <p className="font-medium">
+                  {m.lessons[l.index]?.exam ? <><span className="exam-badge mr-2">Simulado</span>{l.title}</> : `Aula ${l.index + 1} · ${l.title}`}
+                </p>
                 <p className="text-xs text-muted">
                   {l.planLock
                     ? `Bloqueada: faz parte do plano ${l.planLock}`

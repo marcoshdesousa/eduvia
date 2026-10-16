@@ -6,7 +6,9 @@ import { lineParts, plainSpeech } from "@/lib/speech-text";
 /** Um pedaço do slide. from/to: frases do robô que são dele (to fora). */
 export type SlideEl =
   | { kind: "text" | "bullet" | "num" | "label" | "quote" | "enem" | "eq"; md: string; n?: string; from: number; to: number }
-  | { kind: "table"; rows: string[][]; from: number; to: number };
+  | { kind: "table"; rows: string[][]; from: number; to: number }
+  /** Imagem da aula (não é falada): aparece quando a voz chega no que vem logo depois dela. */
+  | { kind: "img"; src: string; alt: string; from: number; to: number };
 
 /** Um slide: título da parte, os pedaços e as frases do robô (from/to). cont = continuação da mesma parte. */
 export type Slide = { title: string; section: number; cont: number; enem: boolean; from: number; to: number; els: SlideEl[] };
@@ -20,7 +22,7 @@ const SLIDE_ELS = 4;
 const PARA_CHARS = 300;
 
 const visible = (md: string) => md.replace(/\*\*|__|`/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
-const size = (el: SlideEl) => (el.kind === "table" ? el.rows.reduce((s, r) => s + r.join(" ").length + 12, 0) : visible(el.md).length + 30);
+const size = (el: SlideEl) => (el.kind === "table" ? el.rows.reduce((s, r) => s + r.join(" ").length + 12, 0) : el.kind === "img" ? 220 : visible(el.md).length + 30);
 /** Partes que falam do ENEM ganham o selo "Cai muito no ENEM". */
 const ENEM_TITLE = /\bENEM\b|dicas?|pegadinha|aten[çc][ãa]o|cuidado|armadilha/i;
 /** Linha em negrito que é fórmula/equação (vira destaque grande no meio do slide). */
@@ -82,6 +84,11 @@ export function lessonVideo(content: string, title: string, labels: string[] = [
       add({ kind: "label", md: t.replace(/^#+\s*/, ""), ...speak(raw) });
       continue;
     }
+    const img = /^!\[([^\]]*)\]\(([^)\s]+)\)$/.exec(t);
+    if (img) {
+      add({ kind: "img", alt: img[1], src: img[2], from: parts.length, to: parts.length });
+      continue;
+    }
     if (t.startsWith("|")) {
       // tabela: junta as linhas seguidas; a linha "|---|" não é falada nem mostrada
       const from = parts.length;
@@ -128,7 +135,8 @@ export function lessonVideo(content: string, title: string, labels: string[] = [
       const sz = size(el);
       // um rótulo ("Tipos de sujeito:") não fica sozinho no fim do slide: vai junto com o que ele apresenta
       const last = cur.els[cur.els.length - 1];
-      if (cur.els.length && (cur.els.length >= SLIDE_ELS || used + sz > SLIDE_CHARS)) {
+      // imagem nunca abre slide novo sozinha (um slide só com imagem não teria fala e passaria batido no vídeo)
+      if (el.kind !== "img" && cur.els.length && (cur.els.filter((e) => e.kind !== "img").length >= SLIDE_ELS || used + sz > SLIDE_CHARS)) {
         const carry = last && (last.kind === "label") && cur.els.length > 1 ? cur.els.pop()! : null;
         if (carry) cur.to = carry.from;
         slides.push(cur);
@@ -146,7 +154,7 @@ export function lessonVideo(content: string, title: string, labels: string[] = [
   for (let i = 0; i < slides.length; i++) slides[i].to = i + 1 < slides.length ? slides[i + 1].from : parts.length;
 
   const resumo = sections.find((s) => /^resum/i.test(s.title));
-  const summary = resumo ? resumo.els.flatMap((e) => (e.kind === "table" ? [] : [e.md])) : [];
+  const summary = resumo ? resumo.els.flatMap((e) => (e.kind === "table" || e.kind === "img" ? [] : [e.md])) : [];
   return { parts, slides, sections: index, summary };
 }
 

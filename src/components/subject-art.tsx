@@ -120,6 +120,18 @@ const ART: Record<string, React.ReactNode> = {
       <path d="M176 60l14 14-74 74-20 6 6-20z" fill={ORANGE} /><path d="M176 60l14 14 6-6c4-4 4-10 0-14s-10-4-14 0z" fill={ORANGE2} />
     </>
   ),
+  tksa41: (
+    <>
+      <rect x="8" y="58" width="62" height="64" rx="10" fill={SLATE} />
+      <rect x="130" y="64" width="62" height="52" rx="10" fill={SKY} />
+      <rect x="70" y="84" width="60" height="12" fill={CREAM} />
+      <rect x="92" y="78" width="16" height="24" rx="3" fill={ORANGE} />
+      <rect x="46" y="128" width="26" height="22" rx="4" fill={ORANGE2} />
+      <rect x="128" y="128" width="26" height="22" rx="4" fill={ORANGE2} />
+      <path d="M72 139h56" stroke="#ef4444" strokeWidth="3" strokeDasharray="6 4" />
+      <path d="M20 168h160" stroke={SLATE} strokeWidth="6" strokeLinecap="round" />
+    </>
+  ),
 };
 
 export function SubjectArt({ slug, className }: { slug: string; className?: string }) {
@@ -146,5 +158,6 @@ const ACCENT: Record<string, string> = {
   fisica: "#60a5fa",
   matematica: "#818cf8",
   redacao: "#fb923c",
+  tksa41: "#14b8a6",
 };
 export const subjectAccent = (slug: string) => ACCENT[slug] ?? "#fb923c";

@@ -40,7 +40,7 @@ const spoken = (block: string) =>
 
 function plan(topicId: string) {
   const found = findLesson(topicId);
-  if (!found) return null;
+  if (!found || found.lesson.exam) return null; // simulado do curso técnico: não tem texto para gravar
   const { lesson } = found;
   const v = lessonVideo(lesson.content, lesson.title);
   const blocks = toBlocks(v.parts, BLOCK_CHARS, []).map((b) => spoken(b.text));
@@ -301,8 +301,10 @@ export const cloudSpeaker: Speaker = async (text) => {
  * meio, depois as do fim). Se a trava do mês parar no meio, todas as matérias ficam com a mesma parte gravada.
  */
 export function lessonOrder() {
-  const all = MATERIAS.flatMap((m, mi) => m.lessons.map((_, i) => ({ id: lessonTopicId(m.slug, i), at: (i + 0.5) / m.lessons.length, mi })));
-  return all.sort((a, b) => a.at - b.at || a.mi - b.mi).map((x) => x.id);
+  // cursos técnicos primeiro (são poucas aulas e já têm data para estudar); o simulado do curso não tem voz
+  const courses = MATERIAS.filter((m) => m.course).flatMap((m) => m.lessons.flatMap((l, i) => (l.exam ? [] : [lessonTopicId(m.slug, i)])));
+  const all = MATERIAS.filter((m) => !m.course).flatMap((m, mi) => m.lessons.map((_, i) => ({ id: lessonTopicId(m.slug, i), at: (i + 0.5) / m.lessons.length, mi })));
+  return [...courses, ...all.sort((a, b) => a.at - b.at || a.mi - b.mi).map((x) => x.id)];
 }
 
 /** A gravação das aulas está ligada (chave do Google Cloud no Render). */
@@ -388,8 +390,9 @@ export async function videoVoiceProgress() {
   let total = 0;
   for (const m of MATERIAS)
     for (let i = 0; i < m.lessons.length; i++) {
-      total++;
       const p = plan(lessonTopicId(m.slug, i));
+      if (!p) continue;
+      total++;
       if (p && (await exists(`${p.key}.json`))) ready++;
     }
   return { ready, total };

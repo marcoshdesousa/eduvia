@@ -11,6 +11,7 @@ import { MORE_NATUREZA } from "./content/more-natureza";
 import { MORE_MATEMATICA } from "./content/more-matematica";
 import { REDACAO } from "./content/redacao";
 import { EXTRA } from "./content/extra";
+import { CURSO_TKSA41 } from "./content/cursos/tksa41";
 
 export const ENEM_PREP_ID = "enem";
 /** Dono técnico da preparação fixa (não é uma conta de verdade: sem CPF, não entra em listas nem no login). */
@@ -35,11 +36,20 @@ export type Materia = {
   /** língua estrangeira: as perguntas vêm só das questões de inglês ou de espanhol */
   lang?: "ingles" | "espanhol";
   lessons: EnemLesson[];
+  /** Curso técnico (fora do ENEM): matéria separada, aberta a todos os planos, fora do "estudar geral". */
+  course?: { tagline: string };
 };
 
 // aulas a mais entram DEPOIS das primeiras: o número (e o id) de cada aula não muda e ninguém perde o progresso
 const MORE = { ...MORE_LINGUAGENS, ...MORE_HUMANAS, ...MORE_NATUREZA, ...MORE_MATEMATICA };
-export const MATERIAS: Materia[] = [...LINGUAGENS, ...HUMANAS, ...NATUREZA, ...MATEMATICA, ...REDACAO].map((m) => ({ ...m, lessons: [...m.lessons, ...(MORE[m.slug] ?? []), ...(EXTRA[m.slug] ?? [])] }));
+export const MATERIAS: Materia[] = [
+  ...[...LINGUAGENS, ...HUMANAS, ...NATUREZA, ...MATEMATICA, ...REDACAO].map((m) => ({ ...m, lessons: [...m.lessons, ...(MORE[m.slug] ?? []), ...(EXTRA[m.slug] ?? [])] })),
+  // cursos técnicos ficam no fim (as matérias do ENEM não mudam de posição)
+  CURSO_TKSA41,
+];
+/** As matérias do ENEM (sem os cursos técnicos). */
+export const ENEM_MATERIAS = MATERIAS.filter((m) => !m.course);
+export const COURSES = MATERIAS.filter((m) => m.course);
 
 export const materiaSubjectId = (slug: string) => `enem-m-${slug}`;
 export const lessonTopicId = (materia: string, lesson: number) => `enem-a-${materia}-${lesson + 1}`;

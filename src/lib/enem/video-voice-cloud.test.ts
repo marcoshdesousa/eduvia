@@ -40,9 +40,10 @@ describe("ordem da gravação", () => {
   it("todas as matérias na mesma proporção: as últimas aulas de cada uma ficam por último", async () => {
     const { lessonOrder } = await import("./video-voice");
     const order = lessonOrder();
-    expect(order).toHaveLength(508);
-    expect(new Set(order).size).toBe(508);
-    const firstHalf = order.slice(0, 254);
+    expect(order).toHaveLength(513); // 508 do ENEM + 5 do curso TKSA 41 (o simulado não tem voz)
+    expect(new Set(order).size).toBe(513);
+    expect(order.slice(0, 5).every((id) => id.startsWith("enem-a-tksa41-"))).toBe(true);
+    const firstHalf = order.slice(5, 259);
     // metade da fila = mais ou menos metade de cada matéria
     expect(firstHalf.filter((id) => id.startsWith("enem-a-matematica-")).length).toBe(36);
     expect(firstHalf.filter((id) => id.startsWith("enem-a-artes-")).length).toBe(13);

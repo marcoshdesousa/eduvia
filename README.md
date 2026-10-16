@@ -142,6 +142,14 @@ e2e/                   testes de ponta a ponta (Playwright)
 - **Questões**: 3.098 questões oficiais do ENEM 2009–2025 (INEP), com gabarito. 2009–2023 vêm do projeto enem-api (`node scripts/build-enem.mjs <enem-api/public>`, que reescreve `data/enem/questions.json` e as imagens em `public/enem/`). 2024 e 2025 entram depois com `node scripts/add-enem-recentes.mjs <gpt-4-enem/data> <irw/itemtext/itemtables>`: 2024 do [gpt-4-enem](https://github.com/piresramon/gpt-4-enem) (MIT, com figuras) e o Espanhol de 2024 e a prova de 2025 do [irw](https://github.com/ben-domingue/irw) (texto do próprio INEP, do caderno de acessibilidade, com as figuras descritas em palavras; essas não têm o número da questão). Quando sair uma prova nova, é só acrescentar o ano nesse script.
 - O servidor grava tudo no banco sozinho na partida (`ensureEnemCatalog`, 8 aulas por vez), só quando aulas ou questões mudam. A preparação fica no usuário técnico `sistema-eduvia` (sem CPF, não faz login).
 
+## Cursos técnicos (Alinhamento a Laser · TKSA 41)
+
+- Matéria separada em `src/lib/enem/content/cursos/` (`CURSO_TKSA41`, com `course` no catálogo): 5 aulas com todo o conteúdo dos 30 slides do material e as 29 imagens (em `public/cursos/tksa41/`), 10 perguntas de marcar cada, texto, "Ler e ouvir" e modo vídeo. Nota mínima 75% libera a próxima.
+- Aula 6 = **Simulado final** (`exam: true`): 100 perguntas (as 50 das aulas + 50 extras), sem texto nem vídeo, card roxo. Só aparece no curso.
+- Aberto para todos os planos (sem trava de plano). Fica fora do Estudar geral, do progresso do ENEM, do teste rápido e dos simulados do ENEM (esses usam só o banco de questões do ENEM). Erros vão para o banco de erros.
+- Voz: as 5 aulas são as primeiras da fila de gravação (Kore). O simulado não tem áudio.
+- Para apagar o curso depois: tirar `CURSO_TKSA41` de `MATERIAS` em `src/lib/enem/catalog.ts` (o banco não é apagado).
+
 ## Aulas com nota mínima
 
 - Cada aula (sessão de estudo) termina com a nota das perguntas dela. **Só com 75% ou mais** a aula conta como feita e a próxima é liberada (`PASS_SCORE` em `src/lib/study.ts`). Abaixo disso, o aluno relê o texto e refaz; a melhor nota fica guardada e dá para refazer só para melhorar.

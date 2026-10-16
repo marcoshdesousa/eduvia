@@ -24,7 +24,7 @@ import { buttonClass } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
 import { formatBRL, listPlans } from "@/lib/billing";
 import { planFeatures, PROMOS, REFERRAL_FIRST_CENTS } from "@/lib/plans";
-import { MATERIAS } from "@/lib/enem/catalog";
+import { ENEM_MATERIAS } from "@/lib/enem/catalog";
 import { InstallButton } from "@/components/install-app";
 import { RegisterServiceWorker } from "@/components/push-settings";
 
@@ -86,7 +86,7 @@ export default async function Home() {
   const all = await listPlans();
   const plans = all.filter((p) => p.slug !== "gratis" && p.slug !== "indicacao" && p.active && p.priceMonthCents > 0);
   const referral = all.find((p) => p.slug === "indicacao" && p.active);
-  const lessons = MATERIAS.reduce((n, m) => n + m.lessons.length, 0);
+  const lessons = ENEM_MATERIAS.reduce((n, m) => n + m.lessons.length, 0);
 
   return (
     <div className="relative overflow-x-clip">

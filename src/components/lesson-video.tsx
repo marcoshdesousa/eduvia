@@ -483,6 +483,12 @@ export function LessonVideo({ text, info, onQuiz, onRead, quizLabel }: { text: s
                       {slide.els.map((el, i) => {
                         const st = elState(el);
                         const common = { "data-now": st === "now" || undefined, className: cn("lv-el", `lv-${el.kind}`, `lv-${st}`) };
+                        // imagens da aula: sempre à vista no slide
+                        if (el.kind === "img")
+                          return (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img key={i} src={el.src} alt={el.alt} className="lv-img" loading="lazy" decoding="async" />
+                          );
                         if (el.kind === "table")
                           return (
                             <div key={i} {...common}>

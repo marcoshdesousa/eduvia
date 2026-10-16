@@ -3,7 +3,7 @@ import { MATERIAS } from "@/lib/enem/catalog";
 import { lessonVideo, slideOfPart } from "./lesson-slides";
 import { toSpeech } from "./speech-text";
 
-const all = MATERIAS.flatMap((m) => m.lessons.map((l, i) => ({ id: `${m.slug}-${i + 1}`, l })));
+const all = MATERIAS.flatMap((m) => m.lessons.map((l, i) => ({ id: `${m.slug}-${i + 1}`, l }))).filter(({ l }) => !l.exam);
 
 describe("modo vídeo", () => {
   it("as frases do vídeo são as mesmas do robô (o áudio pronto da aula serve)", () => {

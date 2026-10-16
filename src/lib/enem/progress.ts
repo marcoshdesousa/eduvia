@@ -2,7 +2,7 @@
 import { db } from "@/lib/db";
 import { PASS_SCORE } from "@/lib/study";
 import { lessonsAllowed } from "@/lib/plans";
-import { findLesson, lessonTopicId, MATERIAS, type Materia } from "./catalog";
+import { ENEM_MATERIAS, findLesson, lessonTopicId, MATERIAS, type Materia } from "./catalog";
 
 export type LessonState = {
   topicId: string;
@@ -40,7 +40,7 @@ export async function lessonStates(userId: string, materias: Materia[] = MATERIA
         const s = byTopic.get(topicId);
         const passed = !!s?.passedAt;
         const n = m.lessons.length;
-        const planLock = i < lessonsAllowed(n, lessonsPct) ? null : i < lessonsAllowed(n, 50) ? "Básico" : "Completo";
+        const planLock = m.course || i < lessonsAllowed(n, lessonsPct) ? null : i < lessonsAllowed(n, 50) ? "Básico" : "Completo";
         const st: LessonState = { topicId, index: i, title: l.title, sessionId: s?.id ?? null, best: s?.bestScore ?? null, last: s?.lastScore ?? null, tries: s?.tries ?? 0, passed, unlocked: prevPassed, planLock };
         prevPassed = passed;
         return st;
@@ -61,7 +61,8 @@ export async function lessonUnlocked(userId: string, topicId: string) {
 
 /** Próxima aula para estudar: na matéria (se informada) ou, no "estudar geral", na matéria com menos progresso. */
 export async function nextEnemLesson(userId: string, materiaSlug?: string, lessonsPct = 100) {
-  const states = await lessonStates(userId, materiaSlug ? MATERIAS.filter((m) => m.slug === materiaSlug) : MATERIAS, lessonsPct);
+  // "estudar geral" é só do ENEM (os cursos técnicos ficam de fora)
+  const states = await lessonStates(userId, materiaSlug ? MATERIAS.filter((m) => m.slug === materiaSlug) : ENEM_MATERIAS, lessonsPct);
   const candidates = [...states.entries()]
     .map(([slug, ls]) => ({ slug, done: ls.filter((l) => l.passed).length / Math.max(1, ls.length), next: ls.find((l) => l.unlocked && !l.passed && !l.planLock), r: Math.random() }))
     .filter((c) => c.next);

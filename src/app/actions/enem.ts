@@ -14,7 +14,7 @@ export async function startEnemLessonAction(topicId: string, minutes?: number): 
   const found = findLesson(topicId);
   if (!found) return { error: "Aula não encontrada." };
   await ensureEnemCatalog();
-  const lock = lessonPlanLock(await getAccess(user), found.index, found.materia.lessons.length);
+  const lock = lessonPlanLock(await getAccess(user), found.index, found.materia.lessons.length, !!found.materia.course);
   if (lock) return { error: `Esta aula faz parte do plano ${lock.needs}. Assine para liberar.` };
   if (!(await lessonUnlocked(user.id, topicId))) return { error: "Esta aula ainda está bloqueada: tire pelo menos 75% na aula anterior." };
   const chosenMinutes = minutes && (SESSION_MINUTES as readonly number[]).includes(minutes) ? minutes : LESSON_MINUTES;

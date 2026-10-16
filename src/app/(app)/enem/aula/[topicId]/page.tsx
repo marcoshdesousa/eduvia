@@ -36,7 +36,7 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
     preparationId: "enem",
     backHref: back,
     kind: "STUDY",
-    label: `Aula ${index + 1} de ${materia.lessons.length}`,
+    label: lesson.exam ? "Simulado final" : `Aula ${index + 1} de ${materia.lessons.length}`,
     minutes: LESSON_MINUTES,
   };
   const title = (
@@ -47,7 +47,7 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
     </div>
   );
 
-  const lock = lessonPlanLock(await getAccess(user), index, materia.lessons.length);
+  const lock = lessonPlanLock(await getAccess(user), index, materia.lessons.length, !!materia.course);
   if (lock) {
     return (
       <div className="mx-auto max-w-xl space-y-4">
@@ -80,7 +80,7 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
   }
 
   // voz da aula ainda sendo gravada (gravação de todas as aulas em andamento): aula bloqueada, com aviso e o que fazer
-  const recording = await recordingNotice(topicId);
+  const recording = lesson.exam ? null : await recordingNotice(topicId);
   if (recording) {
     const when = recording.readyOn
       ? `no dia ${recording.readyOn.toLocaleDateString("pt-BR", { day: "numeric", month: "long", timeZone: "UTC" }).replace(/^1 /, "1º ")}`
@@ -107,7 +107,7 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
   }
 
   const session = await enemSession(user.id, topicId);
-  const minutes = session?.chosenMinutes ?? 20;
+  const minutes = session?.chosenMinutes ?? (lesson.exam ? 45 : 20);
   // aula aberta há muito tempo e não terminada: escolhe o tempo de novo e recomeça
   const stale = !!session && !session.completedAt && Date.now() - session.roundStartedAt.getTime() > (minutes + 60) * 60_000;
   if (!session || stale) {
@@ -116,6 +116,13 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
         {title}
         <Card className="space-y-3">
           <p className="flex items-center gap-2 font-semibold"><BookOpen size={18} className="text-primary" /> Como é a aula</p>
+          {lesson.exam ? (
+            <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
+              <li>Simulado final do curso: {lesson.quiz?.choices.length ?? 0} perguntas de marcar sobre todas as aulas.</li>
+              <li>Não tem texto nem vídeo: é só responder. As que você errar vão para o seu banco de erros.</li>
+              <li>Ele aparece só aqui, no curso (não entra nos simulados do ENEM nem no teste rápido).</li>
+            </ol>
+          ) : (
           <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
             <li>Assista à aula em vídeo (slides com a voz do robô) ou leia o texto, se preferir.</li>
             {lesson.quiz ? (
@@ -128,6 +135,7 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
             )}
             <li>Com 75% ou mais, a próxima aula é liberada. Pode refazer quantas vezes quiser.</li>
           </ol>
+          )}
           <StartLesson topicId={topicId} options={SESSION_MINUTES} suggested={nearestSessionMinutes(minutes)} resume={stale} />
         </Card>
       </div>
@@ -169,9 +177,9 @@ export default async function Page({ params }: { params: Promise<{ topicId: stri
       sessionId={session.id}
       startedAt={session.roundStartedAt.toISOString()}
       completed={!!session.completedAt}
-      text={text ? { content: text.content, highlights: text.highlights as string[], keyPoints: text.keyPoints as { term: string; explanation: string }[], refs: [] } : null}
+      text={text && !lesson.exam ? { content: text.content, highlights: text.highlights as string[], keyPoints: text.keyPoints as { term: string; explanation: string }[], refs: [] } : null}
       questions={ordered}
-      video={{ topicId, slug: materia.slug, materia: materia.name, lesson: index + 1, title: lesson.title, highlights: lesson.highlights, keyPoints: lesson.keyPoints }}
+      video={lesson.exam ? undefined : { topicId, slug: materia.slug, materia: materia.name, lesson: index + 1, title: lesson.title, highlights: lesson.highlights, keyPoints: lesson.keyPoints }}
     />
   );
   if (!lesson.essay) return view;
