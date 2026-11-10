@@ -7,11 +7,12 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const display = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", weight: ["600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: { default: "Eduvia — estude para o ENEM", template: "%s · Eduvia" },
-  description: "Aulas de todas as matérias do ENEM, quiz, questões reais, simulados com o tempo da prova e redação corrigida.",
+  title: { default: "HoraLimp — Sua casa em boas mãos, no seu tempo", template: "%s · HoraLimp" },
+  description: "Encontre profissionais de limpeza residencial na sua cidade, compare preços por hora e contrate pelo app. Grátis para clientes.",
+  applicationName: "HoraLimp",
 };
 
-export const viewport: Viewport = { themeColor: "#0b0d12", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#5b3cc4", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

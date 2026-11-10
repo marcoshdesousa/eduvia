@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pg-boss", "unpdf", "pdf-lib", "mammoth", "@prisma/adapter-pg", "pg", "@breezystack/lamejs", "@napi-rs/canvas"],
+  serverExternalPackages: ["@prisma/adapter-pg", "pg"],
   experimental: { serverActions: { bodySizeLimit: "2mb" } },
 };
 

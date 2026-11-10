@@ -1,29 +1,45 @@
 "use client";
-import { startTransition, type FormHTMLAttributes } from "react";
+import { useActionState, useEffect, useRef } from "react";
+import { FormError } from "@/components/ui/form";
+
+export type ActionResult = { error?: string; ok?: string } | null;
 
 /**
- * Formulário para server actions que NÃO limpa os campos após o envio
- * (o <form action> do React 19 reseta o formulário, o que apaga o que o aluno digitou quando há erro).
+ * Formulário ligado a uma server action que devolve { error } ou { ok }: mostra a mensagem
+ * e mantém o que a pessoa digitou se der erro.
  */
 export function ActionForm({
   action,
-  beforeSubmit,
-  ...props
+  children,
+  className,
+  resetOnOk,
+  confirm,
 }: {
-  action: (formData: FormData) => void;
-  /** Devolve false para não enviar (ex.: formulário em etapas, indo para a próxima). */
-  beforeSubmit?: () => boolean;
-  ref?: React.Ref<HTMLFormElement>;
-} & Omit<FormHTMLAttributes<HTMLFormElement>, "action" | "onSubmit">) {
+  action: (prev: ActionResult, data: FormData) => Promise<ActionResult>;
+  children: React.ReactNode;
+  className?: string;
+  resetOnOk?: boolean;
+  confirm?: string;
+}) {
+  const [state, run] = useActionState(action, null);
+  const ref = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (state?.ok && resetOnOk) ref.current?.reset();
+  }, [state, resetOnOk]);
   return (
     <form
-      {...props}
+      ref={ref}
+      action={run}
+      className={className}
       onSubmit={(e) => {
-        e.preventDefault();
-        if (beforeSubmit && !beforeSubmit()) return;
-        const fd = new FormData(e.currentTarget);
-        startTransition(() => action(fd));
+        if (confirm && !window.confirm(confirm)) e.preventDefault();
       }}
-    />
+    >
+      {children}
+      <div className="mt-3 empty:hidden">
+        <FormError message={state?.error} />
+        {state?.ok && <div role="status" className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">{state.ok}</div>}
+      </div>
+    </form>
   );
 }

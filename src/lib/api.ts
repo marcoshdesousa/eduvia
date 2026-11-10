@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
 
-/** Usuário da requisição de API com cadastro completo. */
+/** Usuário da requisição de API (ou a resposta de erro pronta). */
 export async function apiUser() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return { error: NextResponse.json({ error: "Não autenticado" }, { status: 401 }) } as const;
-  const user = await db.user.findUnique({ where: { id: session.user.id } });
-  if (!user || !user.handle || !user.cpf) return { error: NextResponse.json({ error: "Cadastro incompleto" }, { status: 403 }) } as const;
+  const user = await getCurrentUser();
+  if (!user) return { error: NextResponse.json({ error: "Entre na sua conta." }, { status: 401 }) } as const;
   return { user } as const;
 }
 

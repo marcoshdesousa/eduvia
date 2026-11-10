@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Pré-requisitos: banco migrado, `npm run build && npm start` e `npm run worker` rodando (AI_MODE=mock recomendado).
+// Pré-requisitos: banco migrado e `npm run build && npm start` rodando (ver README).
 export default defineConfig({
   testDir: "e2e",
   timeout: 120_000,

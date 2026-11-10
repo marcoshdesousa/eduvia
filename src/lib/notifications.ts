@@ -1,92 +1,54 @@
-// Notificações: ficam na central do app e, se o aluno ativou, chegam por push no celular/navegador.
+// Avisos dentro do app (sininho) + push no celular (Web Push, chaves VAPID geradas e guardadas sozinhas).
 import webpush from "web-push";
+import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { appUrl } from "@/lib/app-url";
-import { Prisma } from "@/generated/prisma/client";
 
-export type NotificationType =
-  | "STUDY_REMINDER"
-  | "GROUP_INVITE"
-  | "INVITE_ACCEPTED"
-  | "GROUP_SHARE"
-  | "TOURNAMENT"
-  | "NUDGE"
-  | "ACHIEVEMENT"
-  | "PLAN_EXPIRING"
-  | "TRIAL_ENDING"
-  | "SUPPORT_REPLY"
-  | "SUPPORT_MESSAGE"
-  | "AI_ALERT";
+let vapid: Promise<{ publicKey: string; privateKey: string } | null> | null = null;
 
-/**
- * Chaves do push (VAPID). Usa VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY do ambiente quando as duas existem;
- * senão gera um par uma única vez e guarda no banco (SiteSetting "vapid"), sem precisar configurar nada.
- */
-let vapid: Promise<{ publicKey: string } | null> | null = null;
-
-async function loadVapid(): Promise<{ publicKey: string } | null> {
-  let pair: { publicKey: string; privateKey: string } | null = null;
-  const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env;
-  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) pair = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
-  else {
-    const saved = await db.siteSetting.findUnique({ where: { key: "vapid" } });
-    if (saved) pair = JSON.parse(saved.value);
-    else {
-      const fresh = webpush.generateVAPIDKeys();
-      // se dois processos gerarem ao mesmo tempo, fica o primeiro que gravou
-      await db.siteSetting.create({ data: { key: "vapid", value: JSON.stringify(fresh) } }).catch(() => {});
-      pair = JSON.parse((await db.siteSetting.findUniqueOrThrow({ where: { key: "vapid" } })).value);
+async function ensureVapid() {
+  vapid ??= (async () => {
+    let pub = process.env.VAPID_PUBLIC_KEY;
+    let priv = process.env.VAPID_PRIVATE_KEY;
+    if (!pub || !priv) {
+      const row = await db.platformSetting.findUnique({ where: { key: "vapid" } });
+      const saved = row?.value as { publicKey: string; privateKey: string } | undefined;
+      if (saved?.publicKey && saved.privateKey) ({ publicKey: pub, privateKey: priv } = saved);
+      else {
+        const keys = webpush.generateVAPIDKeys();
+        await db.platformSetting.upsert({ where: { key: "vapid" }, create: { key: "vapid", value: { ...keys } }, update: {} });
+        // se outro processo gravou primeiro, vale a dele
+        const again = (await db.platformSetting.findUnique({ where: { key: "vapid" } }))!.value as unknown as typeof keys;
+        ({ publicKey: pub, privateKey: priv } = again);
+      }
     }
-  }
-  // o "subject" precisa ser https: ou mailto: (localhost em http não serve)
-  const candidates = [process.env.VAPID_SUBJECT, appUrl(), "mailto:suporte@eduvia.app"];
-  const subject = candidates.find((c) => c && /^(https:|mailto:)/.test(c))!;
-  try {
-    webpush.setVapidDetails(subject, pair!.publicKey, pair!.privateKey);
-    return { publicKey: pair!.publicKey };
-  } catch (e) {
-    console.error("[push] chaves VAPID inválidas:", (e as Error).message);
-    return null;
-  }
-}
-
-function ensureVapid() {
-  vapid ??= loadVapid().catch((e) => {
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT || `mailto:suporte@${new URL(appUrl()).hostname}`, pub!, priv!);
+    return { publicKey: pub!, privateKey: priv! };
+  })().catch((e) => {
     console.error("[push] não foi possível preparar as chaves:", e);
-    vapid = null; // tenta de novo na próxima vez
+    vapid = null;
     return null;
   });
   return vapid;
 }
 
-export async function pushConfigured() {
-  return !!(await ensureVapid());
-}
-
-/** Chave pública para o navegador inscrever o aparelho. */
 export async function vapidPublicKey() {
   return (await ensureVapid())?.publicKey ?? null;
 }
 
-/** Cria a notificação (ignorando repetidas pelo dedupeKey) e envia push para os aparelhos do aluno. */
-export async function notify(
-  userId: string,
-  n: { type: NotificationType; title: string; body?: string; href?: string; dedupeKey?: string },
-  opts: { push?: boolean } = {},
-) {
-  let created;
+/** Cria o aviso (ignora repetidos pelo dedupeKey) e manda push para os aparelhos da pessoa. */
+export async function notify(userId: string, n: { title: string; body?: string; href?: string; dedupeKey?: string }) {
   try {
-    created = await db.notification.create({ data: { userId, type: n.type, title: n.title, body: n.body, href: n.href, dedupeKey: n.dedupeKey } });
+    await db.notification.create({ data: { userId, title: n.title, body: n.body, href: n.href, dedupeKey: n.dedupeKey } });
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return null;
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return;
     throw e;
   }
-  if (opts.push !== false) await sendPush(userId, { title: n.title, body: n.body ?? "", href: n.href ?? "/notificacoes" });
-  return created;
+  void sendPush(userId, { title: n.title, body: n.body ?? "", href: n.href ?? "/notificacoes" }).catch((e) => console.error("[push]", e));
 }
 
 export async function sendPush(userId: string, payload: { title: string; body: string; href: string }) {
-  if (!(await pushConfigured())) return 0;
+  if (process.env.NODE_ENV === "test" || !(await ensureVapid())) return 0;
   const subs = await db.pushSubscription.findMany({ where: { userId } });
   let sent = 0;
   await Promise.all(
@@ -104,6 +66,4 @@ export async function sendPush(userId: string, payload: { title: string; body: s
   return sent;
 }
 
-export async function unreadCount(userId: string) {
-  return db.notification.count({ where: { userId, readAt: null } });
-}
+export const unreadCount = (userId: string) => db.notification.count({ where: { userId, readAt: null } });

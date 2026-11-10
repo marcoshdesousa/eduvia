@@ -1,6 +1,6 @@
 // Depois de uma atualização do site, quem estava com a página aberta fica com arquivos antigos
 // ("ChunkLoadError", "Failed to find Server Action"). Nesses casos basta recarregar a página.
-const KEY = "eduvia:auto-reload";
+const KEY = "horalimp:auto-reload";
 
 export function isStaleDeployError(error: unknown) {
   const msg = `${(error as Error)?.name ?? ""} ${(error as Error)?.message ?? ""}`;

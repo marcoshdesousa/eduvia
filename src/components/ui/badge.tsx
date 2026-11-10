@@ -1,7 +1,5 @@
 import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
-import type { MasteryStatus } from "@/generated/prisma/enums";
-import { MASTERY_LABEL } from "@/lib/core/spaced";
 
 type Tone = "neutral" | "primary" | "success" | "warning" | "danger";
 const tones: Record<Tone, string> = {
@@ -14,12 +12,6 @@ const tones: Record<Tone, string> = {
 
 export function Badge({ tone = "neutral", className, ...props }: HTMLAttributes<HTMLSpanElement> & { tone?: Tone }) {
   return <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", tones[tone], className)} {...props} />;
-}
-
-const MASTERY_TONE: Record<MasteryStatus, Tone> = { SEM_DADOS: "neutral", CRITICO: "danger", EM_DESENVOLVIMENTO: "warning", BOM: "success" };
-
-export function MasteryBadge({ status }: { status: MasteryStatus }) {
-  return <Badge tone={MASTERY_TONE[status]}>{MASTERY_LABEL[status]}</Badge>;
 }
 
 export function Progress({ value, className, tone = "primary" }: { value: number; className?: string; tone?: "primary" | "success" | "warning" | "danger" }) {

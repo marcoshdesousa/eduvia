@@ -2,20 +2,18 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Eduvia — estude com o seu material",
-    short_name: "Eduvia",
-    description: "Plano de estudo, sessões, revisões, testes rápidos e simulados feitos a partir dos seus materiais.",
-    start_url: "/inicio",
-    scope: "/",
+    name: "HoraLimp — limpeza residencial",
+    short_name: "HoraLimp",
+    description: "Contrate profissionais de limpeza na sua cidade, por hora.",
+    start_url: "/",
     display: "standalone",
-    background_color: "#0b0d12",
-    theme_color: "#0b0d12",
+    background_color: "#f7f6fc",
+    theme_color: "#5b3cc4",
     lang: "pt-BR",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
       { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-      { src: "/icon.svg", sizes: "any", type: "image/svg+xml" },
     ],
   };
 }

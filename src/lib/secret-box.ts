@@ -1,12 +1,11 @@
-// Criptografia simétrica (AES-256-GCM) para guardar a chave de IA do aluno no banco.
-// A chave de criptografia vem de AI_KEY_SECRET (ou BETTER_AUTH_SECRET). Trocar esse segredo
-// invalida as chaves guardadas: os alunos precisarão conectar a IA de novo.
+// Criptografia simétrica (AES-256-GCM) para dados pessoais guardados no banco (CPF, WhatsApp).
+// A chave vem de DATA_SECRET (ou BETTER_AUTH_SECRET). Trocar esse segredo impede abrir o que já foi guardado.
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 function masterKey() {
-  const secret = process.env.AI_KEY_SECRET || process.env.BETTER_AUTH_SECRET;
-  if (!secret) throw new Error("Defina AI_KEY_SECRET ou BETTER_AUTH_SECRET para guardar as chaves de IA.");
-  return createHash("sha256").update(`eduvia-ai-key:${secret}`).digest();
+  const secret = process.env.DATA_SECRET || process.env.BETTER_AUTH_SECRET || (process.env.NODE_ENV === "production" ? "" : "dev-secret");
+  if (!secret) throw new Error("Defina BETTER_AUTH_SECRET para guardar dados pessoais.");
+  return createHash("sha256").update(`horalimp-dados:${secret}`).digest();
 }
 
 export function sealSecret(plain: string): string {

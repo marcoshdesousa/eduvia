@@ -1,9 +1,9 @@
-// Service worker do Eduvia: recebe notificações push e abre a tela certa ao tocar.
+// Service worker da HoraLimp: recebe notificações push e abre a tela certa ao tocar.
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
 self.addEventListener("push", (event) => {
-  let data = { title: "Eduvia", body: "", href: "/inicio" };
+  let data = { title: "HoraLimp", body: "", href: "/notificacoes" };
   try {
     data = { ...data, ...event.data.json() };
   } catch {
@@ -22,7 +22,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const href = (event.notification.data && event.notification.data.href) || "/inicio";
+  const href = (event.notification.data && event.notification.data.href) || "/notificacoes";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
       for (const w of wins) {

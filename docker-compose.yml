@@ -1,16 +1,12 @@
-# Serviços de apoio para desenvolvimento local: Postgres com pgvector e captura de e-mails.
+# Banco para desenvolvimento local.
 services:
   db:
-    image: pgvector/pgvector:pg16
+    image: postgres:16
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: eduvia
+      POSTGRES_DB: horalimp
     ports: ["5432:5432"]
-    volumes: [eduvia-db:/var/lib/postgresql/data]
-  mail:
-    # interface web em http://localhost:8025 — use SMTP_URL="smtp://localhost:1025"
-    image: axllent/mailpit
-    ports: ["1025:1025", "8025:8025"]
+    volumes: [horalimp-db:/var/lib/postgresql/data]
 volumes:
-  eduvia-db:
+  horalimp-db:
