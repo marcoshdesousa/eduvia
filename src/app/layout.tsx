@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { Inter, Sora } from "next/font/google";
 import { AppGate } from "@/components/app-gate";
 import { ThemeProvider } from "@/components/theme";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const display = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", weight: ["600", "700", "800"] });
+const display = Sora({ subsets: ["latin"], variable: "--font-jakarta", weight: ["600", "700", "800"] });
 
 export const metadata: Metadata = {
   title: { default: "Diária Paga — contrate diaristas, pedreiros, cuidadores e mais", template: "%s · Diária Paga" },
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   applicationName: "Diária Paga",
 };
 
-export const viewport: Viewport = { themeColor: "#0a7d55", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#04140f", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

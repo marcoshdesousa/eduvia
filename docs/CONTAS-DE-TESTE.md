@@ -15,16 +15,16 @@ em outro celular (ou outra janela anônima) para ver o chamado tocar.
 
 | Nome | CPF | Senha |
 |---|---|---|
-| Cliente Teste Ana Paula | 123.471.838-34 | teste1234 |
-| Cliente Teste Bruno Costa | 123.479.757-73 | teste1234 |
-| Cliente Teste Carla Souza | 123.487.676-00 | teste1234 |
-| Cliente Teste Diego Lima | 123.495.595-48 | teste1234 |
-| Cliente Teste Elaine Rocha | 123.503.514-08 | teste1234 |
-| Cliente Teste Fábio Nunes | 123.511.433-37 | teste1234 |
+| Ana Paula Ribeiro | 123.471.838-34 | teste1234 |
+| Bruno Costa Lima | 123.479.757-73 | teste1234 |
+| Carla Souza Mendes | 123.487.676-00 | teste1234 |
+| Diego Lima Rocha | 123.495.595-48 | teste1234 |
+| Elaine Rocha Silva | 123.503.514-08 | teste1234 |
+| Fábio Nunes Alves | 123.511.433-37 | teste1234 |
 
 ## Trabalhadores (2 por profissão)
 
-Todos com plano Completo por 1 ano, agenda aberta todos os dias (24 h) e, nas profissões do Contrate rápido, o rápido ligado (⚡).
+Plano pago por 1 ano, agenda aberta todos os dias (24 h) e, nas profissões do Contrate rápido, o rápido ligado (⚡).
 O segundo das profissões que não têm rápido está no plano Básico, para ver a diferença na vitrine.
 
 | Profissão | Nome | CPF | Senha | Plano | Bairro | ⚡ Rápido |

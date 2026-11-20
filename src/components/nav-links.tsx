@@ -18,14 +18,14 @@ export function BottomNav({ items }: { items: NavItem[] }) {
   const current = pick(path, items);
   return (
     <nav aria-label="Menu principal" className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] md:hidden">
-      <ul className="dp-glass mx-auto grid max-w-lg items-end rounded-[28px] border border-border/70 px-1 py-1.5 shadow-[0_12px_40px_-12px_rgba(8,57,43,0.35)]" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+      <ul className="mx-auto grid max-w-lg items-end rounded-[28px] border border-white/10 bg-tech/90 px-1 py-1.5 shadow-[0_18px_50px_-14px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map((it) => {
           const Icon = ICONS[it.icon];
           const on = current === it.href;
           if (it.big)
             return (
               <li key={it.href} className="flex justify-center">
-                <Link href={it.href} aria-current={on ? "page" : undefined} className="dp-ring -mt-8 flex h-[4.5rem] w-[4.5rem] flex-col items-center justify-center gap-0.5 rounded-[26px] border-4 border-background bg-gradient-to-br from-amber-300 via-amber-400 to-accent text-[11px] font-extrabold text-brand-ink shadow-xl shadow-accent/40 transition active:scale-95">
+                <Link href={it.href} aria-current={on ? "page" : undefined} className="dp-ring -mt-8 flex h-[4.5rem] w-[4.5rem] flex-col items-center justify-center gap-0.5 rounded-[26px] border-4 border-background bg-gradient-to-br from-amber-200 via-amber-400 to-orange-500 text-[11px] font-extrabold text-[#2a1600] shadow-[0_12px_30px_-6px_rgba(245,158,11,0.75)] transition active:scale-95">
                   <Icon size={26} strokeWidth={2.6} className="fill-white/60" />
                   {it.label}
                 </Link>
@@ -33,12 +33,12 @@ export function BottomNav({ items }: { items: NavItem[] }) {
             );
           return (
             <li key={it.href}>
-              <Link href={it.href} className={cn("relative flex flex-col items-center gap-0.5 py-1 text-[11px] font-semibold transition active:scale-95", on ? "text-primary" : "text-muted")} aria-current={on ? "page" : undefined}>
-                <span className={cn("grid h-8 w-14 place-items-center rounded-full transition-colors", on ? "bg-primary/10" : "")}>
+              <Link href={it.href} className={cn("relative flex flex-col items-center gap-0.5 py-1 text-[11px] font-semibold transition active:scale-95", on ? "text-[#2ee6a6]" : "text-white/55")} aria-current={on ? "page" : undefined}>
+                <span className={cn("grid h-8 w-14 place-items-center rounded-full transition-colors", on ? "bg-[#2ee6a6]/15 shadow-[0_0_18px_-2px_rgba(46,230,166,0.55)]" : "")}>
                   <Icon size={21} strokeWidth={on ? 2.5 : 1.9} />
                 </span>
                 {it.label}
-                {!!it.badge && <span className="absolute right-[18%] top-0 min-w-[18px] rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-[18px] text-white ring-2 ring-surface">{it.badge > 9 ? "9+" : it.badge}</span>}
+                {!!it.badge && <span className="absolute right-[18%] top-0 min-w-[18px] rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-[18px] text-white ring-2 ring-tech">{it.badge > 9 ? "9+" : it.badge}</span>}
               </Link>
             </li>
           );

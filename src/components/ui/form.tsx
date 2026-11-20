@@ -2,7 +2,7 @@ import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes, type T
 import { cn } from "@/lib/utils";
 
 const field =
-  "w-full rounded-2xl border border-border bg-surface px-4 text-[15px] text-foreground shadow-[inset_0_1px_2px_rgba(8,57,43,0.04)] transition placeholder:text-muted/80 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15 disabled:opacity-60";
+  "w-full rounded-2xl border border-border bg-surface/90 px-4 text-[15px] text-foreground shadow-[inset_0_1px_2px_rgba(8,57,43,0.04)] transition placeholder:text-muted/80 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15 disabled:opacity-60";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
   <input ref={ref} className={cn(field, "h-12", className)} {...props} />

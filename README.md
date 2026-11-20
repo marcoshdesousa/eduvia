@@ -65,7 +65,7 @@ npx playwright test           # fluxo completo no navegador de celular (prestado
 
 ## Testar de graça (GitHub Codespaces)
 
-Versão de teste com banco próprio e 79 contas em Parauapebas/PA: veja [docs/COMO-TESTAR.md](docs/COMO-TESTAR.md) e [docs/CONTAS-DE-TESTE.md](docs/CONTAS-DE-TESTE.md). `npm run demo:seed` recria as contas de teste (nunca roda no Render).
+Versão de teste com banco próprio e 79 contas em Parauapebas/PA: veja [docs/COMO-TESTAR.md](docs/COMO-TESTAR.md) e [docs/CONTAS-DE-TESTE.md](docs/CONTAS-DE-TESTE.md). `npm run demo:seed` recria as contas de teste. **Fase de teste** (`src/lib/test-phase.ts` e `next.config.ts`, `FASE_DE_TESTE = true`): o servidor cria essas contas sozinho quando liga (também no Render) e a tela de baixar o app mostra "Testar no navegador". Para lançar, troque para `false` nos dois arquivos: o servidor apaga as contas de teste quando ligar.
 
 ## Deploy no Render
 

@@ -34,20 +34,21 @@ export default async function HomePage() {
     <div className="space-y-6">
       <div>
         <p className="text-sm font-medium text-muted">{user ? `Olá, ${user.name.split(" ")[0]} 👋` : "Bem-vindo 👋"}</p>
-        <h1 className="text-[1.75rem] font-extrabold leading-tight tracking-tight text-brand-ink">Do que você precisa hoje?</h1>
+        <h1 className="text-[1.8rem] font-extrabold leading-tight tracking-tight text-brand-ink">Do que você <span className="dp-grad-text">precisa hoje?</span></h1>
       </div>
 
       <Link href="/rapido" className="block">
-        <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#12a273] via-primary to-brand-ink p-5 text-white shadow-xl shadow-primary/30 transition active:scale-[0.99]">
-          <div className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/10 blur-[1px]" />
-          <div className="absolute -bottom-14 right-16 h-32 w-32 rounded-full bg-amber-300/25 blur-sm" />
-          <div className="absolute right-5 top-5 grid h-14 w-14 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur">
+        <div className="dp-tech rounded-[28px] p-5 transition active:scale-[0.99]">
+          <div className="absolute right-5 top-5 grid h-14 w-14 place-items-center rounded-2xl bg-amber-300/15 shadow-[0_0_30px_-4px_rgba(251,191,36,0.6)] ring-1 ring-amber-300/40">
             <Zap size={28} className="fill-amber-300 text-amber-300" />
           </div>
-          <p className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ring-1 ring-white/20">Novo</p>
-          <p className="mt-2 text-xl font-extrabold tracking-tight">Contrate rápido</p>
-          <p className="mt-1 max-w-[16rem] text-sm text-white/85">Chame agora quem está perto. O primeiro que aceitar chega em até 2 horas.</p>
-          <span className="mt-4 inline-flex items-center gap-1 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-brand-ink shadow-lg">Chamar agora <ChevronRight size={16} /></span>
+          <p className="inline-flex items-center gap-1.5 rounded-full bg-[#2ee6a6]/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-[#7dfcc9] ring-1 ring-[#2ee6a6]/30"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2ee6a6]" /> Ao vivo</p>
+          <p className="mt-3 font-display text-2xl font-extrabold tracking-tight">Contrate rápido</p>
+          <p className="mt-1 max-w-[17rem] text-sm text-white/75">Chame agora quem está perto. O primeiro que aceitar chega em até 2 horas.</p>
+          <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold text-white/80">
+            {["Valor fixo", "Até 2 h", "Distância ao vivo"].map((t) => <span key={t} className="rounded-full bg-white/8 px-2.5 py-1 ring-1 ring-white/12">{t}</span>)}
+          </div>
+          <span className="mt-4 inline-flex items-center gap-1 rounded-2xl bg-gradient-to-r from-amber-200 to-amber-400 px-4 py-2.5 text-sm font-bold text-[#2a1600] shadow-[0_10px_30px_-8px_rgba(251,191,36,0.7)]">Chamar agora <ChevronRight size={16} /></span>
         </div>
       </Link>
 
@@ -76,7 +77,7 @@ export default async function HomePage() {
           <div className="grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-6">
             {CATEGORIES.filter((c) => c.group === g).map((c) => (
               <Link key={c.slug} href={`/buscar?servico=${c.slug}`} className="group flex flex-col items-center gap-1.5 text-center text-[11px] font-semibold leading-tight text-foreground/85">
-                <span className={`grid aspect-square w-full max-w-[4.5rem] place-items-center rounded-[22px] bg-gradient-to-br text-[2rem] shadow-sm ring-1 ring-black/5 transition group-hover:-translate-y-0.5 group-hover:shadow-md group-active:scale-95 ${TILE[gi % TILE.length]}`}>
+                <span className={`grid aspect-square w-full max-w-[4.5rem] place-items-center rounded-[22px] bg-gradient-to-br text-[2rem] shadow-[0_8px_20px_-12px_rgba(4,32,24,0.45)] ring-1 ring-black/5 transition group-hover:-translate-y-1 group-hover:shadow-[0_14px_28px_-12px_rgba(0,147,106,0.55)] group-active:scale-95 dark:ring-white/10 ${TILE[gi % TILE.length]}`}>
                   {c.emoji}
                 </span>
                 <span className="leading-tight">{c.label}</span>

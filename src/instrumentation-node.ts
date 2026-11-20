@@ -31,7 +31,21 @@ async function tick() {
   for (const [name, job] of jobs) await job().catch((e: unknown) => console.error(`[rotina] ${name}:`, e));
 }
 
+/** Fase de teste: cria as contas de teste de Parauapebas/PA se ainda não existem; fora dela, apaga as que sobraram. */
+async function testAccounts() {
+  const { FASE_DE_TESTE } = await import("./lib/test-phase");
+  const { demoExists, removeDemo, seedDemo } = await import("./lib/demo-seed");
+  if (FASE_DE_TESTE && process.env.DEMO_ACCOUNTS !== "false") {
+    if (await demoExists()) return;
+    const { total } = await seedDemo();
+    console.log(`[teste] ${total} contas de teste criadas em Parauapebas/PA (senha teste1234).`);
+  } else if (await demoExists()) {
+    console.log(`[teste] ${await removeDemo()} contas de teste apagadas (fim da fase de teste).`);
+  }
+}
+
 if (!g.diariapagaCron && process.env.NODE_ENV === "production" && process.env.DISABLE_CRON !== "true") {
+  setTimeout(() => void testAccounts().catch((e) => console.error("[teste] contas de teste:", e)), 5_000);
   g.diariapagaCron = true;
   setInterval(() => void quick(), 10_000).unref();
   setTimeout(() => void tick(), 20_000);

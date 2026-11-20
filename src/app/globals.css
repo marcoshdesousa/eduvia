@@ -3,15 +3,17 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Diária Paga: verde (dinheiro, confiança) + âmbar (moeda) */
+/* Diária Paga: verde neon + ciano (tecnologia, confiança) e âmbar (a moeda do Rápido) */
 :root {
-  --background: #f3f6f4;
+  --background: #f1f6f4;
   --surface: #ffffff;
-  --surface-2: #ecf3ef;
-  --border: #e0e9e4;
-  --foreground: #0f241c;
+  --surface-2: #e9f2ee;
+  --border: #dbe7e1;
+  --foreground: #06201a;
   --muted: #557066;
-  --primary: #0a7d55;
+  --primary: #00936a;
+  --primary-2: #0aa6c2;
+  --tech: #04140f;
   --primary-foreground: #ffffff;
   --accent: #d97706;
   --accent-soft: #fff3dc;
@@ -23,13 +25,15 @@
 }
 
 .dark {
-  --background: #08130f;
-  --surface: #0f1d18;
-  --surface-2: #162a22;
-  --border: #22392f;
-  --foreground: #e6f2ec;
-  --muted: #94b3a6;
-  --primary: #34d399;
+  --background: #030b09;
+  --surface: #0a1814;
+  --surface-2: #10241e;
+  --border: #1b342b;
+  --foreground: #e6f4ee;
+  --muted: #8fb0a3;
+  --primary: #2ee6a6;
+  --primary-2: #22d3ee;
+  --tech: #020907;
   --primary-foreground: #04281c;
   --accent: #fbbf24;
   --accent-soft: #3a2c0b;
@@ -48,6 +52,8 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-primary: var(--primary);
+  --color-primary-2: var(--primary-2);
+  --color-tech: var(--tech);
   --color-primary-foreground: var(--primary-foreground);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
@@ -66,12 +72,51 @@ body {
   color: var(--foreground);
 }
 
-/* fundo com um brilho suave (verde em cima, âmbar no canto) */
+/* fundo tecnológico: brilho verde/ciano (aurora) sobre uma grade de pontinhos */
 body {
-  background-image: radial-gradient(60rem 30rem at 0% -10%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 60%),
-    radial-gradient(40rem 25rem at 110% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 60%);
+  background-image: radial-gradient(55rem 28rem at 0% -10%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 60%),
+    radial-gradient(40rem 26rem at 110% 0%, color-mix(in srgb, var(--primary-2) 12%, transparent), transparent 60%),
+    radial-gradient(color-mix(in srgb, var(--foreground) 7%, transparent) 1px, transparent 1px);
+  background-size: auto, auto, 22px 22px;
   background-attachment: fixed;
 }
+
+/* painel escuro "tech": grade fina, brilho neon e borda de luz (Contrate rápido, saldos, destaques) */
+.dp-tech {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(28rem 16rem at 100% 0%, rgb(34 211 238 / 0.28), transparent 60%),
+    radial-gradient(26rem 18rem at 0% 110%, rgb(46 230 166 / 0.32), transparent 60%),
+    linear-gradient(rgb(255 255 255 / 0.045) 1px, transparent 1px) 0 0 / 26px 26px,
+    linear-gradient(90deg, rgb(255 255 255 / 0.045) 1px, transparent 1px) 0 0 / 26px 26px,
+    linear-gradient(160deg, #063a2b, var(--tech) 70%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.09), 0 24px 50px -24px rgb(0 147 106 / 0.6);
+}
+.dp-tech::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgb(46 230 166 / 0.7), transparent 40%, transparent 60%, rgb(34 211 238 / 0.6));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* texto em degradê verde → ciano */
+.dp-grad-text { background: linear-gradient(120deg, var(--primary), var(--primary-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* brilho que passa (botões principais) */
+@keyframes dp-sheen { from { transform: translateX(-120%) skewX(-20deg); } to { transform: translateX(220%) skewX(-20deg); } }
+.dp-sheen { position: relative; overflow: hidden; }
+.dp-sheen::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 40%; background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.28), transparent); animation: dp-sheen 3.2s ease-in-out infinite; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .dp-sheen::before { animation: none; display: none; } }
 
 /* seta dos selects */
 .dp-select {
@@ -97,7 +142,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; }
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.025em; }
 
 /* áreas de toque confortáveis no celular */
 @media (pointer: coarse) {
