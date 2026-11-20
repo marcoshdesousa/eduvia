@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { apiUser } from "@/lib/api";
 import { db } from "@/lib/db";
-import { categoryLabel, distanceKm, formatBRL, formatKm, qtyLong } from "@/lib/domain";
+import { categoryLabel, distanceKm, formatBRL, formatKm, needsShoppingList, qtyLong } from "@/lib/domain";
 
 const coord = (v: string | null, max: number) => (v != null && v !== "" && Number.isFinite(Number(v)) && Math.abs(Number(v)) <= max ? Number(v) : null);
 
@@ -33,6 +33,7 @@ export async function GET(req: Request) {
         category: categoryLabel(o.booking.category),
         qty: qtyLong(o.booking.unit, o.booking.quantity),
         byHour: o.booking.unit === "HORA",
+        shopping: needsShoppingList(o.booking.category),
         price: formatBRL(o.priceCents),
         distance: formatKm(o.distanceKm),
         ...(() => {

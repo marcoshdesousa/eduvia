@@ -136,7 +136,7 @@ describe("proibido telefone / WhatsApp", () => {
 describe("serviços e contratação", () => {
   it("tem as categorias pedidas", () => {
     const slugs = CATEGORIES.map((c) => c.slug);
-    for (const s of ["diarista", "pedreiro", "cuidador-idoso", "baba", "compras", "motorista", "pintor", "encanador", "eletricista"]) expect(slugs).toContain(s);
+    for (const s of ["diarista", "pedreiro", "cuidador-idoso", "baba", "compras", "pintor", "encanador", "eletricista"]) expect(slugs).toContain(s);
   });
   it("valor estimado = preço × quantidade", () => {
     expect(estimateCents(12000, 3, "DIARIA")).toBe(36000);
@@ -182,5 +182,21 @@ describe("hora, diárias e redes", () => {
     expect(youtubeLink("@canaldamaria")).toBe("https://www.youtube.com/@canaldamaria");
     expect(normalizeYoutube("https://youtube.com/watch?v=abc")).toMatch(/^https:\/\/youtube\.com/);
     expect(normalizeYoutube("https://evil.com/x")).toBeNull();
+  });
+});
+
+describe("profissões do Contrate rápido", () => {
+  it("só as combinadas entram no rápido e motorista saiu", async () => {
+    const { QUICK_SLUGS, isQuickCategory, quickPrice, quickHourPrice, category } = await import("./domain");
+    expect(QUICK_SLUGS).toHaveLength(19);
+    for (const s of QUICK_SLUGS) expect(category(s), s).not.toBeNull();
+    for (const s of ["diarista", "pedreiro", "compras", "manicure", "garcom", "seguranca", "mecanico", "enfermagem"]) expect(isQuickCategory(s), s).toBe(true);
+    for (const s of ["vidraceiro", "serralheiro", "frete", "cozinheira", "pintor", "azulejista", "ar-condicionado"]) {
+      expect(isQuickCategory(s), s).toBe(false);
+      expect(quickPrice(s), s).toBeNull();
+      expect(quickHourPrice(s), s).toBeNull();
+    }
+    expect(category("motorista")).toBeNull();
+    expect(quickPrice("compras")).toBe(4000);
   });
 });

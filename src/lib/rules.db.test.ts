@@ -50,6 +50,20 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
     await db.cpfLedger.deleteMany({ where: { cpfHash: { in: ledgers } } });
   });
 
+  it("rápido: vidraceiro não entra; compras pedem lista e telefone (criptografado)", async () => {
+    const { createQuick, BookingError } = await import("./bookings");
+    const { openSecret } = await import("./secret-box");
+    const c = await user("Cliente Compras");
+    const FLORIPA = { street: "Rua Teste", number: "1", city: "Florianópolis", uf: "SC", lat: -27.5954, lng: -48.548 };
+    await expect(createQuick({ clientId: c.id, category: "vidraceiro", quantity: 1, notes: "trocar o vidro da janela da sala", address: FLORIPA })).rejects.toThrow(/não tem Contrate rápido/);
+    await expect(createQuick({ clientId: c.id, category: "compras", quantity: 1, notes: "arroz", address: FLORIPA, contactPhone: "48999887766" })).rejects.toBeInstanceOf(BookingError);
+    await expect(createQuick({ clientId: c.id, category: "compras", quantity: 1, notes: "5 kg de arroz, 2 kg de feijão, 1 dúzia de ovos", address: FLORIPA })).rejects.toThrow(/telefone/);
+    const b = await createQuick({ clientId: c.id, category: "compras", quantity: 1, notes: "5 kg de arroz, 2 kg de feijão, 1 dúzia de ovos", address: FLORIPA, contactPhone: "(48) 99988-7766" }, NOW);
+    expect(b.estimateCents).toBe(4000);
+    expect(b.contactSealed).not.toContain("99988");
+    expect(openSecret(b.contactSealed!)).toBe("5548999887766");
+  });
+
   it("teste grátis só uma vez por CPF, mesmo apagando e criando o perfil de novo", async () => {
     const { startTrialIfEligible } = await import("./subscription");
     const u = await user("Teste Trial");

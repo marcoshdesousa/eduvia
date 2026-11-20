@@ -30,7 +30,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
             </p>
             <h1 className="text-4xl font-extrabold leading-tight text-brand-ink md:text-5xl">Quem faz o serviço, perto de você. Hoje.</h1>
             <p className="max-w-xl text-lg text-muted">
-              Diarista, pedreiro, cuidador de idoso, babá, motorista, eletricista e muito mais. Compare preço e avaliações, ou chame na hora com o <strong className="text-foreground">Contrate rápido</strong>.
+              Diarista, pedreiro, cuidador de idoso, babá, eletricista, compras no supermercado e muito mais. Compare preço e avaliações, ou chame na hora com o <strong className="text-foreground">Contrate rápido</strong>.
             </p>
             <div className="flex flex-wrap gap-2">
               <Link href="/rapido" className={buttonClass("primary", "lg", "dp-ring")}><Zap size={18} /> Contratar agora</Link>

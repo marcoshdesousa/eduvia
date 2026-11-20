@@ -6,7 +6,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { quickStats } from "@/lib/bookings";
-import { ARRIVE_HOURS, CLIENT_NOSHOW_WAIT_MIN, PRO_QUICK_BAN_DAYS, QUICK_MIN_SAMPLE, UNIT_LABEL, acceptRate, acceptTier, category, formatBRL, quickHourPrice, quickPrice } from "@/lib/domain";
+import { ARRIVE_HOURS, CLIENT_NOSHOW_WAIT_MIN, PRO_QUICK_BAN_DAYS, QUICK_MIN_SAMPLE, UNIT_LABEL, acceptRate, acceptTier, category, formatBRL, quickHourPrice, quickPrice, isQuickCategory } from "@/lib/domain";
 import { getSettings } from "@/lib/settings";
 import { acceptQuickTermsAction, leaveQuickAction, setQuickAction } from "./actions";
 
@@ -18,7 +18,7 @@ export async function QuickCard({ pro, full, visible }: { pro: { id: string; qui
   const { quickPrices, quickHourPrices } = await getSettings();
   const prices = (
     <ul className="divide-y divide-border rounded-xl bg-surface-2 px-3 text-sm">
-      {pro.services.map((s) => {
+      {pro.services.filter((s) => isQuickCategory(s.category)).map((s) => {
         const c = category(s.category);
         const hour = quickHourPrice(s.category, quickPrices, quickHourPrices);
         const byHour = hour != null && c?.unit !== "HORA" && (s.hourCents || s.unit === "HORA");
@@ -33,6 +33,12 @@ export async function QuickCard({ pro, full, visible }: { pro: { id: string; qui
         );
       })}
     </ul>
+  );
+  const outside = pro.services.filter((s) => !isQuickCategory(s.category));
+  const outsideNote = outside.length > 0 && (
+    <p className="text-xs text-muted">
+      {outside.map((s) => category(s.category)?.label ?? s.category).join(", ")}: {outside.length === 1 ? "essa profissão não entra" : "essas profissões não entram"} no Contrate rápido (o valor depende do trabalho). O cliente contrata pela vitrine, com o seu valor.
+    </p>
   );
 
   if (!full) {
@@ -60,6 +66,7 @@ export async function QuickCard({ pro, full, visible }: { pro: { id: string; qui
         </ul>
         <p className="text-sm font-medium">Valores fixos dos seus serviços:</p>
         {prices}
+        {outsideNote}
         <ActionForm action={acceptQuickTermsAction} className="space-y-3">
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" name="agree" required className="mt-1 h-4 w-4 accent-[var(--primary)]" />
@@ -98,7 +105,7 @@ export async function QuickCard({ pro, full, visible }: { pro: { id: string; qui
       </div>
       <details className="text-sm">
         <summary className="cursor-pointer text-primary">Valores fixos dos seus serviços</summary>
-        <div className="mt-2">{prices}</div>
+        <div className="mt-2 space-y-2">{prices}{outsideNote}</div>
       </details>
       <PushToggle />
       <ActionButton action={leaveQuickAction} variant="ghost" size="sm" className="text-muted" confirm="Sair do Contrate rápido?">Sair do Contrate rápido</ActionButton>

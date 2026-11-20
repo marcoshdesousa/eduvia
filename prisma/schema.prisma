@@ -422,6 +422,8 @@ model Booking {
   proLat        Float?
   proLng        Float?
   proPosAt      DateTime?
+  /// compras no supermercado: telefone do cliente para o Pix das compras (criptografado; o prestador vê depois do aceite)
+  contactSealed String?
   canceledAt    DateTime?
   cancelReason  String?
   addressPurgedAt DateTime?

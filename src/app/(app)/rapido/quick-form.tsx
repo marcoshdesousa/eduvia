@@ -2,10 +2,11 @@
 import { startTransition, useActionState, useMemo, useState } from "react";
 import { Minus, Plus, Zap } from "lucide-react";
 import { AddressFields, type SavedAddress } from "@/components/address-fields";
+import { ShoppingPhone } from "@/components/shopping-fields";
 import { PendingContext, SubmitButton } from "@/components/submit-button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { FormError, Label, Textarea } from "@/components/ui/form";
-import { CATEGORIES, DIARIA_HOURS, MAX_QTY, UNIT_LABEL, category, formatBRL, qtyLabel } from "@/lib/domain";
+import { CATEGORIES, DIARIA_HOURS, SHOPPING_SLUG, MAX_QTY, UNIT_LABEL, category, formatBRL, qtyLabel } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { createQuickAction } from "../hire-actions";
 
@@ -15,11 +16,13 @@ export function QuickForm({ saved, ufs, initialCategory, prices, hourPrices }: {
   const [qty, setQty] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const c = category(cat);
+  const shopping = cat === SHOPPING_SLUG;
   const [byHour, setByHour] = useState(false);
   const hourPrice = c ? hourPrices[c.slug] : undefined;
   const unit: keyof typeof UNIT_LABEL = byHour && hourPrice != null ? "HORA" : (c?.unit ?? "DIARIA");
   const unitPrice = c ? (unit === "HORA" && c.unit !== "HORA" ? hourPrice! : prices[c.slug]) : null;
-  const list = useMemo(() => (showAll ? CATEGORIES : CATEGORIES.slice(0, 12)), [showAll]);
+  const quickCats = useMemo(() => CATEGORIES.filter((x) => x.slug in prices), [prices]);
+  const list = useMemo(() => (showAll ? quickCats : quickCats.slice(0, 12)), [showAll, quickCats]);
 
   return (
     <form
@@ -55,7 +58,8 @@ export function QuickForm({ saved, ufs, initialCategory, prices, hourPrices }: {
             </button>
           ))}
         </div>
-        {!showAll && <button type="button" onClick={() => setShowAll(true)} className="w-full text-sm text-primary">Ver todos os serviços</button>}
+        {!showAll && quickCats.length > 12 && <button type="button" onClick={() => setShowAll(true)} className="w-full text-sm text-primary">Ver todos os serviços</button>}
+        <p className="text-xs text-muted">Vidraceiro, serralheiro, frete, pintor e outros trabalhos que dependem de orçamento: escolha o prestador pela vitrine, no Início.</p>
       </Card>
 
       {c && (
@@ -98,10 +102,11 @@ export function QuickForm({ saved, ufs, initialCategory, prices, hourPrices }: {
           <Card className="space-y-3">
             <CardTitle>4. O que precisa ser feito?</CardTitle>
             <div>
-              <Label htmlFor="notes">Descrição do serviço (obrigatória)</Label>
-              <Textarea id="notes" name="notes" required minLength={10} maxLength={1000} rows={4} placeholder={`Ex.: ${c.slug === "eletricista" ? "montar o painel de iluminação da sala e trocar 6 tomadas" : c.slug === "pedreiro" ? "levantar um muro de 6 metros no quintal, o material já está aqui" : "faxina completa em casa de 2 quartos, com geladeira e janelas"}.`} />
-              <p className="mt-1 text-xs text-muted">O prestador lê isso antes de aceitar.</p>
+              <Label htmlFor="notes">{shopping ? "Lista de compras completa (obrigatória)" : "Descrição do serviço (obrigatória)"}</Label>
+              <Textarea id="notes" name="notes" required minLength={10} maxLength={1000} rows={4} placeholder={shopping ? "Ex.: 5 kg de arroz Tio João, 2 kg de feijão carioca, 1 dúzia de ovos, 2 L de leite integral, pão de forma, sabão em pó 1 kg…" : `Ex.: ${c.slug === "eletricista" ? "montar o painel de iluminação da sala e trocar 6 tomadas" : c.slug === "pedreiro" ? "levantar um muro de 6 metros no quintal, o material já está aqui" : "faxina completa em casa de 2 quartos, com geladeira e janelas"}.`} />
+              <p className="mt-1 text-xs text-muted">O prestador lê isso antes de aceitar.{shopping ? " Coloque marca e quantidade de cada item." : ""}</p>
             </div>
+            {shopping && <ShoppingPhone />}
           </Card>
 
           <Card className="space-y-3 border-primary/40">

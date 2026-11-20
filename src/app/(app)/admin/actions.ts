@@ -143,7 +143,7 @@ export async function adminReply(ticketId: string, _: ActionResult, d: FormData)
 /** Valores fixos do Contrate rápido por profissão (vazio = volta ao padrão). */
 export async function saveQuickPrices(_: ActionResult, d: FormData): Promise<ActionResult> {
   const admin = await requireAdmin();
-  const { CATEGORIES, parseBRL, quickHourPrice } = await import("@/lib/domain");
+  const { QUICK_CATEGORIES: CATEGORIES, parseBRL, quickHourPrice } = await import("@/lib/domain");
   const out: Record<string, number> = {};
   const hours: Record<string, number> = {};
   for (const c of CATEGORIES) {

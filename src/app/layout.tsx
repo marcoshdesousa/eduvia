@@ -9,7 +9,7 @@ const display = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakart
 
 export const metadata: Metadata = {
   title: { default: "Diária Paga — contrate diaristas, pedreiros, cuidadores e mais", template: "%s · Diária Paga" },
-  description: "Encontre quem faz o serviço perto de você: diarista, pedreiro, eletricista, cuidador, babá, motorista e muito mais. Grátis para quem contrata.",
+  description: "Encontre quem faz o serviço perto de você: diarista, pedreiro, eletricista, cuidador, babá, encanador e muito mais. Grátis para quem contrata.",
   applicationName: "Diária Paga",
 };
 

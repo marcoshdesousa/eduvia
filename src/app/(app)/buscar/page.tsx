@@ -4,7 +4,7 @@ import { SearchX, Zap } from "lucide-react";
 import { Empty, PageTitle } from "@/components/bits";
 import { ProviderCard } from "@/components/provider-card";
 import { buttonClass } from "@/components/ui/button";
-import { category, isCategory, parseBRL } from "@/lib/domain";
+import { category, isCategory, parseBRL, isQuickCategory } from "@/lib/domain";
 import { UFS, officialCity } from "@/lib/places";
 import { profilePhotoUrl, searchProviders } from "@/lib/providers";
 import { getCurrentUser } from "@/lib/session";
@@ -40,7 +40,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       ) : (
         <SearchBar ufs={UFS} initial={{ servico, uf, cidade: city ?? sp.cidade ?? "", max: sp.max ?? "", lat: near ? String(lat) : "", lng: near ? String(lng) : "" }} />
       )}
-      {cat && (
+      {cat && isQuickCategory(cat.slug) && (
         <Link href={`/rapido?servico=${cat.slug}`} className={buttonClass("outline", "md", "w-full border-primary/50 text-primary")}>
           <Zap size={16} /> Precisa agora? Use o Contrate rápido
         </Link>
@@ -66,7 +66,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                       plan: p.plan,
                       distanceKm: p.distanceKm,
                       place: `${place.district ? `${place.district}, ` : ""}${place.city}`,
-                      quickNow: p.plan === "FULL" && !!p.quickTermsAt && p.quickOn && !(p.quickBannedUntil && p.quickBannedUntil > now),
+                      quickNow: !!cat && isQuickCategory(cat.slug) && p.plan === "FULL" && !!p.quickTermsAt && p.quickOn && !(p.quickBannedUntil && p.quickBannedUntil > now),
                       overBudget: !!maxCents && p.priceCents > maxCents,
                     }}
                   />

@@ -49,6 +49,7 @@ export async function createBookingAction(_: ActionResult, d: FormData): Promise
       address: addr,
       saveAddressLabel: d.get("saveAddress") === "on" ? s(d, "saveLabel") || "Endereço" : null,
       payMethod: PAY.includes(s(d, "payMethod")) ? s(d, "payMethod") : null,
+      contactPhone: s(d, "contactPhone"),
     });
     id = b.id;
   } catch (e) {
@@ -75,6 +76,7 @@ export async function createQuickAction(_: ActionResult, d: FormData): Promise<A
       address: { ...addr, lat: addr.lat, lng: addr.lng },
       saveAddressLabel: d.get("saveAddress") === "on" ? s(d, "saveLabel") || "Endereço" : null,
       payMethod: PAY.includes(s(d, "payMethod")) ? s(d, "payMethod") : null,
+      contactPhone: s(d, "contactPhone"),
     });
     id = b.id;
   } catch (e) {

@@ -95,7 +95,6 @@ export const CATEGORIES = [
   { slug: "baba", label: "Babá", emoji: "🍼", unit: "DIARIA", group: "Cuidados", quick: 13000 },
   { slug: "pet", label: "Cuidador de pets / passeador", emoji: "🐕", unit: "SERVICO", group: "Cuidados", quick: 5000 },
   { slug: "enfermagem", label: "Técnico(a) de enfermagem", emoji: "🩺", unit: "DIARIA", group: "Cuidados", quick: 20000 },
-  { slug: "motorista", label: "Motorista particular", emoji: "🚗", unit: "SERVICO", group: "Transporte e entregas", quick: 5000 },
   { slug: "compras", label: "Compras no supermercado", emoji: "🛒", unit: "SERVICO", group: "Transporte e entregas", quick: 4000 },
   { slug: "frete", label: "Frete e mudança", emoji: "🚚", unit: "SERVICO", group: "Transporte e entregas", quick: 15000 },
   { slug: "chapa", label: "Carregador / chapa", emoji: "📦", unit: "DIARIA", group: "Transporte e entregas", quick: 12000 },
@@ -124,7 +123,7 @@ export const isCategory = (slug: string) => CAT.has(slug);
 const EXTRA_UNITS: Record<string, PriceUnit[]> = {
   diarista: ["HORA"], cozinheira: ["HORA"], jardineiro: ["SERVICO"], pedreiro: ["SERVICO"], servente: ["SERVICO"], pintor: ["SERVICO"],
   eletricista: ["DIARIA", "HORA"], encanador: ["DIARIA", "HORA"], carpinteiro: ["SERVICO"], gesseiro: ["SERVICO"], azulejista: ["SERVICO"],
-  serralheiro: ["DIARIA"], "cuidador-idoso": ["HORA"], baba: ["HORA"], pet: ["HORA"], enfermagem: ["HORA"], motorista: ["DIARIA", "HORA"],
+  serralheiro: ["DIARIA"], "cuidador-idoso": ["HORA"], baba: ["HORA"], pet: ["HORA"], enfermagem: ["HORA"],
   chapa: ["SERVICO", "HORA"], garcom: ["HORA"], seguranca: ["HORA"], mecanico: ["HORA"], personal: ["SERVICO"], professor: ["SERVICO"], outros: ["SERVICO", "HORA"],
 };
 export const unitsOf = (slug: string): PriceUnit[] => {
@@ -175,9 +174,25 @@ export const isPayMethod = (v: string): v is PayMethod => v in PAY_METHODS;
  * Contrate rápido: valor FIXO por profissão (por diária, hora ou serviço), um pouco abaixo do mercado.
  * O admin pode trocar cada valor (ficam em `overrides`). O prestador recebe tudo: a plataforma não tira nada.
  */
+/**
+ * Profissões que entram no Contrate rápido (dá para ter um valor fixo). As outras (vidraceiro, serralheiro, frete,
+ * cozinheira, pintor…) dependem muito do trabalho: o cliente contrata pela vitrine, com o valor de cada prestador.
+ */
+export const QUICK_SLUGS: readonly string[] = [
+  "diarista", "passadeira", "lavadeira", "jardineiro", "piscineiro", "dedetizacao", "pedreiro", "servente", "eletricista", "encanador",
+  "cuidador-idoso", "baba", "pet", "enfermagem", "compras", "manicure", "garcom", "seguranca", "mecanico",
+];
+export const isQuickCategory = (slug: string) => QUICK_SLUGS.includes(slug);
+export const QUICK_CATEGORIES = CATEGORIES.filter((c) => QUICK_SLUGS.includes(c.slug));
+
+/** Compras no supermercado: o cliente manda a lista completa e o telefone para o Pix das compras; o prestador entrega a notinha. */
+export const SHOPPING_SLUG = "compras";
+export const needsShoppingList = (slug: string) => slug === SHOPPING_SLUG;
+export const SHOPPING_RULE = "O cliente paga as compras por Pix (o telefone dele aparece depois do aceite) e o prestador entrega a notinha (nota fiscal) das compras junto com as sacolas.";
+
 export function quickPrice(slug: string, overrides: Record<string, number> = {}) {
   const c = CAT.get(slug);
-  if (!c) return null;
+  if (!c || !isQuickCategory(slug)) return null;
   const o = overrides[slug];
   return Number.isInteger(o) && o >= 100 ? o : c.quick;
 }
@@ -192,7 +207,7 @@ export const hourFromDaily = (dailyCents: number) => Math.ceil((dailyCents / DIA
  */
 export function quickHourPrice(slug: string, overrides: Record<string, number> = {}, hourOverrides: Record<string, number> = {}) {
   const c = CAT.get(slug);
-  if (!c) return null;
+  if (!c || !isQuickCategory(slug)) return null;
   const o = hourOverrides[slug];
   if (Number.isInteger(o) && o >= 100) return o;
   const base = quickPrice(slug, overrides)!;

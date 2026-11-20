@@ -7,7 +7,7 @@ import { ReportButton } from "@/components/report-dialog";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { PAY_METHODS, POSTS_PREVIEW, REPORT_REASONS, DIARIA_HOURS, UNIT_LABEL, WEEKDAYS, category, formatBRL, whatsappLabel, whatsappLink, youtubeLink, isPayMethod, minutesToHHMM, providerVisible, ratingOf, shortName } from "@/lib/domain";
+import { PAY_METHODS, POSTS_PREVIEW, REPORT_REASONS, DIARIA_HOURS, UNIT_LABEL, WEEKDAYS, category, formatBRL, whatsappLabel, whatsappLink, youtubeLink, isPayMethod, minutesToHHMM, providerVisible, ratingOf, shortName, isQuickCategory } from "@/lib/domain";
 import { postImageUrl, profilePhotoUrl } from "@/lib/providers";
 import { getCurrentUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -81,7 +81,7 @@ export default async function ProviderPage({ params, searchParams }: { params: P
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <Rating value={ratingOf(pro)} count={pro.ratingCount} />
               {full && <RecommendedBadge />}
-              {quickNow && <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success"><Zap size={12} /> Disponível agora</span>}
+              {quickNow && cur && isQuickCategory(cur.category) && <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success"><Zap size={12} /> Disponível agora</span>}
             </div>
             <div className="flex flex-wrap gap-x-3 text-xs text-muted">
               {pro.completedCount > 0 && <span className="flex items-center gap-1"><CheckCircle2 size={12} /> {pro.completedCount} serviços</span>}

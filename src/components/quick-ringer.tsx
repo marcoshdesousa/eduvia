@@ -3,8 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BellRing, Loader2, MapPin, Navigation, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SHOPPING_RULE } from "@/lib/domain";
 
-type Offer = { id: string; bookingId: string; category: string; qty: string; byHour?: boolean; price: string; distance: string; place: string; notes: string | null; expiresAt: string; fromPlaces?: { label: string; distance: string; nearest: boolean }[]; here?: string | null };
+type Offer = { id: string; bookingId: string; category: string; qty: string; byHour?: boolean; shopping?: boolean; price: string; distance: string; place: string; notes: string | null; expiresAt: string; fromPlaces?: { label: string; distance: string; nearest: boolean }[]; here?: string | null };
 
 /** Som de chamado (dois tons repetidos, tipo app de corrida), feito no próprio navegador. */
 function useRingtone() {
@@ -183,7 +184,8 @@ export function QuickRinger() {
                 ))}
               </ul>
             )}
-            {offer.notes && <div className="rounded-xl bg-surface-2 p-3 text-sm"><p className="text-xs font-semibold uppercase text-muted">O que o cliente precisa</p><p className="mt-1 whitespace-pre-line">{offer.notes}</p></div>}
+            {offer.notes && <div className="rounded-xl bg-surface-2 p-3 text-sm"><p className="text-xs font-semibold uppercase text-muted">{offer.shopping ? "Lista de compras" : "O que o cliente precisa"}</p><p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-line">{offer.notes}</p></div>}
+            {offer.shopping && <p className="rounded-xl bg-primary/10 p-3 text-xs">{SHOPPING_RULE}</p>}
             <p className="text-xs text-muted">Aceitando, você tem até 2 horas para chegar. O endereço completo aparece depois do aceite. Recusar muito faz você tocar menos.</p>
             <div className="grid grid-cols-[1fr_2fr] gap-2">
               <Button variant="outline" size="lg" disabled={busy} onClick={() => answer("recusar")}>Recusar</Button>

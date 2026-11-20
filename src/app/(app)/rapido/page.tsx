@@ -5,7 +5,7 @@ import { PageTitle } from "@/components/bits";
 import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { CATEGORIES, isCategory, quickHourPrice, quickPrice } from "@/lib/domain";
+import { QUICK_CATEGORIES, isQuickCategory, quickHourPrice, quickPrice } from "@/lib/domain";
 import { getSettings } from "@/lib/settings";
 import { UFS } from "@/lib/places";
 import { savedAddresses } from "@/lib/saved-addresses";
@@ -33,7 +33,7 @@ export default async function QuickPage({ searchParams }: { searchParams: Promis
           <Link href="/desbloquear" className={buttonClass("primary")}>Liberar agora por R$ 2,85</Link>
         </Card>
       ) : (
-        <QuickForm saved={await savedAddresses(user.id)} ufs={UFS} initialCategory={isCategory(servico) ? servico : ""} prices={Object.fromEntries(CATEGORIES.map((c) => [c.slug, quickPrice(c.slug, quickPrices)!]))} hourPrices={Object.fromEntries(CATEGORIES.flatMap((c) => { const h = quickHourPrice(c.slug, quickPrices, quickHourPrices); return h != null && c.unit !== "HORA" ? [[c.slug, h]] : []; }))} />
+        <QuickForm saved={await savedAddresses(user.id)} ufs={UFS} initialCategory={isQuickCategory(servico) ? servico : ""} prices={Object.fromEntries(QUICK_CATEGORIES.map((c) => [c.slug, quickPrice(c.slug, quickPrices)!]))} hourPrices={Object.fromEntries(QUICK_CATEGORIES.flatMap((c) => { const h = quickHourPrice(c.slug, quickPrices, quickHourPrices); return h != null && c.unit !== "HORA" ? [[c.slug, h]] : []; }))} />
       )}
     </div>
   );

@@ -2,10 +2,11 @@
 import { startTransition, useActionState, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { AddressFields, type SavedAddress } from "@/components/address-fields";
+import { ShoppingPhone } from "@/components/shopping-fields";
 import { PendingContext, SubmitButton } from "@/components/submit-button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { FormError, Input, Label, Textarea } from "@/components/ui/form";
-import { DIARIA_HOURS, MAX_QTY, PAY_METHODS, UNIT_LABEL, formatBRL, isPayMethod, qtyLabel } from "@/lib/domain";
+import { DIARIA_HOURS, SHOPPING_SLUG, MAX_QTY, PAY_METHODS, UNIT_LABEL, formatBRL, isPayMethod, qtyLabel } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { createBookingAction } from "../../hire-actions";
 
@@ -98,7 +99,14 @@ export function BookingForm({ proId, services, initial, agenda, saved, ufs, payM
       </Card>
       <Card className="space-y-3">
         <CardTitle>4. Detalhes</CardTitle>
-        <Textarea name="notes" maxLength={1000} placeholder="Conte o que precisa ser feito (opcional)." aria-label="Observações" />
+        {s.category === SHOPPING_SLUG ? (
+          <>
+            <Textarea name="notes" required minLength={15} maxLength={1000} rows={5} placeholder="Lista de compras completa: marca e quantidade de cada item." aria-label="Lista de compras completa" />
+            <ShoppingPhone />
+          </>
+        ) : (
+          <Textarea name="notes" maxLength={1000} placeholder="Conte o que precisa ser feito (opcional)." aria-label="Observações" />
+        )}
         <fieldset className="flex flex-wrap items-center gap-4 text-sm">
           <legend className="mb-1 w-full text-sm font-medium">Como vai pagar (o prestador aceita)</legend>
           {(payMethods.length ? payMethods : ["PIX", "DINHEIRO"]).filter(isPayMethod).map((m, i) => (

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { AlertTriangle, CalendarClock, CheckCircle2, ExternalLink, Info, LifeBuoy, Lock, MapPin, Timer, Wallet, Zap } from "lucide-react";
+import { AlertTriangle, ShoppingCart, CalendarClock, CheckCircle2, ExternalLink, Info, LifeBuoy, Lock, MapPin, Timer, Wallet, Zap } from "lucide-react";
 import { ActionButton } from "@/components/action-button";
 import { BookingBadge, ProPhoto, Rating, Stars } from "@/components/bits";
 import { ChatBox } from "@/components/chat-box";
@@ -16,7 +16,8 @@ import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { roleIn } from "@/lib/bookings";
 import { db } from "@/lib/db";
-import { ARRIVE_HOURS, BOOKING_LABEL, CLIENT_NOSHOW_WAIT_MIN, REPORT_REASONS, UNIT_LABEL, canReview, category, chatOpen, formatBRL, nextSteps, proSeesAddress, qtyLabel, qtyLong, ratingOf, shortName } from "@/lib/domain";
+import { ARRIVE_HOURS, BOOKING_LABEL, CLIENT_NOSHOW_WAIT_MIN, REPORT_REASONS, UNIT_LABEL, canReview, category, chatOpen, formatBRL, nextSteps, proSeesAddress, qtyLabel, qtyLong, ratingOf, shortName, SHOPPING_RULE, needsShoppingList, whatsappLabel, whatsappLink } from "@/lib/domain";
+import { openSecret } from "@/lib/secret-box";
 import { formatWhen } from "@/lib/places";
 import { accountPhotoUrl } from "@/lib/providers";
 import { requireUser } from "@/lib/session";
@@ -52,6 +53,8 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
   const pro = b.pro;
   const quick = b.mode === "QUICK";
   const cat = category(b.category);
+  const shopping = needsShoppingList(b.category);
+  const contact = b.contactSealed ? openSecret(b.contactSealed) : null;
   const showAddress = !b.addressPurgedAt && (isClient || as === "ADMIN" || (isPro && proSeesAddress(b)));
   const chat = chatOpen(b);
   // conversa entre os dois (uma só, antes e depois de contratar)
@@ -166,7 +169,21 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
             </div>
           </div>
         </dl>
-        {b.notes && <p className="whitespace-pre-line rounded-lg bg-surface-2 p-3 text-sm">Observações: {b.notes}</p>}
+        {b.notes && <p className="whitespace-pre-line rounded-lg bg-surface-2 p-3 text-sm">{shopping ? "Lista de compras" : "Observações"}: {b.notes}</p>}
+        {shopping && (
+          <div className="space-y-1 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+            <p className="flex items-center gap-2 font-semibold"><ShoppingCart size={16} className="text-primary" /> Compras no supermercado</p>
+            {contact && (isClient || as === "ADMIN" || (isPro && proSeesAddress(b))) ? (
+              <p>
+                Telefone {isPro ? "do cliente" : "informado"} para o Pix das compras:{" "}
+                <a href={whatsappLink(contact)} target="_blank" rel="noreferrer nofollow" className="font-semibold text-primary underline">{whatsappLabel(contact)}</a>
+              </p>
+            ) : isPro && contact ? (
+              <p className="text-muted">O telefone do cliente para o Pix aparece depois que você aceitar.</p>
+            ) : null}
+            <p className="text-xs text-muted">{SHOPPING_RULE}</p>
+          </div>
+        )}
         {b.status === "WAITING_PRO" && b.expiresAt && (
           <p className="flex items-center gap-2 text-sm text-muted"><Info size={16} /> {isPro ? "Responda até" : "O prestador tem até"} {b.expiresAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" })}{isPro ? "." : " para responder."}</p>
         )}
@@ -194,7 +211,7 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
         <Card className="space-y-3 border-2 border-primary">
           <CardTitle>📅 Confirmar agendamento</CardTitle>
           <p className="text-sm text-muted">{otherName} reservou este horário para você. Informe o endereço para confirmar. Se não der, cancele.</p>
-          <ConfirmSchedule bookingId={b.id} saved={await savedAddresses(user.id)} ufs={UFS} payMethods={b.pro?.payMethods ?? []} />
+          <ConfirmSchedule bookingId={b.id} saved={await savedAddresses(user.id)} ufs={UFS} payMethods={b.pro?.payMethods ?? []} shopping={needsShoppingList(b.category)} />
         </Card>
       )}
 

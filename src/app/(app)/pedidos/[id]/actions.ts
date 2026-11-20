@@ -98,7 +98,7 @@ export async function confirmScheduleAction(bookingId: string, _: ActionResult, 
       bookingId,
       user.id,
       { street: s("street"), number: s("number"), complement: s("complement"), district: s("district"), city: s("city"), uf: s("uf").toUpperCase(), cep: s("cep"), reference: s("reference"), lat: num(s("lat")), lng: num(s("lng")) },
-      { saveAddressLabel: d.get("saveAddress") === "on" ? s("saveLabel") || "Endereço" : null, payMethod: s("payMethod") || null },
+      { saveAddressLabel: d.get("saveAddress") === "on" ? s("saveLabel") || "Endereço" : null, payMethod: s("payMethod") || null, contactPhone: s("contactPhone") },
     );
   } catch (e) {
     if (e instanceof BookingError) return { error: e.message };

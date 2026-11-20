@@ -8,6 +8,9 @@ import {
   ACTIVE_STATUSES,
   acceptRate,
   quickUnitPrice,
+  isQuickCategory,
+  needsShoppingList,
+  normalizeWhatsapp,
   ARRIVE_HOURS,
   BOOKING_LABEL,
   CLIENT_BLOCK_DAYS,
@@ -31,6 +34,7 @@ import { formatWhen, localParts, officialCity } from "@/lib/places";
 import { bbox, visibleWhere } from "@/lib/providers";
 import { clientBlock } from "@/lib/subscription";
 import { conversationWith } from "@/lib/chat";
+import { sealSecret } from "@/lib/secret-box";
 import type { Prisma } from "@/generated/prisma/client";
 
 export class BookingError extends Error {}
@@ -87,6 +91,8 @@ export type BookingInput = {
   address: AddressInput;
   saveAddressLabel?: string | null;
   payMethod?: string | null;
+  /** compras no supermercado: telefone do cliente para o Pix das compras */
+  contactPhone?: string | null;
   /** "HORA" para contratar por hora quem também trabalha por hora; vazio = cobrança principal do perfil */
   unit?: PriceUnit | null;
 };
@@ -111,6 +117,7 @@ export async function createBooking(input: BookingInput, now = new Date()) {
   if (blocked) throw new BookingError("Não é possível enviar pedido para este prestador.");
   const service = pro.services.find((s) => s.category === input.category);
   if (!service) throw new BookingError("Escolha um serviço que este prestador oferece.");
+  const contactSealed = shoppingContact(service.category, input.notes, input.contactPhone);
   // por hora: só se o prestador também trabalha por hora (valor da hora do perfil)
   const byHour = input.unit === "HORA" && service.unit !== "HORA";
   if (byHour && !service.hourCents) throw new BookingError("Este prestador não trabalha por hora nessa profissão.");
@@ -139,6 +146,7 @@ export async function createBooking(input: BookingInput, now = new Date()) {
         estimateCents: estimate,
         scheduledAt: input.scheduledAt,
         notes: input.notes?.trim().slice(0, 1000) || null,
+        contactSealed,
         payMethod: input.payMethod || null,
         expiresAt: new Date(Math.min(now.getTime() + settings.requestExpiryHours * H, input.scheduledAt.getTime())),
         ...addr,
@@ -156,21 +164,35 @@ export async function createBooking(input: BookingInput, now = new Date()) {
   return booking;
 }
 
+/**
+ * Compras no supermercado: precisa da lista completa e do telefone do cliente (para o Pix das compras).
+ * Devolve o telefone criptografado (ou null nas outras profissões).
+ */
+export function shoppingContact(category: string, notes: string | null | undefined, phone: string | null | undefined) {
+  if (!needsShoppingList(category)) return null;
+  if ((notes ?? "").trim().length < 15) throw new BookingError("Escreva a lista de compras completa (o que comprar e quantidade).");
+  const n = normalizeWhatsapp(phone ?? "");
+  if (!n) throw new BookingError("Informe seu telefone com DDD para o prestador pedir o Pix das compras.");
+  return sealSecret(n);
+}
+
 // ───────────────────────── Contrate rápido ─────────────────────────
 
-export type QuickInput = { clientId: string; category: string; quantity: number; unit?: PriceUnit | null; notes: string; address: AddressInput & { lat: number; lng: number }; saveAddressLabel?: string | null; payMethod?: string | null };
+export type QuickInput = { clientId: string; category: string; quantity: number; unit?: PriceUnit | null; notes: string; contactPhone?: string | null; address: AddressInput & { lat: number; lng: number }; saveAddressLabel?: string | null; payMethod?: string | null };
 
 /** Cria o chamado e já toca para a primeira rodada de prestadores perto. */
 export async function createQuick(input: QuickInput, now = new Date()) {
   await checkClient(input.clientId);
   const cat = categoryOf(input.category);
   if (!cat) throw new BookingError("Escolha o serviço.");
+  if (!isQuickCategory(cat.slug)) throw new BookingError("Essa profissão não tem Contrate rápido. Escolha um prestador pela vitrine.");
   const city = officialCity(input.address.uf, input.address.city);
   if (!city) throw new BookingError("Não reconhecemos o município. Confira o estado e a cidade.");
   if (!input.address.street.trim()) throw new BookingError("Informe a rua (o prestador só vê depois de aceitar).");
   if (!Number.isFinite(input.address.lat) || !Number.isFinite(input.address.lng)) throw new BookingError("Precisamos da sua localização no mapa para achar quem está perto.");
   const notes = input.notes?.trim().slice(0, 1000) ?? "";
   if (notes.length < 10) throw new BookingError("Descreva o serviço que você precisa (pelo menos uma frase). O prestador lê antes de aceitar.");
+  const contactSealed = shoppingContact(cat.slug, notes, input.contactPhone);
   const settings = await getSettings();
   // diária(s)/serviço pelo valor fixo, ou hora(s) pelo valor fixo da hora (só toca para quem trabalha por hora)
   const unit: PriceUnit = input.unit === "HORA" ? "HORA" : cat.unit;
@@ -193,6 +215,7 @@ export async function createQuick(input: QuickInput, now = new Date()) {
       maxCents: total,
       scheduledAt: now,
       notes,
+      contactSealed,
       payMethod: input.payMethod || null,
       ...addr,
       history: { create: { to: "SEARCHING", byUserId: input.clientId } },
@@ -517,7 +540,7 @@ export async function proposeSchedule(conversationId: string, proUserId: string,
 }
 
 /** O cliente confirma o agendamento informando o endereço. */
-export async function confirmSchedule(bookingId: string, clientId: string, address: AddressInput, opts: { saveAddressLabel?: string | null; payMethod?: string | null } = {}, now = new Date()) {
+export async function confirmSchedule(bookingId: string, clientId: string, address: AddressInput, opts: { saveAddressLabel?: string | null; payMethod?: string | null; contactPhone?: string | null } = {}, now = new Date()) {
   await checkClient(clientId);
   const b = await db.booking.findUnique({ where: { id: bookingId }, include: { pro: { select: { userId: true } } } });
   if (!b || b.clientId !== clientId || b.status !== "PROPOSED") throw new BookingError("Este agendamento não está mais esperando confirmação.");
@@ -526,7 +549,9 @@ export async function confirmSchedule(bookingId: string, clientId: string, addre
   if (!city) throw new BookingError("Município do endereço não encontrado. Confira o estado e a cidade.");
   if (!address.street.trim()) throw new BookingError("Informe a rua do endereço.");
   const addr = addressData(address, city);
-  const r = await db.booking.updateMany({ where: { id: b.id, status: "PROPOSED" }, data: { ...addr, status: "ACCEPTED", acceptedAt: now, expiresAt: null, payMethod: opts.payMethod || null } });
+  // compras: a lista foi combinada na conversa (ou na anotação); só falta o telefone para o Pix
+  const contactSealed = shoppingContact(b.category, b.notes ?? "lista combinada na conversa", opts.contactPhone);
+  const r = await db.booking.updateMany({ where: { id: b.id, status: "PROPOSED" }, data: { ...addr, status: "ACCEPTED", acceptedAt: now, expiresAt: null, payMethod: opts.payMethod || null, contactSealed } });
   if (!r.count) throw new BookingError("O agendamento acabou de mudar. Atualize a tela.");
   await db.bookingStatusHistory.create({ data: { bookingId: b.id, from: "PROPOSED", to: "ACCEPTED", byUserId: clientId } });
   await saveAddress(clientId, opts.saveAddressLabel, addr);
@@ -538,7 +563,7 @@ export async function purgeAddresses(now = new Date()) {
   const before = new Date(now.getTime() - ADDRESS_RETENTION_DAYS * 24 * H);
   const r = await db.booking.updateMany({
     where: { addressPurgedAt: null, status: { in: ["COMPLETED", "CANCELED_CLIENT", "CANCELED_PRO", "REFUSED", "EXPIRED", "NO_PROVIDER", "NO_SHOW_PRO", "NO_SHOW_CLIENT"] }, updatedAt: { lt: before } },
-    data: { addrStreet: "(endereço removido)", addrNumber: null, addrComplement: null, addrDistrict: null, addrCep: null, addrReference: null, lat: null, lng: null, proLat: null, proLng: null, proPosAt: null, addressPurgedAt: now },
+    data: { addrStreet: "(endereço removido)", addrNumber: null, addrComplement: null, addrDistrict: null, addrCep: null, addrReference: null, lat: null, lng: null, proLat: null, proLng: null, proPosAt: null, contactSealed: null, addressPurgedAt: now },
   });
   return r.count;
 }

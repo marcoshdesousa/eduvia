@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Diária Paga — serviços perto de você",
     short_name: "Diária Paga",
-    description: "Contrate diaristas, pedreiros, cuidadores, motoristas e muito mais.",
+    description: "Contrate diaristas, pedreiros, cuidadores, eletricistas e muito mais.",
     start_url: "/",
     display: "standalone",
     background_color: "#f5f8f6",

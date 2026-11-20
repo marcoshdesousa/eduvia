@@ -8,7 +8,7 @@ export default function Terms() {
     <>
       <h1>Termos de uso do Diária Paga</h1>
       <h2>1. O que é o Diária Paga</h2>
-      <p>O Diária Paga é uma plataforma que aproxima clientes e prestadores de serviço autônomos (diaristas, pedreiros, cuidadores, babás, motoristas, eletricistas e outros). O Diária Paga não presta os serviços, não é empregador dos prestadores e não recebe, retém, divide ou processa o pagamento dos serviços.</p>
+      <p>O Diária Paga é uma plataforma que aproxima clientes e prestadores de serviço autônomos (diaristas, pedreiros, cuidadores, babás, eletricistas e outros). O Diária Paga não presta os serviços, não é empregador dos prestadores e não recebe, retém, divide ou processa o pagamento dos serviços.</p>
       <h2>2. Conta</h2>
       <ul>
         <li>Cada pessoa pode ter uma única conta, ligada ao seu CPF. A mesma conta serve para contratar e, se quiser, para oferecer serviços.</li>
@@ -33,6 +33,8 @@ export default function Terms() {
       <h2>5. Contrate rápido</h2>
       <ul>
         <li>O cliente informa o serviço, a quantidade, a localização e uma descrição do que precisa. O valor é fixo para cada profissão, definido pelo Diária Paga, e é pago integralmente ao prestador.</li>
+        <li>Só algumas profissões entram no Contrate rápido (as que permitem um valor fixo, como diarista, pedreiro, eletricista, encanador, cuidador e compras no supermercado). As demais são contratadas pela vitrine, com o valor de cada prestador.</li>
+        <li>Compras no supermercado: o cliente informa a lista completa e um telefone para o Pix das compras; o valor das compras é pago pelo cliente e o prestador entrega a nota fiscal (notinha) junto com as compras.</li>
         <li>Só recebem chamados os prestadores do plano Completo em dia que aceitaram as regras do Contrate rápido e estão Disponíveis.</li>
         <li>O chamado toca primeiro para quem aceita mais chamados e está mais perto. Quem recusa muito, ou deixa tocar sem responder, passa a receber menos chamados. O primeiro que aceitar fica com o serviço e tem até {ARRIVE_HOURS} horas para chegar.</li>
         <li>Se o prestador não chegar em {ARRIVE_HOURS} horas, o chamado é cancelado e ele fica {PRO_QUICK_BAN_DAYS} dias sem receber chamados do Contrate rápido.</li>
