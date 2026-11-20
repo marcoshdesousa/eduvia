@@ -14,3 +14,4 @@ public/pdf.worker.min.mjs
 
 # voz do robô (instalada no deploy)
 /vendor
+.uploads/

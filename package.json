@@ -14,7 +14,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "postinstall": "prisma generate",
     "test:e2e": "playwright test",
-    "admin": "echo use ADMIN_CPF"
+    "admin": "echo use ADMIN_CPF",
+    "demo:seed": "tsx prisma/demo.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1142.0",

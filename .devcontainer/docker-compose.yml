@@ -1,0 +1,31 @@
+# Ambiente de TESTE do Diária Paga no GitHub Codespaces: o site + um banco PostgreSQL, com contas de teste.
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm
+    volumes:
+      - ../..:/workspaces:cached
+    command: sleep infinity
+    network_mode: service:db
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/diariapaga
+      # só para o ambiente de teste (não é o segredo do site de verdade)
+      BETTER_AUTH_SECRET: diariapaga-ambiente-de-teste-nao-usar-em-producao-123456
+      STORAGE_DRIVER: local
+      # versão de teste: dá para usar no navegador sem instalar o app
+      NEXT_PUBLIC_TEST_MODE: "1"
+      # aceita os formulários vindos do link do Codespaces
+      SERVER_ACTIONS_ORIGINS: "*.app.github.dev"
+      # administrador de teste (ver docs/CONTAS-DE-TESTE.md)
+      ADMIN_CPF: "12346391905"
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: diariapaga
+
+volumes:
+  pgdata:

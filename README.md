@@ -63,6 +63,10 @@ npm run build && npm start    # em outro terminal
 npx playwright test           # fluxo completo no navegador de celular (prestador + cliente + admin)
 ```
 
+## Testar de graça (GitHub Codespaces)
+
+Versão de teste com banco próprio e 79 contas em Parauapebas/PA: veja [docs/COMO-TESTAR.md](docs/COMO-TESTAR.md) e [docs/CONTAS-DE-TESTE.md](docs/CONTAS-DE-TESTE.md). `npm run demo:seed` recria as contas de teste (nunca roda no Render).
+
 ## Deploy no Render
 
 O `render.yaml` descreve o serviço web (disco em `/var/data` para fotos, áudios e vídeos) e o banco. No painel do serviço → **Environment**, preencha:

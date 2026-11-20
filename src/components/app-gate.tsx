@@ -13,6 +13,40 @@ type Device = "iphone" | "android" | "computador";
 /** Páginas que abrem mesmo fora do app (textos legais). */
 const OPEN = ["/termos", "/privacidade", "/cancelamento"];
 
+/** Versão de teste (NEXT_PUBLIC_TEST_MODE=1): dá para usar no navegador, sem instalar nem ativar notificações. */
+const TEST_MODE = process.env.NEXT_PUBLIC_TEST_MODE === "1";
+const TEST_KEY = "dp_teste_navegador";
+const testSkip = () => {
+  try {
+    return TEST_MODE && localStorage.getItem(TEST_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+function TestModeButton({ onSkip }: { onSkip: () => void }) {
+  if (!TEST_MODE) return null;
+  return (
+    <div className="w-full space-y-2 rounded-2xl border border-dashed border-accent bg-accent/10 p-3 text-sm">
+      <p className="font-semibold">🧪 Versão de teste</p>
+      <p className="text-muted">Para testar rápido, dá para usar direto no navegador. (No app de verdade isso não existe.)</p>
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full"
+        onClick={() => {
+          try {
+            localStorage.setItem(TEST_KEY, "1");
+          } catch {}
+          onSkip();
+        }}
+      >
+        Testar no navegador
+      </Button>
+    </div>
+  );
+}
+
 const standalone = () => window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
 const inAppBrowser = () => /Instagram|FBAN|FBAV|FB_IAB|Line\/|TikTok|Snapchat|; wv\)/i.test(navigator.userAgent);
 const detect = (): Device => (/iPhone|iPad|iPod/i.test(navigator.userAgent) ? "iphone" : /Android/i.test(navigator.userAgent) ? "android" : "computador");
@@ -26,7 +60,7 @@ export function AppGate({ children }: { children: React.ReactNode }) {
   const [step, setStep] = useState<"checking" | "install" | "notify" | "ok">("checking");
   useEffect(() => {
     // testes automáticos e textos legais passam direto
-    if (navigator.webdriver || OPEN.some((p) => path.startsWith(p))) return setStep("ok");
+    if (navigator.webdriver || testSkip() || OPEN.some((p) => path.startsWith(p))) return setStep("ok");
     if (!standalone()) return setStep("install");
     if (pushSupported() && Notification.permission !== "granted") return setStep("notify");
     setStep("ok");
@@ -40,7 +74,7 @@ export function AppGate({ children }: { children: React.ReactNode }) {
       {step === "checking" ? (
         <div className="grid min-h-dvh place-items-center"><LogoMark className="h-20 w-20 animate-pulse" /></div>
       ) : step === "install" ? (
-        <InstallScreen />
+        <InstallScreen onSkip={() => setStep("ok")} />
       ) : (
         <NotifyScreen onDone={() => setStep("ok")} />
       )}
@@ -61,7 +95,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function InstallScreen() {
+function InstallScreen({ onSkip }: { onSkip: () => void }) {
   const [device, setDevice] = useState<Device>("android");
   const [evt, setEvt] = useState<InstallEvent | null>(null);
   const [inApp, setInApp] = useState(false);
@@ -105,6 +139,7 @@ function InstallScreen() {
 
   return (
     <Shell>
+      <TestModeButton onSkip={onSkip} />
       <div className="space-y-1">
         <h1 className="text-xl font-bold">Baixe o app para usar</h1>
         <p className="text-sm text-muted">O Diária Paga funciona como aplicativo no seu celular. É grátis, leva 10 segundos e não precisa de loja.</p>
@@ -167,6 +202,7 @@ function NotifyScreen({ onDone }: { onDone: () => void }) {
   }, []);
   return (
     <Shell>
+      <TestModeButton onSkip={onDone} />
       <div className="grid h-20 w-20 place-items-center rounded-full bg-primary/10 text-primary"><BellRing size={40} /></div>
       <div className="space-y-1">
         <h1 className="text-xl font-bold">Ative as notificações</h1>
