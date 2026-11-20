@@ -1,59 +1,128 @@
-// Regras do negócio da HoraLimp que não dependem do banco (testadas em domain.test.ts).
-import type { BookingStatus, ProStatus } from "@/generated/prisma/enums";
+// Regras do Diária Paga que não dependem do banco (testadas em domain.test.ts).
+import type { BookingMode, BookingStatus, Plan, PriceUnit } from "@/generated/prisma/enums";
 
-/** Assinatura mensal do profissional: R$ 15,00 de mensalidade + R$ 0,85 de valor adicional = R$ 15,85. */
-export const SUBSCRIPTION_FEE_CENTS = 1500;
-export const SUBSCRIPTION_EXTRA_CENTS = 85;
-export const SUBSCRIPTION_CENTS = SUBSCRIPTION_FEE_CENTS + SUBSCRIPTION_EXTRA_CENTS;
-export const SUBSCRIPTION_DAYS = 30;
+// ───────────── Planos do prestador ─────────────
 
-export const MIN_HOURS = 1;
-export const MAX_HOURS = 12;
-export const MIN_AGE = 18;
+export const PLANS: Record<Plan, { name: string; priceCents: number; platformCents: number; feesCents: number; places: number; recommended: boolean }> = {
+  BASIC: { name: "Básico", priceCents: 685, platformCents: 300, feesCents: 385, places: 1, recommended: false },
+  FULL: { name: "Completo", priceCents: 1585, platformCents: 1000, feesCents: 585, places: 3, recommended: true },
+};
+/** Pacote de endereços extras (só no Completo): +2 endereços por R$ 3,85 por mês. */
+export const PACK_CENTS = 385;
+export const PACK_PLACES = 2;
+export const MAX_PLACES = 11;
+export const MAX_PACKS = Math.floor((MAX_PLACES - PLANS.FULL.places) / PACK_PLACES); // 4
+export const PERIOD_DAYS = 30;
+export const TRIAL_DAYS = 3;
 
-export const SERVICES = [
-  { slug: "geral", label: "Limpeza geral" },
-  { slug: "cozinha", label: "Cozinha" },
-  { slug: "banheiro", label: "Banheiro" },
-  { slug: "quartos", label: "Quartos" },
-  { slug: "sala", label: "Sala e áreas comuns" },
-  { slug: "pisos", label: "Pisos" },
-  { slug: "janelas", label: "Janelas" },
-  { slug: "organizacao", label: "Organização residencial" },
-  { slug: "loucas", label: "Louças" },
-  { slug: "roupas", label: "Lavagem de roupas" },
-  { slug: "passadoria", label: "Passadoria" },
-  { slug: "pesada", label: "Limpeza pesada" },
-  { slug: "outros", label: "Outros serviços" },
-] as const;
-export type ServiceSlug = (typeof SERVICES)[number]["slug"];
-const SERVICE_LABEL = new Map<string, string>(SERVICES.map((s) => [s.slug, s.label]));
-export const serviceLabel = (slug: string) => SERVICE_LABEL.get(slug) ?? slug;
-export const isService = (slug: string) => SERVICE_LABEL.has(slug);
+/** Valor do mês: plano + pacotes (pacotes só existem no Completo). */
+export function monthlyCents(plan: Plan, packs: number) {
+  return PLANS[plan].priceCents + (plan === "FULL" ? Math.max(0, Math.min(packs, MAX_PACKS)) * PACK_CENTS : 0);
+}
 
-export const HOME_SIZES = ["Até 50 m²", "50 a 100 m²", "100 a 200 m²", "Mais de 200 m²"] as const;
+/** Quantos endereços no mapa o plano permite. */
+export function placesLimit(plan: Plan, packs: number) {
+  return Math.min(MAX_PLACES, PLANS[plan].places + (plan === "FULL" ? Math.max(0, Math.min(packs, MAX_PACKS)) * PACK_PLACES : 0));
+}
 
-export const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"] as const;
+/** Subir do Básico para o Completo no meio do mês: paga só a diferença dos dias que faltam. */
+export function upgradeCents(periodEnd: Date | null, now = new Date()) {
+  if (!periodEnd || periodEnd <= now) return PLANS.FULL.priceCents;
+  const days = Math.min(PERIOD_DAYS, (periodEnd.getTime() - now.getTime()) / 86_400_000);
+  return Math.max(100, Math.round(((PLANS.FULL.priceCents - PLANS.BASIC.priceCents) * days) / PERIOD_DAYS));
+}
+
+// ───────────── Penalidades do Contrate rápido ─────────────
+
+/** O prestador tem 2 horas para chegar depois de aceitar. */
+export const ARRIVE_HOURS = 2;
+/** Prestador que aceitou e não chegou: 7 dias fora do Contrate rápido. */
+export const PRO_QUICK_BAN_DAYS = 7;
+/** Cliente que não estava no endereço: 30 dias sem contratar, ou paga R$ 2,85 para liberar na hora. */
+export const CLIENT_BLOCK_DAYS = 30;
+export const UNLOCK_FEE_CENTS = 285;
+/** O prestador só pode marcar "cliente não estava" depois de esperar este tempo no endereço. */
+export const CLIENT_NOSHOW_WAIT_MIN = 15;
+
+// ───────────── Serviços ─────────────
+
+export const UNIT_LABEL: Record<PriceUnit, { one: string; many: string; per: string }> = {
+  DIARIA: { one: "diária", many: "diárias", per: "por diária" },
+  HORA: { one: "hora", many: "horas", per: "por hora" },
+  SERVICO: { one: "serviço", many: "serviços", per: "por serviço" },
+};
+export const qtyLabel = (unit: PriceUnit, n: number) => `${n} ${n === 1 ? UNIT_LABEL[unit].one : UNIT_LABEL[unit].many}`;
+export const MAX_QTY: Record<PriceUnit, number> = { DIARIA: 30, HORA: 12, SERVICO: 10 };
+
+export const CATEGORY_GROUPS = ["Casa e limpeza", "Obras e reparos", "Cuidados", "Transporte e entregas", "Beleza e bem-estar", "Outros"] as const;
+
+export const CATEGORIES = [
+  { slug: "diarista", label: "Diarista / faxina", emoji: "🧹", unit: "DIARIA", group: "Casa e limpeza" },
+  { slug: "passadeira", label: "Passadeira", emoji: "👕", unit: "DIARIA", group: "Casa e limpeza" },
+  { slug: "lavadeira", label: "Lavadeira", emoji: "🧺", unit: "DIARIA", group: "Casa e limpeza" },
+  { slug: "cozinheira", label: "Cozinheira", emoji: "🍲", unit: "DIARIA", group: "Casa e limpeza" },
+  { slug: "jardineiro", label: "Jardineiro", emoji: "🌿", unit: "DIARIA", group: "Casa e limpeza" },
+  { slug: "piscineiro", label: "Limpeza de piscina", emoji: "🏊", unit: "SERVICO", group: "Casa e limpeza" },
+  { slug: "dedetizacao", label: "Dedetização", emoji: "🪳", unit: "SERVICO", group: "Casa e limpeza" },
+  { slug: "pedreiro", label: "Pedreiro", emoji: "🧱", unit: "DIARIA", group: "Obras e reparos" },
+  { slug: "servente", label: "Servente / ajudante de obra", emoji: "🦺", unit: "DIARIA", group: "Obras e reparos" },
+  { slug: "pintor", label: "Pintor", emoji: "🎨", unit: "DIARIA", group: "Obras e reparos" },
+  { slug: "eletricista", label: "Eletricista", emoji: "⚡", unit: "SERVICO", group: "Obras e reparos" },
+  { slug: "encanador", label: "Encanador", emoji: "🔧", unit: "SERVICO", group: "Obras e reparos" },
+  { slug: "carpinteiro", label: "Carpinteiro / marceneiro", emoji: "🪚", unit: "DIARIA", group: "Obras e reparos" },
+  { slug: "gesseiro", label: "Gesseiro", emoji: "🏗️", unit: "DIARIA", group: "Obras e reparos" },
+  { slug: "azulejista", label: "Azulejista", emoji: "🔲", unit: "DIARIA", group: "Obras e reparos" },
+  { slug: "serralheiro", label: "Serralheiro", emoji: "🔩", unit: "SERVICO", group: "Obras e reparos" },
+  { slug: "vidraceiro", label: "Vidraceiro", emoji: "🪟", unit: "SERVICO", group: "Obras e reparos" },
+  { slug: "montador", label: "Montador de móveis", emoji: "🪑", unit: "SERVICO", group: "Obras e reparos" },
+  { slug: "ar-condicionado", label: "Técnico de ar-condicionado", emoji: "❄️", unit: "SERVICO", group: "Obras e reparos" },
+  { slug: "cuidador-idoso", label: "Cuidador(a) de idoso", emoji: "🧓", unit: "DIARIA", group: "Cuidados" },
+  { slug: "baba", label: "Babá", emoji: "🍼", unit: "DIARIA", group: "Cuidados" },
+  { slug: "pet", label: "Cuidador de pets / passeador", emoji: "🐕", unit: "SERVICO", group: "Cuidados" },
+  { slug: "enfermagem", label: "Técnico(a) de enfermagem", emoji: "🩺", unit: "DIARIA", group: "Cuidados" },
+  { slug: "motorista", label: "Motorista particular", emoji: "🚗", unit: "DIARIA", group: "Transporte e entregas" },
+  { slug: "compras", label: "Compras no supermercado", emoji: "🛒", unit: "SERVICO", group: "Transporte e entregas" },
+  { slug: "frete", label: "Frete e mudança", emoji: "🚚", unit: "SERVICO", group: "Transporte e entregas" },
+  { slug: "chapa", label: "Carregador / chapa", emoji: "📦", unit: "DIARIA", group: "Transporte e entregas" },
+  { slug: "manicure", label: "Manicure", emoji: "💅", unit: "SERVICO", group: "Beleza e bem-estar" },
+  { slug: "cabeleireiro", label: "Cabeleireiro(a)", emoji: "💇", unit: "SERVICO", group: "Beleza e bem-estar" },
+  { slug: "costureira", label: "Costureira", emoji: "🧵", unit: "SERVICO", group: "Beleza e bem-estar" },
+  { slug: "personal", label: "Personal trainer", emoji: "🏋️", unit: "HORA", group: "Beleza e bem-estar" },
+  { slug: "professor", label: "Professor particular", emoji: "📚", unit: "HORA", group: "Outros" },
+  { slug: "garcom", label: "Garçom / garçonete", emoji: "🍽️", unit: "DIARIA", group: "Outros" },
+  { slug: "seguranca", label: "Vigia / segurança", emoji: "🛡️", unit: "DIARIA", group: "Outros" },
+  { slug: "mecanico", label: "Mecânico", emoji: "🛠️", unit: "SERVICO", group: "Outros" },
+  { slug: "lavador", label: "Lavador de carro", emoji: "🧽", unit: "SERVICO", group: "Outros" },
+  { slug: "outros", label: "Outros serviços", emoji: "✨", unit: "DIARIA", group: "Outros" },
+] as const satisfies readonly { slug: string; label: string; emoji: string; unit: PriceUnit; group: (typeof CATEGORY_GROUPS)[number] }[];
+
+export type CategorySlug = (typeof CATEGORIES)[number]["slug"];
+const CAT = new Map<string, (typeof CATEGORIES)[number]>(CATEGORIES.map((c) => [c.slug, c]));
+export const category = (slug: string) => CAT.get(slug) ?? null;
+export const categoryLabel = (slug: string) => CAT.get(slug)?.label ?? slug;
+export const isCategory = (slug: string) => CAT.has(slug);
+
+// ───────────── Dinheiro, datas e idade ─────────────
 
 export function formatBRL(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-/** "25,50" ou "25.50" ou "25" → centavos (null se inválido). */
+/** "120", "120,50" ou "R$ 1.200,00" → centavos (null se inválido). */
 export function parseBRL(raw: string): number | null {
   const t = raw.replace(/[R$\s]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
   if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
   return Math.round(Number(t) * 100);
 }
 
-/** Valor estimado = preço por hora × horas. Pago direto ao profissional (não passa pela HoraLimp). */
-export function estimateCents(hourlyCents: number, hours: number) {
-  if (!Number.isInteger(hours) || hours < MIN_HOURS || hours > MAX_HOURS) throw new Error(`Escolha de ${MIN_HOURS} a ${MAX_HOURS} horas.`);
-  if (!Number.isInteger(hourlyCents) || hourlyCents <= 0) throw new Error("Preço por hora inválido.");
-  return hourlyCents * hours;
+/** Valor estimado = preço × quantidade. Pago direto ao prestador (não passa pela plataforma). */
+export function estimateCents(unitPriceCents: number, quantity: number, unit: PriceUnit) {
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QTY[unit]) throw new Error(`Escolha de 1 a ${MAX_QTY[unit]} ${UNIT_LABEL[unit].many}.`);
+  if (!Number.isInteger(unitPriceCents) || unitPriceCents <= 0) throw new Error("Preço inválido.");
+  return unitPriceCents * quantity;
 }
 
-/** Idade completa em anos na data `on` (data de nascimento em UTC, sem horário). */
+export const MIN_AGE = 18;
 export function ageOn(birth: Date, on = new Date()) {
   let age = on.getUTCFullYear() - birth.getUTCFullYear();
   const m = on.getUTCMonth() - birth.getUTCMonth();
@@ -61,7 +130,6 @@ export function ageOn(birth: Date, on = new Date()) {
   return age;
 }
 
-/** "AAAA-MM-DD" → data (meio-dia UTC não, 00:00 UTC) ou null. */
 export function parseDateOnly(raw: string): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim());
   if (!m) return null;
@@ -69,43 +137,109 @@ export function parseDateOnly(raw: string): Date | null {
   return d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]) ? d : null;
 }
 
-// ───────────── Verificação do profissional ─────────────
+// ───────────── Vitrine e Contrate rápido ─────────────
 
-export const PRO_STATUS_LABEL: Record<ProStatus, string> = {
-  INCOMPLETE: "Cadastro incompleto",
-  PENDING: "Aguardando verificação",
-  APPROVED: "Aprovado",
-  REJECTED: "Reprovado",
-  SUSPENDED: "Suspenso",
-};
+type ProLike = { status: "ACTIVE" | "SUSPENDED"; paused: boolean; photoKey: string | null; blocked?: boolean; subscriptionEnd: Date | null | undefined; services: number; places: number };
 
-/** Aparece na vitrine e recebe pedidos: aprovado, assinatura em dia, sem pausa e com preço definido. */
-export function proVisible(p: { status: ProStatus; paused: boolean; hourlyCents: number | null; subscriptionEnd: Date | null | undefined; blocked?: boolean }, now = new Date()) {
-  return p.status === "APPROVED" && !p.paused && !p.blocked && !!p.hourlyCents && !!p.subscriptionEnd && p.subscriptionEnd > now;
+/** Aparece na vitrine e recebe pedidos: conta ativa, plano (ou teste) em dia, com foto, serviço e endereço. */
+export function providerVisible(p: ProLike, now = new Date()) {
+  return p.status === "ACTIVE" && !p.paused && !p.blocked && !!p.photoKey && p.services > 0 && p.places > 0 && !!p.subscriptionEnd && p.subscriptionEnd > now;
 }
 
-// ───────────── Solicitação e contratação ─────────────
+/** Recebe chamados do Contrate rápido: visível, com o botão "Disponível" ligado e sem penalidade. */
+export function quickEligible(p: ProLike & { quickOn: boolean; quickBannedUntil: Date | null }, now = new Date()) {
+  return providerVisible(p, now) && p.quickOn && !(p.quickBannedUntil && p.quickBannedUntil > now);
+}
+
+/** Distância em km entre dois pontos (fórmula de Haversine). */
+export function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371;
+  const rad = (x: number) => (x * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+export const formatKm = (km: number) => (km < 1 ? `${Math.max(100, Math.round(km * 10) * 100)} m` : `${km.toFixed(km < 10 ? 1 : 0).replace(".", ",")} km`);
+
+/**
+ * Ordem da vitrine: primeiro o plano Completo ("Recomendado"), depois o Básico. Dentro de cada grupo,
+ * o mais perto do cliente; empate, o mais barato. Quem está dentro do valor do cliente vem antes.
+ */
+export function rankProviders<T extends { plan: Plan; distanceKm: number | null; priceCents: number }>(list: T[], maxCents?: number | null) {
+  const fits = (p: T) => (maxCents ? p.priceCents <= maxCents : true);
+  return [...list].sort(
+    (a, b) =>
+      Number(b.plan === "FULL") - Number(a.plan === "FULL") ||
+      Number(fits(b)) - Number(fits(a)) ||
+      (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999) ||
+      a.priceCents - b.priceCents,
+  );
+}
+
+/**
+ * Ordem do Contrate rápido: quem está perto toca primeiro (até 5 km um pouco mais longe empata), e entre
+ * os que estão perto, quem fez menos serviços rápidos na semana. Plano Completo ganha um pequeno empurrão.
+ */
+export function rankQuick<T extends { distanceKm: number; recentJobs: number; plan: Plan }>(list: T[]) {
+  const band = (km: number) => (km <= 2 ? 0 : km <= 5 ? 1 : km <= 10 ? 2 : km <= 20 ? 3 : 4);
+  return [...list].sort((a, b) => band(a.distanceKm) - band(b.distanceKm) || Number(b.plan === "FULL") - Number(a.plan === "FULL") || a.recentJobs - b.recentJobs || a.distanceKm - b.distanceKm);
+}
+
+// ───────────── Proibido número de telefone / WhatsApp ─────────────
+
+/**
+ * A ideia é contratar pelo app: textos públicos (biografia, serviços, legendas) e o chat não podem levar
+ * telefone/WhatsApp. Pega números de 10 a 13 dígitos (com espaços, pontos, traços e parênteses), celular
+ * de 9 dígitos começando com 9, número escrito com palavras ("nove nove…") e "me chama no zap".
+ * CEP (8 dígitos) e números de casa continuam liberados.
+ */
+const NUM_WORDS = "zero|um|uma|dois|duas|tres|três|quatro|cinco|seis|meia|sete|oito|nove";
+export function containsPhone(text: string) {
+  const t = text.normalize("NFC");
+  for (const m of t.matchAll(/\+?\(?\d[\d\s().\-–]{6,}\d/g)) {
+    const digits = m[0].replace(/\D/g, "");
+    if (digits.length >= 10 && digits.length <= 13) return true;
+    if (digits.length === 9 && digits.startsWith("9")) return true;
+  }
+  if (/\b(whats\s?app|whats|zap|zapzap|wpp|wa\.me|telegram|telefone|meu\s+n[uú]mero|me\s+liga)\b/i.test(t)) return true;
+  if (new RegExp(`((${NUM_WORDS})[\\s,.-]+){7,}(${NUM_WORDS})`, "i").test(t)) return true;
+  return false;
+}
+export const PHONE_BLOCKED_MSG = "Não é permitido passar telefone ou WhatsApp. Combine tudo pelo chat do Diária Paga.";
+
+/** "@joao.silva", "instagram.com/joao.silva" ou "joao.silva" → "joao.silva" (null se inválido). */
+export function normalizeInstagram(raw: string): string | null {
+  const t = raw.trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/^@/, "").replace(/\/.*$/, "");
+  if (!t) return null;
+  return /^[a-zA-Z0-9._]{1,30}$/.test(t) ? t.toLowerCase() : null;
+}
+
+// ───────────── Status ─────────────
 
 export const BOOKING_LABEL: Record<BookingStatus, string> = {
-  DRAFT: "Rascunho",
-  READY: "Aguardando envio",
-  WAITING_PRO: "Aguardando resposta do profissional",
-  ACCEPTED: "Aceita — contratação confirmada",
-  REFUSED: "Recusada",
-  EXPIRED: "Expirada sem resposta",
-  ON_THE_WAY: "Profissional a caminho",
-  ARRIVED: "Profissional chegou",
+  SEARCHING: "Procurando prestador perto de você",
+  NO_PROVIDER: "Ninguém disponível agora",
+  WAITING_PRO: "Aguardando resposta do prestador",
+  ACCEPTED: "Aceito — contratação confirmada",
+  REFUSED: "Recusado",
+  EXPIRED: "Expirou sem resposta",
+  ON_THE_WAY: "Prestador a caminho",
+  ARRIVED: "Prestador chegou",
   STARTED: "Serviço iniciado",
   COMPLETED: "Serviço concluído",
-  CANCELED_CLIENT: "Cancelada pelo cliente",
-  CANCELED_PRO: "Cancelada pelo profissional",
+  CANCELED_CLIENT: "Cancelado pelo cliente",
+  CANCELED_PRO: "Cancelado pelo prestador",
+  NO_SHOW_PRO: "Prestador não chegou a tempo",
+  NO_SHOW_CLIENT: "Cliente não estava no endereço",
   IN_REVIEW: "Em análise pelo suporte",
 };
 
 export type Tone = "neutral" | "primary" | "success" | "warning" | "danger";
 export const BOOKING_TONE: Record<BookingStatus, Tone> = {
-  DRAFT: "neutral",
-  READY: "neutral",
+  SEARCHING: "warning",
+  NO_PROVIDER: "neutral",
   WAITING_PRO: "warning",
   ACCEPTED: "success",
   REFUSED: "danger",
@@ -116,44 +250,51 @@ export const BOOKING_TONE: Record<BookingStatus, Tone> = {
   COMPLETED: "success",
   CANCELED_CLIENT: "danger",
   CANCELED_PRO: "danger",
+  NO_SHOW_PRO: "danger",
+  NO_SHOW_CLIENT: "danger",
   IN_REVIEW: "warning",
 };
 
-/** Contratação confirmada e em andamento (aceita e ainda não terminou). */
 export const ACTIVE_STATUSES: BookingStatus[] = ["ACCEPTED", "ON_THE_WAY", "ARRIVED", "STARTED"];
-export const CLOSED_STATUSES: BookingStatus[] = ["REFUSED", "EXPIRED", "COMPLETED", "CANCELED_CLIENT", "CANCELED_PRO"];
+export const OPEN_STATUSES: BookingStatus[] = ["SEARCHING", "WAITING_PRO"];
+export const CLOSED_STATUSES: BookingStatus[] = ["NO_PROVIDER", "REFUSED", "EXPIRED", "COMPLETED", "CANCELED_CLIENT", "CANCELED_PRO", "NO_SHOW_PRO", "NO_SHOW_CLIENT"];
 
 export type Actor = "CLIENT" | "PRO" | "ADMIN" | "SYSTEM";
 
-/** Quem pode mudar de qual status para qual. `reason` = precisa informar o motivo. */
-const TRANSITIONS: { from: BookingStatus[]; to: BookingStatus; by: Actor[]; reason?: boolean }[] = [
-  { from: ["WAITING_PRO"], to: "ACCEPTED", by: ["PRO"] },
-  { from: ["WAITING_PRO"], to: "REFUSED", by: ["PRO"] },
-  { from: ["WAITING_PRO"], to: "EXPIRED", by: ["SYSTEM"] },
-  { from: ["WAITING_PRO"], to: "CANCELED_CLIENT", by: ["CLIENT"] },
+const TRANSITIONS: { from: BookingStatus[]; to: BookingStatus; by: Actor[]; reason?: boolean; mode?: BookingMode }[] = [
+  // Contrate rápido
+  { from: ["SEARCHING"], to: "ACCEPTED", by: ["PRO"], mode: "QUICK" },
+  { from: ["SEARCHING"], to: "NO_PROVIDER", by: ["SYSTEM"], mode: "QUICK" },
+  { from: ["SEARCHING"], to: "CANCELED_CLIENT", by: ["CLIENT"], mode: "QUICK" },
+  { from: ["ACCEPTED", "ON_THE_WAY"], to: "NO_SHOW_PRO", by: ["SYSTEM", "ADMIN"], mode: "QUICK" },
+  { from: ["ARRIVED"], to: "NO_SHOW_CLIENT", by: ["PRO"], mode: "QUICK" },
+  // pedido normal
+  { from: ["WAITING_PRO"], to: "ACCEPTED", by: ["PRO"], mode: "NORMAL" },
+  { from: ["WAITING_PRO"], to: "REFUSED", by: ["PRO"], mode: "NORMAL" },
+  { from: ["WAITING_PRO"], to: "EXPIRED", by: ["SYSTEM"], mode: "NORMAL" },
+  { from: ["WAITING_PRO"], to: "CANCELED_CLIENT", by: ["CLIENT"], mode: "NORMAL" },
+  // andamento (os dois)
   { from: ["ACCEPTED"], to: "ON_THE_WAY", by: ["PRO"] },
   { from: ["ACCEPTED", "ON_THE_WAY"], to: "ARRIVED", by: ["PRO"] },
   { from: ["ACCEPTED", "ON_THE_WAY", "ARRIVED"], to: "STARTED", by: ["PRO"] },
   { from: ["STARTED"], to: "COMPLETED", by: ["PRO", "ADMIN"] },
   { from: ["ACCEPTED", "ON_THE_WAY", "ARRIVED"], to: "CANCELED_CLIENT", by: ["CLIENT"], reason: true },
   { from: ["ACCEPTED", "ON_THE_WAY", "ARRIVED"], to: "CANCELED_PRO", by: ["PRO"], reason: true },
-  { from: ["WAITING_PRO", "ACCEPTED", "ON_THE_WAY", "ARRIVED", "STARTED", "COMPLETED"], to: "IN_REVIEW", by: ["ADMIN"], reason: true },
+  { from: ["WAITING_PRO", "SEARCHING", "ACCEPTED", "ON_THE_WAY", "ARRIVED", "STARTED", "COMPLETED", "NO_SHOW_CLIENT", "NO_SHOW_PRO"], to: "IN_REVIEW", by: ["ADMIN"], reason: true },
   { from: ["IN_REVIEW"], to: "ACCEPTED", by: ["ADMIN"], reason: true },
   { from: ["IN_REVIEW"], to: "COMPLETED", by: ["ADMIN"], reason: true },
   { from: ["IN_REVIEW"], to: "CANCELED_CLIENT", by: ["ADMIN"], reason: true },
   { from: ["IN_REVIEW"], to: "CANCELED_PRO", by: ["ADMIN"], reason: true },
 ];
 
-export function transitionRule(from: BookingStatus, to: BookingStatus, by: Actor) {
-  return TRANSITIONS.find((t) => t.to === to && t.from.includes(from) && t.by.includes(by)) ?? null;
+export function transitionRule(from: BookingStatus, to: BookingStatus, by: Actor, mode: BookingMode = "NORMAL") {
+  return TRANSITIONS.find((t) => t.to === to && t.from.includes(from) && t.by.includes(by) && (!t.mode || t.mode === mode)) ?? null;
 }
 
-/** Próximos passos possíveis para quem está vendo (na ordem em que aparecem na tela). */
-export function nextSteps(from: BookingStatus, by: Actor) {
-  return TRANSITIONS.filter((t) => t.from.includes(from) && t.by.includes(by)).map((t) => ({ to: t.to, reason: !!t.reason }));
+export function nextSteps(from: BookingStatus, by: Actor, mode: BookingMode = "NORMAL") {
+  return TRANSITIONS.filter((t) => t.from.includes(from) && t.by.includes(by) && (!t.mode || t.mode === mode) && !(by === "PRO" && t.to === "NO_SHOW_CLIENT")).map((t) => ({ to: t.to, reason: !!t.reason }));
 }
 
-/** O chat abre depois do aceite. Depois de concluída ou cancelada, ainda dá para escrever por alguns dias. */
 export const CHAT_AFTER_DAYS = 7;
 export function chatOpen(b: { status: BookingStatus; acceptedAt: Date | null; completedAt: Date | null; canceledAt: Date | null }, now = new Date()) {
   if (!b.acceptedAt) return { read: false, write: false };
@@ -162,28 +303,29 @@ export function chatOpen(b: { status: BookingStatus; acceptedAt: Date | null; co
   return { read: true, write: !!end && now.getTime() - end.getTime() < CHAT_AFTER_DAYS * 86_400_000 };
 }
 
-/** Endereço completo: o cliente sempre (até ser apagado); o profissional só depois do aceite e enquanto a contratação estiver ativa ou recém-concluída. */
 export const ADDRESS_AFTER_DAYS = 2;
-export function proSeesAddress(b: { status: BookingStatus; acceptedAt: Date | null; completedAt: Date | null; canceledAt: Date | null }, now = new Date()) {
+export function proSeesAddress(b: { status: BookingStatus; acceptedAt: Date | null; completedAt: Date | null }, now = new Date()) {
   if (!b.acceptedAt) return false;
   if (ACTIVE_STATUSES.includes(b.status) || b.status === "IN_REVIEW") return true;
   if (b.status === "COMPLETED" && b.completedAt) return now.getTime() - b.completedAt.getTime() < ADDRESS_AFTER_DAYS * 86_400_000;
   return false;
 }
 
-/** Avaliação: só quem participou de um serviço concluído, uma vez, de 1 a 5 estrelas. */
 export function canReview(b: { status: BookingStatus }, alreadyReviewed: boolean) {
   return b.status === "COMPLETED" && !alreadyReviewed;
 }
 
-/** Nota que aparece no perfil (com pelo menos 1 avaliação); perfis novos ficam como "Novo". */
 export function ratingOf(p: { ratingSum: number; ratingCount: number }) {
   return p.ratingCount ? Math.round((p.ratingSum / p.ratingCount) * 10) / 10 : null;
 }
 
-/** Disponibilidade: o horário pedido cabe numa das faixas daquele dia da semana? (minutos desde 0h, hora local) */
-export function fitsAvailability(rules: { weekday: number; startMin: number; endMin: number }[], weekday: number, startMin: number, hours: number) {
-  if (!rules.length) return true; // sem agenda definida: o profissional decide no aceite
+// ───────────── Agenda ─────────────
+
+export const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"] as const;
+
+/** Sem agenda definida, aceita qualquer horário. */
+export function fitsAvailability(rules: { weekday: number; startMin: number; endMin: number }[], weekday: number, startMin: number, hours = 1) {
+  if (!rules.length) return true;
   return rules.some((r) => r.weekday === weekday && startMin >= r.startMin && startMin + hours * 60 <= r.endMin);
 }
 
@@ -191,16 +333,19 @@ export const minutesToHHMM = (m: number) => `${String(Math.floor(m / 60)).padSta
 export function hhmmToMinutes(s: string) {
   const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
   if (!m) return null;
-  const v = Number(m[1]) * 60 + Number(m[2]);
-  return Number(m[1]) < 24 && Number(m[2]) < 60 ? v : null;
+  return Number(m[1]) < 24 && Number(m[2]) < 60 ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
-/** Nome que aparece para quem ainda não contratou: primeiro nome + inicial do sobrenome. */
+// ───────────── Textos ─────────────
+
 export function shortName(name: string) {
   const p = name.trim().split(/\s+/);
   return p.length > 1 ? `${p[0]} ${p[p.length - 1][0].toUpperCase()}.` : p[0];
 }
 
-export const REPORT_REASONS = ["Comportamento inadequado", "Assédio ou ameaça", "Perfil falso ou dados errados", "Pediu pagamento fora do combinado", "Não compareceu", "Spam ou propaganda", "Outro motivo"] as const;
+export const REPORT_REASONS = ["Comportamento inadequado", "Assédio ou ameaça", "Perfil falso ou dados errados", "Passou telefone/WhatsApp", "Pediu pagamento fora do combinado", "Não compareceu", "Foto imprópria", "Spam ou propaganda", "Outro motivo"] as const;
 
 export const TICKET_LABEL = { OPEN: ["Aberto", "warning"], ANSWERED: ["Respondido", "success"], CLOSED: ["Encerrado", "neutral"] } as const;
+
+export const MAX_POSTS = 8;
+export const POSTS_PREVIEW = 4;

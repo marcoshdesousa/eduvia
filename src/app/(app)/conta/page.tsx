@@ -14,24 +14,24 @@ import { maskCpf } from "@/lib/core/phone";
 import { openCpf } from "@/lib/cpf";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { changePassword, deleteAddress, logout } from "./actions";
+import { changePassword, deleteAccount, deleteAddress, logout } from "./actions";
 
 export const metadata: Metadata = { title: "Minha conta" };
 
 export default async function AccountPage() {
   const user = await requireUser("/conta");
   const cpf = openCpf(user.cpfSealed);
-  const addresses = user.role === "CLIENT" ? await db.address.findMany({ where: { clientId: user.id }, orderBy: { lastUsedAt: "desc" } }) : [];
+  const addresses = await db.address.findMany({ where: { clientId: user.id }, orderBy: { lastUsedAt: "desc" } });
   return (
     <div className="space-y-4">
       <PageTitle title="Minha conta" />
       <Card className="space-y-1">
         <p className="font-semibold">{user.name}</p>
-        <p className="text-sm text-muted">CPF {cpf ? maskCpf(cpf) : "—"} · {user.role === "PRO" ? "Profissional" : user.role === "ADMIN" ? "Administrador" : "Cliente"}</p>
+        <p className="text-sm text-muted">CPF {cpf ? maskCpf(cpf) : "—"} · {user.role === "ADMIN" ? "Administrador" : user.provider ? "Cliente e prestador" : "Cliente"}</p>
         <p className="text-xs text-muted">Para corrigir nome ou CPF, fale com o suporte.</p>
       </Card>
 
-      {user.role === "CLIENT" && (
+      {user.role !== "ADMIN" && (
         <Card className="space-y-3">
           <CardTitle>Endereços salvos</CardTitle>
           {addresses.length ? (
@@ -47,7 +47,7 @@ export default async function AccountPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted">Nenhum endereço salvo. Você pode salvar ao pedir uma limpeza.</p>
+            <p className="text-sm text-muted">Nenhum endereço salvo. Você pode salvar ao pedir um serviço.</p>
           )}
         </Card>
       )}
@@ -72,19 +72,40 @@ export default async function AccountPage() {
 
       <Card className="space-y-2 text-sm">
         <CardTitle>Privacidade</CardTitle>
-        <p className="text-muted">Você pode pedir uma cópia dos seus dados ou a exclusão da conta pelo suporte.</p>
+        <p className="text-muted">Você pode pedir uma cópia dos seus dados pelo suporte.</p>
         <div className="flex flex-wrap gap-2">
-          <Link href="/suporte/novo?assunto=dados" className={buttonClass("outline", "sm")}>Pedir meus dados / excluir conta</Link>
+          <Link href="/suporte/novo?assunto=dados" className={buttonClass("outline", "sm")}>Pedir meus dados</Link>
           <Link href="/privacidade" className={buttonClass("ghost", "sm")}>Política de privacidade</Link>
         </div>
       </Card>
 
       <Card className="flex flex-wrap gap-2">
         <Link href="/suporte" className={buttonClass("outline", "sm")}>Suporte e chamados</Link>
-        {user.role === "PRO" && <Link href="/painel/agenda" className={buttonClass("outline", "sm")}>Agenda e pausa</Link>}
+        {user.provider ? <Link href="/painel" className={buttonClass("outline", "sm")}>Painel do prestador</Link> : user.role !== "ADMIN" && <Link href="/seja-prestador" className={buttonClass("outline", "sm")}>Quero oferecer serviços</Link>}
+        <Link href="/baixar" className={buttonClass("outline", "sm")}>Instalar o app</Link>
         <Link href="/termos" className={buttonClass("ghost", "sm")}>Termos de uso</Link>
         <Link href="/cancelamento" className={buttonClass("ghost", "sm")}>Política de cancelamento</Link>
       </Card>
+
+      {user.role !== "ADMIN" && (
+        <Card className="space-y-2">
+          <details>
+            <summary className="cursor-pointer text-sm font-medium text-danger">Apagar minha conta</summary>
+            <ActionForm action={deleteAccount} className="mt-3 space-y-3">
+              <p className="text-sm text-muted">Apaga seu perfil, fotos, pedidos e conversas. Não dá para desfazer. Por segurança, o CPF continua registrado: uma conta nova com o mesmo CPF não ganha outro teste grátis e as penalidades continuam valendo.</p>
+              <div>
+                <Label htmlFor="del-pass">Sua senha</Label>
+                <Input id="del-pass" name="password" type="password" autoComplete="current-password" required />
+              </div>
+              <div>
+                <Label htmlFor="del-confirm">Digite APAGAR</Label>
+                <Input id="del-confirm" name="confirm" required autoComplete="off" />
+              </div>
+              <SubmitButton variant="danger" pendingText="Apagando…">Apagar conta para sempre</SubmitButton>
+            </ActionForm>
+          </details>
+        </Card>
+      )}
 
       <form action={logout}>
         <Button type="submit" variant="outline" className="w-full"><LogOut size={16} /> Sair</Button>

@@ -3,41 +3,41 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* HoraLimp: violeta (confiança) + verde-menta (limpeza) */
+/* Diária Paga: verde (dinheiro, confiança) + âmbar (moeda) */
 :root {
-  --background: #f7f6fc;
+  --background: #f5f8f6;
   --surface: #ffffff;
-  --surface-2: #f0eef8;
-  --border: #e3e0ef;
-  --foreground: #1d1733;
-  --muted: #625b78;
-  --primary: #5b3cc4;
+  --surface-2: #eaf2ee;
+  --border: #dbe7e1;
+  --foreground: #0f241c;
+  --muted: #557066;
+  --primary: #0a7d55;
   --primary-foreground: #ffffff;
-  --accent: #0f9f77;
-  --accent-soft: #e3f7ef;
+  --accent: #d97706;
+  --accent-soft: #fff3dc;
   --success: #15803d;
   --warning: #b45309;
   --danger: #dc2626;
-  --ring: #7c5cf0;
-  --brand-ink: #2e1f5e;
+  --ring: #10b981;
+  --brand-ink: #08392b;
 }
 
 .dark {
-  --background: #0f0c1a;
-  --surface: #171329;
-  --surface-2: #211b38;
-  --border: #2f2850;
-  --foreground: #ecebf6;
-  --muted: #a39dbd;
-  --primary: #a48bff;
-  --primary-foreground: #160f2e;
-  --accent: #34d3a3;
-  --accent-soft: #123a30;
+  --background: #08130f;
+  --surface: #0f1d18;
+  --surface-2: #162a22;
+  --border: #22392f;
+  --foreground: #e6f2ec;
+  --muted: #94b3a6;
+  --primary: #34d399;
+  --primary-foreground: #04281c;
+  --accent: #fbbf24;
+  --accent-soft: #3a2c0b;
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #f87171;
-  --ring: #a48bff;
-  --brand-ink: #d9cfff;
+  --ring: #34d399;
+  --brand-ink: #c9f5e3;
 }
 
 @theme inline {
@@ -84,9 +84,18 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; }
 .hl-in { animation: hl-in 0.3s ease-out both; }
 @media (prefers-reduced-motion: reduce) { .hl-in { animation: none; } }
 
-/* brilho de "limpo" no topo da página inicial */
+/* brilho do topo da página inicial */
 .hl-hero { background: radial-gradient(90% 70% at 15% 0%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 70%), radial-gradient(70% 60% at 100% 10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%); }
 
 /* mapa (Leaflet) */
 .leaflet-container { font: inherit; border-radius: 0.75rem; z-index: 0; }
 .dark .leaflet-tile { filter: brightness(0.75) contrast(1.1); }
+
+/* chamado do Contrate rápido tocando */
+@keyframes dp-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 14px transparent; } }
+.dp-ring { animation: dp-ring 1.1s ease-in-out infinite; }
+@keyframes dp-radar { from { transform: scale(0.4); opacity: 0.8; } to { transform: scale(2.4); opacity: 0; } }
+.dp-radar span { position: absolute; inset: 0; border-radius: 9999px; border: 3px solid var(--primary); animation: dp-radar 2.2s ease-out infinite; }
+.dp-radar span:nth-child(2) { animation-delay: 0.7s; }
+.dp-radar span:nth-child(3) { animation-delay: 1.4s; }
+@media (prefers-reduced-motion: reduce) { .dp-ring, .dp-radar span { animation: none; } }

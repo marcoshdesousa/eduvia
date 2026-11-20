@@ -13,69 +13,72 @@ export default async function AdminHome() {
   await requireAdmin();
   const now = new Date();
   const month = new Date(now.getTime() - 30 * 86_400_000);
-  const [clients, pros, approved, pending, subsActive, subsExpired, waiting, accepted, refused, completed, canceled, expired, reviews, revenueMonth, revenueAll, openReports, openTickets] = await Promise.all([
-    db.user.count({ where: { role: "CLIENT" } }),
-    db.professionalProfile.count(),
-    db.professionalProfile.count({ where: { status: "APPROVED" } }),
-    db.professionalProfile.count({ where: { status: "PENDING" } }),
-    db.subscription.count({ where: { currentPeriodEnd: { gt: now } } }),
-    db.subscription.count({ where: { currentPeriodEnd: { lte: now } } }),
-    db.booking.count({ where: { status: "WAITING_PRO" } }),
-    db.booking.count({ where: { acceptedAt: { not: null } } }),
-    db.booking.count({ where: { status: "REFUSED" } }),
+  const [users, pros, full, basic, trial, expiredSubs, quickOn, searching, quickTotal, quickAccepted, noProvider, normal, completed, noShowPro, noShowClient, revenueMonth, revenueAll, openReports, openTickets, clientBlocks, quickBans] = await Promise.all([
+    db.user.count({ where: { role: "USER" } }),
+    db.providerProfile.count(),
+    db.subscription.count({ where: { currentPeriodEnd: { gt: now }, plan: "FULL", trial: false } }),
+    db.subscription.count({ where: { currentPeriodEnd: { gt: now }, plan: "BASIC" } }),
+    db.subscription.count({ where: { currentPeriodEnd: { gt: now }, trial: true } }),
+    db.subscription.count({ where: { OR: [{ currentPeriodEnd: { lte: now } }, { currentPeriodEnd: null }] } }),
+    db.providerProfile.count({ where: { quickOn: true } }),
+    db.booking.count({ where: { status: "SEARCHING" } }),
+    db.booking.count({ where: { mode: "QUICK" } }),
+    db.booking.count({ where: { mode: "QUICK", acceptedAt: { not: null } } }),
+    db.booking.count({ where: { status: "NO_PROVIDER" } }),
+    db.booking.count({ where: { mode: "NORMAL" } }),
     db.booking.count({ where: { status: "COMPLETED" } }),
-    db.booking.count({ where: { status: { in: ["CANCELED_CLIENT", "CANCELED_PRO"] } } }),
-    db.booking.count({ where: { status: "EXPIRED" } }),
-    db.review.count(),
-    db.subscriptionPayment.aggregate({ where: { status: "PAID", provider: "SYNCPAY", paidAt: { gt: month } }, _sum: { amountCents: true } }),
-    db.subscriptionPayment.aggregate({ where: { status: "PAID", provider: "SYNCPAY" }, _sum: { amountCents: true } }),
+    db.booking.count({ where: { status: "NO_SHOW_PRO" } }),
+    db.booking.count({ where: { status: "NO_SHOW_CLIENT" } }),
+    db.payment.aggregate({ where: { status: "PAID", provider: "SYNCPAY", paidAt: { gt: month } }, _sum: { amountCents: true } }),
+    db.payment.aggregate({ where: { status: "PAID", provider: "SYNCPAY" }, _sum: { amountCents: true } }),
     db.report.count({ where: { status: "OPEN" } }),
     db.supportTicket.count({ where: { status: "OPEN" } }),
+    db.cpfLedger.count({ where: { clientBlockedUntil: { gt: now } } }),
+    db.providerProfile.count({ where: { quickBannedUntil: { gt: now } } }),
   ]);
-  const total = await db.booking.count();
   return (
     <div className="space-y-5">
-      <PageTitle title="Painel administrativo" subtitle="Visão geral da HoraLimp" />
-      {(pending > 0 || openReports > 0 || openTickets > 0) && (
+      <PageTitle title="Painel administrativo" subtitle="Visão geral do Diária Paga" />
+      {(openReports > 0 || openTickets > 0) && (
         <Card className="flex flex-wrap gap-2 border-warning/40 bg-warning/5">
-          {pending > 0 && <Link href="/admin/profissionais" className={buttonClass("primary", "sm")}>{pending} profissional(is) para verificar</Link>}
-          {openReports > 0 && <Link href="/admin/denuncias" className={buttonClass("outline", "sm")}>{openReports} denúncia(s) abertas</Link>}
+          {openReports > 0 && <Link href="/admin/denuncias" className={buttonClass("primary", "sm")}>{openReports} denúncia(s) abertas</Link>}
           {openTickets > 0 && <Link href="/admin/suporte" className={buttonClass("outline", "sm")}>{openTickets} chamado(s) abertos</Link>}
         </Card>
       )}
       <section className="space-y-2">
-        <CardTitle>Pessoas</CardTitle>
+        <CardTitle>Pessoas e planos</CardTitle>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="Clientes" value={clients} />
-          <Stat label="Profissionais" value={pros} hint={`${approved} aprovados`} />
-          <Stat label="Assinaturas ativas" value={subsActive} />
-          <Stat label="Assinaturas vencidas" value={subsExpired} />
+          <Stat label="Contas" value={users} hint={`${pros} prestadores`} />
+          <Stat label="Plano Completo" value={full} hint={`${basic} no Básico`} />
+          <Stat label="Em teste grátis" value={trial} />
+          <Stat label="Planos vencidos" value={expiredSubs} />
         </div>
       </section>
       <section className="space-y-2">
-        <CardTitle>Solicitações</CardTitle>
+        <CardTitle>Contrate rápido</CardTitle>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="Total" value={total} hint={`${waiting} aguardando resposta`} />
-          <Stat label="Aceites" value={accepted} hint={`${refused} recusadas · ${expired} expiradas`} />
-          <Stat label="Concluídos" value={completed} />
-          <Stat label="Cancelamentos" value={canceled} />
+          <Stat label="Disponíveis agora" value={quickOn} hint={`${searching} chamado(s) procurando`} />
+          <Stat label="Chamados" value={quickTotal} hint={`${quickAccepted} aceitos · ${noProvider} sem prestador`} />
+          <Stat label="Prestador não chegou" value={noShowPro} hint={`${quickBans} penalizado(s) agora`} />
+          <Stat label="Cliente não estava" value={noShowClient} hint={`${clientBlocks} bloqueado(s) agora`} />
         </div>
       </section>
       <section className="space-y-2">
-        <CardTitle>Receita e qualidade</CardTitle>
+        <CardTitle>Pedidos e receita</CardTitle>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="Receita (30 dias)" value={formatBRL(revenueMonth._sum.amountCents ?? 0)} hint="Assinaturas pagas por Pix" />
+          <Stat label="Pedidos normais" value={normal} />
+          <Stat label="Serviços concluídos" value={completed} />
+          <Stat label="Receita (30 dias)" value={formatBRL(revenueMonth._sum.amountCents ?? 0)} hint="Planos e taxas pagas por Pix" />
           <Stat label="Receita total" value={formatBRL(revenueAll._sum.amountCents ?? 0)} />
-          <Stat label="Avaliações" value={reviews} />
-          <Stat label="Denúncias abertas" value={openReports} />
         </div>
       </section>
       <Card className="flex flex-wrap gap-2">
         {[
-          ["/admin/profissionais", "Verificação"],
+          ["/admin/prestadores", "Prestadores"],
           ["/admin/usuarios", "Usuários"],
-          ["/admin/pedidos", "Solicitações"],
-          ["/admin/assinaturas", "Assinaturas"],
+          ["/admin/pedidos", "Pedidos"],
+          ["/admin/pagamentos", "Pagamentos"],
+          ["/admin/penalidades", "Penalidades"],
           ["/admin/denuncias", "Denúncias"],
           ["/admin/suporte", "Suporte"],
           ["/admin/config", "Configurações"],

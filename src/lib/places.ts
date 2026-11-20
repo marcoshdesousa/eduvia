@@ -16,7 +16,7 @@ export function officialCity(uf: string, city: string) {
   return citiesOf(uf).find((c) => fold(c) === f) ?? null;
 }
 
-/** Fuso de cada estado (o horário da limpeza é o do lugar). */
+/** Fuso de cada estado (o horário do serviço é o do lugar). */
 const TZ: Record<string, string> = {
   AC: "America/Rio_Branco",
   AM: "America/Manaus",

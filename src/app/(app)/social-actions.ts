@@ -8,12 +8,11 @@ import { REPORT_REASONS } from "@/lib/domain";
 
 export async function toggleFavorite(proId: string) {
   const user = await requireUser();
-  if (user.role !== "CLIENT") return;
   const key = { clientId_proId: { clientId: user.id, proId } };
   const had = await db.favorite.findUnique({ where: key });
   if (had) await db.favorite.delete({ where: key });
-  else if (await db.professionalProfile.findUnique({ where: { id: proId }, select: { id: true } })) await db.favorite.create({ data: { clientId: user.id, proId } });
-  revalidatePath(`/profissional/${proId}`);
+  else if (await db.providerProfile.findUnique({ where: { id: proId }, select: { id: true } })) await db.favorite.create({ data: { clientId: user.id, proId } });
+  revalidatePath(`/prestador/${proId}`);
   revalidatePath("/favoritos");
 }
 
@@ -24,14 +23,15 @@ export async function report(_: ActionResult, d: FormData): Promise<ActionResult
   const bookingId = String(d.get("bookingId") ?? "") || null;
   const messageId = String(d.get("messageId") ?? "") || null;
   const reviewId = String(d.get("reviewId") ?? "") || null;
+  const postId = String(d.get("postId") ?? "") || null;
   const reason = String(d.get("reason") ?? "");
   const details = String(d.get("details") ?? "").trim().slice(0, 1000) || null;
   if (!REPORT_REASONS.includes(reason as (typeof REPORT_REASONS)[number])) return { error: "Escolha o motivo." };
   if (!targetId && !bookingId) return { error: "Denúncia sem destino." };
   if (targetId === user.id) return { error: "Você não pode denunciar a si mesmo." };
   if (!(await allowAttempt(`report:${user.id}`, 10, 60))) return { error: "Muitas denúncias em pouco tempo. Tente mais tarde." };
-  await db.report.create({ data: { reporterId: user.id, targetId, bookingId, messageId, reviewId, reason, details } });
-  return { ok: "Denúncia enviada. A equipe da HoraLimp vai analisar." };
+  await db.report.create({ data: { reporterId: user.id, targetId, bookingId, messageId, reviewId, postId, reason, details } });
+  return { ok: "Denúncia enviada. A equipe do Diária Paga vai analisar." };
 }
 
 export async function toggleBlock(otherUserId: string) {

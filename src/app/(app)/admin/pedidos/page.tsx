@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { db } from "@/lib/db";
-import { BOOKING_LABEL, formatBRL } from "@/lib/domain";
+import { BOOKING_LABEL, formatBRL, categoryLabel, qtyLabel } from "@/lib/domain";
 import { formatWhen } from "@/lib/places";
 import { requireAdmin } from "@/lib/session";
 
@@ -24,7 +24,7 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
   });
   return (
     <div className="space-y-4">
-      <PageTitle title="Solicitações e contratações" />
+      <PageTitle title="Pedidos" />
       <form className="flex gap-2">
         <Select name="status" defaultValue={status ?? ""}>
           <option value="">Todos os status</option>
@@ -39,8 +39,8 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
               <Link href={`/pedidos/${b.id}`}>
                 <Card className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm transition hover:border-primary">
                   <span>
-                    <strong>{b.client.name}</strong> → {b.pro.user.name}
-                    <span className="block text-xs text-muted">{formatWhen(b.scheduledAt, b.addrUf)} · {b.addrCity}/{b.addrUf} · {b.hours} h · {formatBRL(b.estimateCents)}</span>
+                    <strong>{b.client.name}</strong> → {b.pro?.user.name ?? "(procurando)"} {b.mode === "QUICK" && "⚡"}
+                    <span className="block text-xs text-muted">{categoryLabel(b.category)} · {formatWhen(b.scheduledAt, b.addrUf)} · {b.addrCity}/{b.addrUf} · {qtyLabel(b.unit, b.quantity)} · {formatBRL(b.finalCents ?? b.estimateCents ?? b.maxCents ?? 0)}</span>
                   </span>
                   <BookingBadge status={b.status} />
                 </Card>
@@ -49,7 +49,7 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
           ))}
         </ul>
       ) : (
-        <Empty title="Nenhuma solicitação" />
+        <Empty title="Nenhum pedido" />
       )}
     </div>
   );

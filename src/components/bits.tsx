@@ -1,7 +1,7 @@
 import { Star } from "lucide-react";
-import type { BookingStatus, ProStatus } from "@/generated/prisma/enums";
+import type { BookingStatus } from "@/generated/prisma/enums";
 import { Badge } from "@/components/ui/badge";
-import { BOOKING_LABEL, BOOKING_TONE, PRO_STATUS_LABEL } from "@/lib/domain";
+import { BOOKING_LABEL, BOOKING_TONE } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 
 export function ProPhoto({ url, name, size = 64, className }: { url: string | null; name: string; size?: number; className?: string }) {
@@ -17,7 +17,7 @@ export function ProPhoto({ url, name, size = 64, className }: { url: string | nu
 }
 
 export function Rating({ value, count, className }: { value: number | null; count: number; className?: string }) {
-  if (value == null) return <Badge tone="primary" className={className}>Novo na HoraLimp</Badge>;
+  if (value == null) return <Badge tone="primary" className={className}>Novo no Diária Paga</Badge>;
   return (
     <span className={cn("inline-flex items-center gap-1 text-sm", className)} aria-label={`Nota ${value.toFixed(1).replace(".", ",")} de 5, ${count} avaliações`}>
       <Star size={15} className="fill-amber-400 text-amber-400" />
@@ -41,9 +41,9 @@ export function BookingBadge({ status }: { status: BookingStatus }) {
   return <Badge tone={BOOKING_TONE[status]}>{BOOKING_LABEL[status]}</Badge>;
 }
 
-const PRO_TONE: Record<ProStatus, "neutral" | "warning" | "success" | "danger"> = { INCOMPLETE: "neutral", PENDING: "warning", APPROVED: "success", REJECTED: "danger", SUSPENDED: "danger" };
-export function ProStatusBadge({ status }: { status: ProStatus }) {
-  return <Badge tone={PRO_TONE[status]}>{PRO_STATUS_LABEL[status]}</Badge>;
+/** Selo do plano Completo na vitrine. */
+export function RecommendedBadge() {
+  return <Badge tone="warning" className="bg-accent-soft text-accent">★ Recomendado</Badge>;
 }
 
 export function Empty({ icon, title, children }: { icon?: React.ReactNode; title: string; children?: React.ReactNode }) {

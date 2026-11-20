@@ -1,13 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CalendarCheck, CreditCard, Heart, LayoutDashboard, LifeBuoy, Search, Settings, ShieldCheck, User, Users, Flag, ClipboardList } from "lucide-react";
+import { Bell, Briefcase, CalendarCheck, CreditCard, Flag, Heart, Home, LayoutDashboard, LifeBuoy, Search, Settings, ShieldCheck, User, Users, ClipboardList, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const ICONS = { Bell, CalendarCheck, CreditCard, Heart, LayoutDashboard, LifeBuoy, Search, Settings, ShieldCheck, User, Users, Flag, ClipboardList };
+const ICONS = { Bell, Briefcase, CalendarCheck, CreditCard, Flag, Heart, Home, LayoutDashboard, LifeBuoy, Search, Settings, ShieldCheck, User, Users, ClipboardList, Zap };
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
-const active = (path: string, href: string) => (href === "/admin" || href === "/painel" ? path === href : path === href || path.startsWith(`${href}/`));
+const active = (path: string, href: string) => (href === "/admin" ? path === href : path === href || path.startsWith(`${href}/`));
 
 /** Menu de baixo no celular (fixo) e lateral/topo no computador. */
 export function BottomNav({ items }: { items: NavItem[] }) {

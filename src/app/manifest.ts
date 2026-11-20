@@ -2,13 +2,13 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "HoraLimp — limpeza residencial",
-    short_name: "HoraLimp",
-    description: "Contrate profissionais de limpeza na sua cidade, por hora.",
+    name: "Diária Paga — serviços perto de você",
+    short_name: "Diária Paga",
+    description: "Contrate diaristas, pedreiros, cuidadores, motoristas e muito mais.",
     start_url: "/",
     display: "standalone",
-    background_color: "#f7f6fc",
-    theme_color: "#5b3cc4",
+    background_color: "#f5f8f6",
+    theme_color: "#0a7d55",
     lang: "pt-BR",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png" },

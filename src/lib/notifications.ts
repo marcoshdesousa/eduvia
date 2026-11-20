@@ -47,14 +47,15 @@ export async function notify(userId: string, n: { title: string; body?: string; 
   void sendPush(userId, { title: n.title, body: n.body ?? "", href: n.href ?? "/notificacoes" }).catch((e) => console.error("[push]", e));
 }
 
-export async function sendPush(userId: string, payload: { title: string; body: string; href: string }) {
+/** kind "quick" = chamado do Contrate rápido: o celular vibra forte e o aviso fica na tela até a pessoa tocar. */
+export async function sendPush(userId: string, payload: { title: string; body: string; href: string; kind?: "quick" }) {
   if (process.env.NODE_ENV === "test" || !(await ensureVapid())) return 0;
   const subs = await db.pushSubscription.findMany({ where: { userId } });
   let sent = 0;
   await Promise.all(
     subs.map(async (s) => {
       try {
-        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), { TTL: 60 * 60 * 6 });
+        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), { TTL: payload.kind === "quick" ? 60 : 60 * 60 * 6, urgency: payload.kind === "quick" ? "high" : "normal" });
         sent++;
       } catch (e) {
         const code = (e as { statusCode?: number }).statusCode;

@@ -1,10 +1,8 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import type { ProStatus } from "@/generated/prisma/enums";
 import type { ActionResult } from "@/components/action-form";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
-import { PRO_STATUS_LABEL } from "@/lib/domain";
 import { notify } from "@/lib/notifications";
 import { createResetLink } from "@/lib/password-reset";
 import { requireAdmin } from "@/lib/session";
@@ -13,38 +11,68 @@ import { grantManual } from "@/lib/subscription";
 
 const s = (d: FormData, k: string) => String(d.get(k) ?? "").trim();
 
-/** Aprovar, reprovar (pedindo correção) ou suspender um profissional. Reprovar/suspender exige motivo. */
-export async function setProStatus(proId: string, status: ProStatus, _: ActionResult, d: FormData): Promise<ActionResult> {
+/** Suspender (sai da vitrine e do Contrate rápido) ou reativar um prestador. Suspender exige motivo. */
+export async function setProviderStatus(proId: string, status: "ACTIVE" | "SUSPENDED", _: ActionResult, d: FormData): Promise<ActionResult> {
   const admin = await requireAdmin();
   const reason = s(d, "reason").slice(0, 500) || null;
-  if ((status === "REJECTED" || status === "SUSPENDED") && !reason) return { error: "Informe o motivo (a pessoa vai ver)." };
-  const pro = await db.professionalProfile.findUnique({ where: { id: proId } });
-  if (!pro) return { error: "Profissional não encontrado." };
-  await db.professionalProfile.update({
-    where: { id: proId },
-    data: { status, statusReason: reason, approvals: { create: { status, reason, adminId: admin.id } } },
-  });
-  await audit(admin.id, `pro.${status.toLowerCase()}`, "ProfessionalProfile", proId, { reason });
-  const msg =
-    status === "APPROVED"
-      ? { title: "Perfil aprovado! 🎉", body: "Assine para aparecer na vitrine e receber pedidos.", href: "/painel/assinatura" }
-      : status === "REJECTED"
-        ? { title: "Seu cadastro precisa de correção", body: reason ?? "", href: "/painel" }
-        : status === "SUSPENDED"
-          ? { title: "Conta de profissional suspensa", body: reason ?? "", href: "/painel" }
-          : { title: `Status: ${PRO_STATUS_LABEL[status]}`, href: "/painel" };
-  await notify(pro.userId, msg);
-  revalidatePath("/admin/profissionais");
-  return { ok: `Marcado como: ${PRO_STATUS_LABEL[status]}.` };
+  if (status === "SUSPENDED" && !reason) return { error: "Informe o motivo (a pessoa vai ver)." };
+  const pro = await db.providerProfile.findUnique({ where: { id: proId } });
+  if (!pro) return { error: "Prestador não encontrado." };
+  await db.providerProfile.update({ where: { id: proId }, data: { status, statusReason: reason, ...(status === "SUSPENDED" ? { quickOn: false } : {}) } });
+  await audit(admin.id, `provider.${status.toLowerCase()}`, "ProviderProfile", proId, { reason });
+  await notify(pro.userId, status === "SUSPENDED" ? { title: "Perfil de prestador suspenso", body: reason ?? "", href: "/suporte" } : { title: "Perfil reativado ✅", body: "Você voltou a aparecer para os clientes.", href: "/painel" });
+  revalidatePath("/admin/prestadores");
+  return { ok: status === "SUSPENDED" ? "Prestador suspenso." : "Prestador reativado." };
 }
 
-export async function grantSubscription(proId: string): Promise<ActionResult> {
+/** Libera dias de plano sem Pix (cortesia ou acerto). Fica registrado como pagamento MANUAL de R$ 0. */
+export async function grantPlan(userId: string, _: ActionResult, d: FormData): Promise<ActionResult> {
   const admin = await requireAdmin();
-  await grantManual(proId);
-  await audit(admin.id, "subscription.grant_manual", "ProfessionalProfile", proId, { days: 30 });
-  revalidatePath("/admin/profissionais");
-  revalidatePath("/admin/assinaturas");
-  return { ok: "30 dias liberados." };
+  const plan = s(d, "plan") === "BASIC" ? "BASIC" : "FULL";
+  const days = Number(s(d, "days") || 30);
+  if (!Number.isInteger(days) || days < 1 || days > 365) return { error: "Dias: de 1 a 365." };
+  if (!(await db.providerProfile.findUnique({ where: { userId }, select: { id: true } }))) return { error: "Esta conta não é prestador." };
+  await grantManual(userId, plan, days);
+  await audit(admin.id, "subscription.grant_manual", "User", userId, { plan, days });
+  revalidatePath("/admin/prestadores");
+  revalidatePath("/admin/pagamentos");
+  return { ok: `${days} dias do plano ${plan === "FULL" ? "Completo" : "Básico"} liberados.` };
+}
+
+/** Tira a penalidade do Contrate rápido (prestador que não chegou). */
+export async function liftQuickBan(proId: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const pro = await db.providerProfile.update({ where: { id: proId }, data: { quickBannedUntil: null } });
+  await audit(admin.id, "provider.quick_unban", "ProviderProfile", proId);
+  await notify(pro.userId, { title: "Você voltou ao Contrate rápido", body: "O suporte retirou a penalidade. Ligue o Disponível quando quiser.", href: "/painel" });
+  revalidatePath("/admin/penalidades");
+  revalidatePath("/admin/prestadores");
+  return { ok: "Penalidade retirada." };
+}
+
+/** Libera o cliente que estava 30 dias sem contratar. */
+export async function liftClientBlock(cpfHash: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  await db.cpfLedger.update({ where: { cpfHash }, data: { clientBlockedUntil: null, clientBlockReason: null } });
+  const u = await db.user.findUnique({ where: { cpfHash }, select: { id: true } });
+  await audit(admin.id, "client.unblock_quick", "CpfLedger", cpfHash.slice(0, 12));
+  if (u) await notify(u.id, { title: "Conta liberada ✅", body: "O suporte liberou você para contratar de novo.", href: "/inicio" });
+  revalidatePath("/admin/penalidades");
+  return { ok: "Cliente liberado." };
+}
+
+/** Apaga uma foto do portfólio (denúncia de foto imprópria ou com telefone). */
+export async function removePost(postId: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const post = await db.post.findUnique({ where: { id: postId }, include: { pro: { select: { userId: true } } } });
+  if (!post) return { error: "Foto já apagada." };
+  await db.post.delete({ where: { id: postId } });
+  const { deleteObject } = await import("@/lib/storage");
+  await deleteObject(post.imageKey).catch(() => {});
+  await audit(admin.id, "post.remove", "Post", postId);
+  await notify(post.pro.userId, { title: "Uma foto do portfólio foi removida", body: "Ela não segue as regras do Diária Paga (sem telefone, sem conteúdo impróprio).", href: "/painel/portfolio" });
+  revalidatePath("/admin/denuncias");
+  return { ok: "Foto apagada." };
 }
 
 /** Bloquear impede a pessoa de entrar (e tira o profissional da vitrine). */
@@ -67,31 +95,33 @@ export async function makeResetLink(userId: string): Promise<{ link?: string; er
   return { link };
 }
 
-/** Ver dado sensível (CPF completo / WhatsApp): fica registrado na auditoria. */
-export async function revealSensitive(userId: string, what: "cpf" | "whatsapp"): Promise<string> {
+/** Ver dado sensível (CPF completo / celular): fica registrado na auditoria. */
+export async function revealSensitive(userId: string, what: "cpf" | "phone"): Promise<string> {
   const admin = await requireAdmin();
   const { openCpf } = await import("@/lib/cpf");
   const { openSecret } = await import("@/lib/secret-box");
-  const u = await db.user.findUnique({ where: { id: userId }, include: { pro: true } });
+  const u = await db.user.findUnique({ where: { id: userId }, include: { provider: true } });
   if (!u) return "—";
   await audit(admin.id, `reveal.${what}`, "User", userId);
   if (what === "cpf") return openCpf(u.cpfSealed) ?? "—";
-  return u.pro ? (openSecret(u.pro.whatsappSealed) ?? "—") : "—";
+  return u.provider ? (openSecret(u.provider.phoneSealed) ?? "—") : "—";
 }
 
 export async function resolveReport(reportId: string, status: "RESOLVED" | "DISMISSED", _: ActionResult, d: FormData): Promise<ActionResult> {
   const admin = await requireAdmin();
   const resolution = s(d, "resolution").slice(0, 500) || null;
   const r = await db.report.update({ where: { id: reportId }, data: { status, resolution, resolvedAt: new Date() } });
+  if (d.get("removePost") === "on" && r.postId) await removePost(r.postId);
   if (d.get("hideReview") === "on" && r.reviewId) {
     const rev = await db.review.update({ where: { id: r.reviewId }, data: { hiddenAt: new Date() } });
-    // a nota do profissional deixa de contar a avaliação escondida
-    const pro = await db.professionalProfile.findUnique({ where: { userId: rev.targetId } });
-    if (pro && rev.authorId !== pro.userId) await db.professionalProfile.update({ where: { id: pro.id }, data: { ratingSum: { decrement: rev.stars }, ratingCount: { decrement: 1 } } });
+    // a nota do prestador deixa de contar a avaliação escondida
+    const pro = await db.providerProfile.findUnique({ where: { userId: rev.targetId } });
+    const b = await db.booking.findUnique({ where: { id: rev.bookingId }, select: { proId: true } });
+    if (pro && b?.proId === pro.id) await db.providerProfile.update({ where: { id: pro.id }, data: { ratingSum: { decrement: rev.stars }, ratingCount: { decrement: 1 } } });
     await audit(admin.id, "review.hide", "Review", rev.id);
   }
   await audit(admin.id, `report.${status.toLowerCase()}`, "Report", reportId, { resolution });
-  await notify(r.reporterId, { title: "Sua denúncia foi analisada", body: resolution ?? "Obrigado por ajudar a manter a HoraLimp segura.", href: "/notificacoes" });
+  await notify(r.reporterId, { title: "Sua denúncia foi analisada", body: resolution ?? "Obrigado por ajudar a manter o Diária Paga seguro.", href: "/notificacoes" });
   revalidatePath("/admin/denuncias");
   return { ok: "Denúncia atualizada." };
 }
@@ -112,15 +142,22 @@ export async function adminReply(ticketId: string, _: ActionResult, d: FormData)
 
 export async function saveSettings(_: ActionResult, d: FormData): Promise<ActionResult> {
   const admin = await requireAdmin();
-  const hours = Number(s(d, "requestExpiryHours"));
-  const max = Number(s(d, "maxCities"));
-  if (!Number.isInteger(hours) || hours < 1 || hours > 168) return { error: "Prazo de resposta: de 1 a 168 horas." };
-  if (!Number.isInteger(max) || max < 1 || max > 30) return { error: "Municípios: de 1 a 30." };
-  await saveSetting("requestExpiryHours", hours);
-  await saveSetting("multipleCities", d.get("multipleCities") === "on");
-  await saveSetting("maxCities", max);
+  const n = (k: string) => Number(s(d, k));
+  const checks: [string, number, number, number][] = [
+    ["requestExpiryHours", n("requestExpiryHours"), 1, 168],
+    ["quickRingSeconds", n("quickRingSeconds"), 15, 180],
+    ["quickWaveSize", n("quickWaveSize"), 1, 20],
+    ["quickMaxKm", n("quickMaxKm"), 2, 150],
+    ["quickSearchMinutes", n("quickSearchMinutes"), 2, 60],
+  ];
+  for (const [k, v, min, max] of checks) if (!Number.isInteger(v) || v < min || v > max) return { error: `${k}: de ${min} a ${max}.` };
+  await saveSetting("requestExpiryHours", checks[0][1]);
+  await saveSetting("quickRingSeconds", checks[1][1]);
+  await saveSetting("quickWaveSize", checks[2][1]);
+  await saveSetting("quickMaxKm", checks[3][1]);
+  await saveSetting("quickSearchMinutes", checks[4][1]);
   await saveSetting("supportWhatsapp", s(d, "supportWhatsapp").slice(0, 30));
-  await audit(admin.id, "settings.save", "PlatformSetting", null, { hours, max });
+  await audit(admin.id, "settings.save", "PlatformSetting", null, Object.fromEntries(checks.map(([k, v]) => [k, v])));
   revalidatePath("/admin/config");
   return { ok: "Configurações salvas." };
 }

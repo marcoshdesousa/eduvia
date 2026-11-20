@@ -4,7 +4,7 @@ import { chatAccess } from "@/lib/chat";
 import { db } from "@/lib/db";
 import { readObject } from "@/lib/storage";
 
-/** Foto ou áudio do chat: só as duas partes da contratação (e o admin) abrem. Aceita Range (áudio no iPhone). */
+/** Foto, áudio ou vídeo do chat: só as duas partes da contratação (e o admin) abrem. Aceita Range (áudio no iPhone). */
 export async function GET(req: Request, { params }: { params: Promise<{ mid: string }> }) {
   const { user, error } = await apiUser();
   if (error) return error;

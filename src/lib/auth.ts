@@ -6,15 +6,15 @@ import { db } from "@/lib/db";
 import { appUrl, trustedOrigins } from "@/lib/app-url";
 
 /**
- * As contas da HoraLimp não usam e-mail: o login é por CPF e senha.
+ * As contas do Diária Paga não usam e-mail: o login é por CPF e senha.
  * O Better Auth exige um e-mail; usamos um endereço técnico aleatório (não revela o CPF), nunca exibido nem usado para envio.
  */
 export const auth = betterAuth({
-  appName: "HoraLimp",
+  appName: "Diária Paga",
   baseURL: appUrl(),
   trustedOrigins: trustedOrigins(),
   database: prismaAdapter(db, { provider: "postgresql" }),
-  // contas são criadas só pelo servidor (cadastro de cliente/profissional), nunca direto pela API de login
+  // contas são criadas só pelo servidor (cadastro), nunca direto pela API de login
   emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 8, maxPasswordLength: 128 },
   session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
   user: {
@@ -27,4 +27,4 @@ export const auth = betterAuth({
   plugins: [nextCookies()],
 });
 
-export const internalEmail = () => `${randomUUID()}@conta.horalimp.invalid`;
+export const internalEmail = () => `${randomUUID()}@conta.diariapaga.invalid`;

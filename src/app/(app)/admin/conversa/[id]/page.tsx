@@ -36,14 +36,14 @@ export default async function AdminConversation({ params }: { params: Promise<{ 
   return (
     <div className="space-y-4">
       <Link href={`/pedidos/${id}`} className="text-sm text-muted hover:text-foreground">← Contratação</Link>
-      <PageTitle title="Conversa" subtitle={`${b.client.name} (cliente) e ${b.pro.user.name} (profissional)`} />
+      <PageTitle title="Conversa" subtitle={`${b.client.name} (cliente) e ${b.pro?.user.name ?? "—"} (prestador)`} />
       <div className="space-y-2">
         {msgs.map((m) => {
           const fromClient = m.senderId === b.client.id;
           return (
             <div key={m.id} className={cn("flex", fromClient ? "justify-start" : "justify-end")}>
               <Card className="max-w-[85%] py-2 text-sm">
-                <p className="text-xs text-muted">{fromClient ? "Cliente" : "Profissional"} · {m.createdAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p>
+                <p className="text-xs text-muted">{fromClient ? "Cliente" : "Prestador"} · {m.createdAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p>
                 {m.kind === "TEXT" && <p className="whitespace-pre-wrap">{m.text}</p>}
                 {m.kind === "IMAGE" && (
                   // eslint-disable-next-line @next/next/no-img-element

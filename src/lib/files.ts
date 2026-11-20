@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 export const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 export const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 export const MAX_AUDIO_SECONDS = 180;
+export const MAX_VIDEO_BYTES = 40 * 1024 * 1024;
 
 const startsWith = (b: Buffer, sig: number[], at = 0) => sig.every((x, i) => b[at + i] === x);
 
@@ -25,3 +26,15 @@ export function audioType(b: Buffer): { mime: string; ext: string } | null {
 }
 
 export const newKey = (folder: string, ext: string) => `${folder}/${randomUUID()}.${ext}`;
+
+/** Tipo real do vídeo (MP4/MOV do celular ou WebM) ou null. */
+export function videoType(b: Buffer): { mime: string; ext: string } | null {
+  if (startsWith(b, [0x66, 0x74, 0x79, 0x70], 4)) {
+    const brand = b.subarray(8, 12).toString("latin1");
+    if (brand === "qt  ") return { mime: "video/quicktime", ext: "mov" };
+    if (/^M4A /.test(brand)) return null;
+    return { mime: "video/mp4", ext: "mp4" };
+  }
+  if (startsWith(b, [0x1a, 0x45, 0xdf, 0xa3])) return { mime: "video/webm", ext: "webm" };
+  return null;
+}

@@ -28,13 +28,13 @@ export async function sql<T = Record<string, unknown>>(query: string, params: un
   }
 }
 
-export async function signUpClient(page: Page, name: string, cpf = randomCpf()) {
-  await page.goto("/cadastro/cliente");
+export async function signUp(page: Page, name: string, cpf = randomCpf(), query = "") {
+  await page.goto(`/cadastro${query}`);
   await page.getByLabel("Nome completo").fill(name);
   await page.getByLabel("CPF").fill(cpf);
   await page.getByLabel("Senha", { exact: true }).fill(PASSWORD);
   await page.getByLabel("Confirme a senha").fill(PASSWORD);
-  await page.getByRole("checkbox").check();
+  await page.getByRole("checkbox", { name: /Termos/ }).check();
   await page.getByRole("button", { name: "Criar conta grátis" }).click();
   await page.waitForURL((u) => !u.pathname.startsWith("/cadastro"), { timeout: 15_000 }).catch(() => {});
   return cpf;

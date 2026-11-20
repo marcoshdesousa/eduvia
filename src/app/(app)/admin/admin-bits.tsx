@@ -2,10 +2,10 @@
 import { useState, useTransition } from "react";
 import { Copy, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { grantSubscription, makeResetLink, revealSensitive } from "./actions";
+import { makeResetLink, revealSensitive } from "./actions";
 
-/** Mostra CPF/WhatsApp completo só quando o admin clica (fica registrado na auditoria). */
-export function Reveal({ userId, what, masked }: { userId: string; what: "cpf" | "whatsapp"; masked: string }) {
+/** Mostra CPF/celular completo só quando o admin clica (fica registrado na auditoria). */
+export function Reveal({ userId, what, masked }: { userId: string; what: "cpf" | "phone"; masked: string }) {
   const [value, setValue] = useState<string | null>(null);
   const [pending, start] = useTransition();
   return value ? (
@@ -34,15 +34,3 @@ export function ResetLinkButton({ userId }: { userId: string }) {
   );
 }
 
-export function GrantButton({ proId }: { proId: string }) {
-  const [msg, setMsg] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-  return (
-    <span className="inline-flex items-center gap-2">
-      <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => confirm("Liberar 30 dias de assinatura sem Pix?") && start(async () => setMsg((await grantSubscription(proId))?.ok ?? null))}>
-        {pending && <Loader2 size={14} className="animate-spin" />} Liberar 30 dias
-      </Button>
-      {msg && <span className="text-xs text-success">{msg}</span>}
-    </span>
-  );
-}

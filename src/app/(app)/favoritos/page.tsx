@@ -1,51 +1,40 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { Heart } from "lucide-react";
-import { Empty, PageTitle, ProPhoto, Rating } from "@/components/bits";
-import { Card } from "@/components/ui/card";
+import { Empty, PageTitle } from "@/components/bits";
+import { ProviderCard } from "@/components/provider-card";
 import { db } from "@/lib/db";
-import { formatBRL, proVisible, ratingOf, shortName } from "@/lib/domain";
-import { proPhotoUrl } from "@/lib/pros";
-import { requireClient } from "@/lib/session";
+import { providerVisible, ratingOf } from "@/lib/domain";
+import { providerPhotoUrl } from "@/lib/providers";
+import { requireUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Favoritos" };
 
 export default async function FavoritesPage() {
-  const user = await requireClient("/favoritos");
+  const user = await requireUser("/favoritos");
   const favs = await db.favorite.findMany({
     where: { clientId: user.id },
     orderBy: { createdAt: "desc" },
-    include: { pro: { include: { user: { select: { name: true, blockedAt: true } }, subscription: true, areas: true } } },
+    include: { pro: { include: { user: { select: { name: true, blockedAt: true } }, subscription: true, places: { where: { active: true } }, services: { orderBy: { priceCents: "asc" } } } } },
   });
+  const list = favs.map(({ pro }) => ({ pro, on: providerVisible({ ...pro, subscriptionEnd: pro.subscription?.currentPeriodEnd, blocked: !!pro.user.blockedAt, services: pro.services.length, places: pro.places.length }) })).filter((x) => x.on);
   return (
     <div className="space-y-4">
-      <PageTitle title="Favoritos" subtitle="Profissionais que você salvou." />
-      {favs.length ? (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {favs.map(({ pro }) => {
-            const on = proVisible({ ...pro, subscriptionEnd: pro.subscription?.currentPeriodEnd, blocked: !!pro.user.blockedAt });
-            return (
-              <li key={pro.id}>
-                <Card className="flex items-center gap-3">
-                  <ProPhoto url={on ? proPhotoUrl(pro) : null} name={pro.user.name} size={56} />
-                  <div className="flex-1">
-                    <p className="font-semibold">{shortName(pro.user.name)}</p>
-                    <Rating value={ratingOf(pro)} count={pro.ratingCount} />
-                    <p className="text-xs text-muted">{pro.areas.map((a) => a.city).join(", ")}</p>
-                  </div>
-                  {on ? (
-                    <Link href={`/profissional/${pro.id}`} className="text-right text-sm font-semibold text-primary">{formatBRL(pro.hourlyCents!)}/h<span className="block text-xs font-normal">Ver perfil</span></Link>
-                  ) : (
-                    <span className="text-xs text-muted">Indisponível no momento</span>
-                  )}
-                </Card>
-              </li>
-            );
-          })}
+      <PageTitle title="Favoritos" subtitle="Prestadores que você salvou." />
+      {list.length ? (
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {list.map(({ pro }) => (
+            <li key={pro.id}>
+              <ProviderCard
+                href={`/prestador/${pro.id}`}
+                p={{ id: pro.id, name: pro.user.name, photoUrl: providerPhotoUrl(pro), rating: ratingOf(pro), ratingCount: pro.ratingCount, priceCents: pro.services[0].priceCents, unit: pro.services[0].unit, plan: pro.subscription?.plan ?? "BASIC", distanceKm: null, place: pro.places[0] ? `${pro.places[0].city}/${pro.places[0].uf}` : "" }}
+              />
+            </li>
+          ))}
         </ul>
       ) : (
-        <Empty icon={<Heart />} title="Nenhum favorito ainda">Toque em “Favoritar” no perfil de um profissional para guardar aqui.</Empty>
+        <Empty icon={<Heart />} title="Nenhum favorito ainda">Toque no coração no perfil de um prestador para guardar aqui.</Empty>
       )}
+      {favs.length > list.length && <p className="text-center text-xs text-muted">{favs.length - list.length} favorito(s) não está(ão) atendendo no momento.</p>}
     </div>
   );
 }

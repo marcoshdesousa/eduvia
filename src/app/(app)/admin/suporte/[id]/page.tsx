@@ -22,7 +22,7 @@ export default async function AdminTicket({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-4">
       <Link href="/admin/suporte" className="text-sm text-muted hover:text-foreground">← Chamados</Link>
-      <PageTitle title={t.subject} subtitle={`${t.user.name} (${t.user.role === "PRO" ? "profissional" : t.user.role === "ADMIN" ? "admin" : "cliente"})`} />
+      <PageTitle title={t.subject} subtitle={`${t.user.name} (${t.user.role === "ADMIN" ? "admin" : "usuário"})`} />
       <div className="flex flex-wrap gap-2 text-sm">
         {t.bookingId && <Link href={`/pedidos/${t.bookingId}`} className="text-primary hover:underline">Ver contratação</Link>}
         <Link href={`/admin/usuarios?q=${encodeURIComponent(t.user.name)}`} className="text-primary hover:underline">Ver usuário</Link>

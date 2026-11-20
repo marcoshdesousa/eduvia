@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/form";
 import { db } from "@/lib/db";
+import { postImageUrl } from "@/lib/providers";
 import { requireAdmin } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { resolveReport } from "../actions";
@@ -24,6 +25,8 @@ export default async function AdminReports({ searchParams }: { searchParams: Pro
   });
   const reviewIds = reports.map((r) => r.reviewId).filter(Boolean) as string[];
   const reviews = new Map((await db.review.findMany({ where: { id: { in: reviewIds } } })).map((r) => [r.id, r]));
+  const postIds = reports.map((r) => r.postId).filter(Boolean) as string[];
+  const posts = new Map((await db.post.findMany({ where: { id: { in: postIds } }, select: { id: true, imageKey: true, proId: true } })).map((p) => [p.id, p]));
   return (
     <div className="space-y-4">
       <PageTitle title="Denúncias">
@@ -36,6 +39,7 @@ export default async function AdminReports({ searchParams }: { searchParams: Pro
         <ul className="space-y-3">
           {reports.map((r) => {
             const rev = r.reviewId ? reviews.get(r.reviewId) : null;
+            const post = r.postId ? posts.get(r.postId) : null;
             return (
               <li key={r.id}>
                 <Card className="space-y-2 text-sm">
@@ -44,8 +48,14 @@ export default async function AdminReports({ searchParams }: { searchParams: Pro
                     <Badge tone={r.status === "OPEN" ? "warning" : r.status === "RESOLVED" ? "success" : "neutral"}>{r.status === "OPEN" ? "Aberta" : r.status === "RESOLVED" ? "Resolvida" : "Arquivada"}</Badge>
                     <span className="text-xs text-muted">{r.createdAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
                   </div>
-                  <p>De: {r.reporter.name} · Sobre: {r.target ? `${r.target.name} (${r.target.role === "PRO" ? "profissional" : "cliente"})` : "—"}</p>
+                  <p>De: {r.reporter.name} · Sobre: {r.target ? `${r.target.name} ` : "—"}</p>
                   {r.details && <p className="rounded bg-surface-2 p-2">{r.details}</p>}
+                  {post && (
+                    <a href={`/prestador/${post.proId}`} className="block w-32">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={postImageUrl(post)} alt="Foto denunciada" className="aspect-square w-32 rounded-lg object-cover" />
+                    </a>
+                  )}
                   {rev && <p className="text-muted">Avaliação denunciada: {rev.stars}★ “{rev.comment ?? ""}” {rev.hiddenAt && "(escondida)"}</p>}
                   <div className="flex flex-wrap gap-3 text-xs">
                     {r.bookingId && <Link href={`/pedidos/${r.bookingId}`} className="text-primary hover:underline">Ver contratação</Link>}
@@ -55,6 +65,7 @@ export default async function AdminReports({ searchParams }: { searchParams: Pro
                     <div className="flex flex-wrap gap-2 border-t border-border pt-2">
                       <ActionForm action={resolveReport.bind(null, r.id, "RESOLVED")} className="flex flex-1 flex-wrap items-center gap-2">
                         <Input name="resolution" placeholder="O que foi feito (o denunciante vê)" className="h-8 min-w-48 flex-1" maxLength={500} />
+                        {post && <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="removePost" /> apagar a foto</label>}
                         {rev && !rev.hiddenAt && <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="hideReview" /> esconder a avaliação</label>}
                         <SubmitButton size="sm" pendingText="…">Resolver</SubmitButton>
                       </ActionForm>

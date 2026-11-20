@@ -2,12 +2,16 @@ import { db } from "@/lib/db";
 
 /** Configurações que o admin pode mudar (com os valores padrão). */
 export const SETTING_DEFAULTS = {
-  /** horas para o profissional responder antes da solicitação expirar */
+  /** horas para o prestador responder um pedido normal antes de expirar */
   requestExpiryHours: 12,
-  /** permitir que o profissional atenda em mais de um município */
-  multipleCities: true,
-  /** quantos municípios no máximo */
-  maxCities: 5,
+  /** Contrate rápido: segundos que cada chamado fica tocando para um prestador */
+  quickRingSeconds: 45,
+  /** Contrate rápido: quantos prestadores tocam ao mesmo tempo em cada rodada */
+  quickWaveSize: 3,
+  /** Contrate rápido: raio máximo de busca (km) */
+  quickMaxKm: 40,
+  /** Contrate rápido: minutos procurando antes de avisar que ninguém aceitou */
+  quickSearchMinutes: 8,
   /** WhatsApp do suporte (opcional; aparece na tela de suporte) */
   supportWhatsapp: "",
 };

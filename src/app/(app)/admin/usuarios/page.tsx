@@ -15,7 +15,6 @@ import { setBlocked } from "../actions";
 import { ResetLinkButton, Reveal } from "../admin-bits";
 
 export const metadata: Metadata = { title: "Usuários" };
-const ROLE = { CLIENT: "Cliente", PRO: "Profissional", ADMIN: "Admin" } as const;
 
 export default async function AdminUsers({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   await requireAdmin();
@@ -25,7 +24,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
     where: q ? (isValidCpf(digits) ? { cpfHash: cpfHash(digits) } : { name: { contains: q, mode: "insensitive" } }) : {},
     orderBy: { createdAt: "desc" },
     take: 50,
-    include: { _count: { select: { clientBookings: true } }, pro: { select: { id: true, status: true } } },
+    include: { _count: { select: { clientBookings: true } }, provider: { select: { id: true, status: true } } },
   });
   return (
     <div className="space-y-4">
@@ -43,7 +42,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
                 <Card className="space-y-2 py-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">{u.name}</span>
-                    <Badge tone={u.role === "PRO" ? "primary" : u.role === "ADMIN" ? "warning" : "neutral"}>{ROLE[u.role]}</Badge>
+                    <Badge tone={u.role === "ADMIN" ? "warning" : u.provider ? "primary" : "neutral"}>{u.role === "ADMIN" ? "Admin" : u.provider ? "Prestador" : "Cliente"}</Badge>
                     {u.blockedAt && <Badge tone="danger">Bloqueado{u.blockReason ? `: ${u.blockReason}` : ""}</Badge>}
                   </div>
                   <p className="text-muted">CPF {cpf ? <Reveal userId={u.id} what="cpf" masked={maskCpf(cpf)} /> : "—"} · desde {u.createdAt.toLocaleDateString("pt-BR")} · {u._count.clientBookings} pedido(s) como cliente</p>

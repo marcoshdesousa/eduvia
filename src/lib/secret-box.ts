@@ -5,7 +5,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 function masterKey() {
   const secret = process.env.DATA_SECRET || process.env.BETTER_AUTH_SECRET || (process.env.NODE_ENV === "production" ? "" : "dev-secret");
   if (!secret) throw new Error("Defina BETTER_AUTH_SECRET para guardar dados pessoais.");
-  return createHash("sha256").update(`horalimp-dados:${secret}`).digest();
+  return createHash("sha256").update(`diariapaga-dados:${secret}`).digest();
 }
 
 export function sealSecret(plain: string): string {

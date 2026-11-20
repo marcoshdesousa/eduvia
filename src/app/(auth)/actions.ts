@@ -22,17 +22,17 @@ export async function loginAction(_: ActionResult, d: FormData): Promise<ActionR
   redirect(to);
 }
 
-export async function signupClientAction(_: ActionResult, d: FormData): Promise<ActionResult> {
+export async function signupAction(_: ActionResult, d: FormData): Promise<ActionResult> {
   let next: string;
   try {
     if (d.get("terms") !== "on") throw new AccountError("Para criar a conta, aceite os Termos de uso e a Política de privacidade.");
     const name = checkName(str(d, "name"));
     const cpf = checkCpf(str(d, "cpf"));
     checkPassword(str(d, "password"), str(d, "passwordConfirm"));
-    const id = await createAccount({ name, cpf, password: str(d, "password"), role: "CLIENT" });
-    await signInWithCpf(cpf, str(d, "password"));
-    await notify(id, { title: "Cadastro concluído 🎉", body: "Agora é só escolher a cidade e encontrar um profissional.", href: "/buscar" });
-    next = safeNext(str(d, "voltar")) ?? "/buscar";
+    const id = await createAccount({ name, cpf, password: str(d, "password"), role: "USER" });
+    const user = await signInWithCpf(cpf, str(d, "password"));
+    await notify(id, { title: "Conta criada 🎉", body: "Encontre quem faz o serviço perto de você, ou ofereça o seu trabalho.", href: "/inicio" });
+    next = safeNext(str(d, "voltar")) ?? (str(d, "quero") === "trabalhar" ? "/seja-prestador" : homeOf(user));
   } catch (e) {
     if (e instanceof AccountError) return { error: e.message };
     throw e;

@@ -1,34 +1,34 @@
-# HoraLimp
+# Diária Paga
 
-**Sua casa em boas mãos, no seu tempo.** Marketplace que conecta clientes a profissionais autônomos de limpeza residencial.
+**Quem faz o serviço, perto de você. Hoje.** Plataforma (site com cara de aplicativo, instalável no celular) que conecta clientes a prestadores autônomos: diarista, pedreiro, pintor, eletricista, encanador, cuidador de idoso, babá, motorista, compras de supermercado e mais (37 serviços).
 
-- **Cliente**: cadastro e uso grátis (nome, CPF e senha). Busca por município, compara perfis, pede limpeza por hora (1 a 12 h) com data, horário e endereço, conversa no chat e avalia.
-- **Profissional** (18+): nome, nascimento, CPF, WhatsApp (privado), foto do rosto (com corte e prévia redonda), estado e município. Define o próprio preço por hora, serviços, municípios e agenda; aceita ou recusa cada pedido; pode pausar.
-- **Assinatura do profissional**: R$ 15,85/mês (R$ 15,00 + R$ 0,85), por Pix (SyncPay). Sem comissão, sem taxa por hora ou por serviço. Só aparece na vitrine quem está **aprovado** e com **assinatura em dia**.
-- **O pagamento da limpeza** é feito direto ao profissional (dinheiro ou Pix). A HoraLimp não recebe nem processa esse valor.
-- **Admin**: verificação de profissionais (aprovar, pedir correção, suspender), usuários (bloquear, link de nova senha), solicitações, assinaturas (inclusive liberar 30 dias), denúncias, suporte, configurações, indicadores e auditoria.
+- **Cliente**: grátis, sem taxa nenhuma. Conta com nome, CPF e senha. Busca por serviço e cidade (ou "perto de mim"), vê perfil, fotos dos trabalhos, preços e avaliações, contrata com data marcada **ou** chama na hora pelo **Contrate rápido**.
+- **Prestador** (18+): a mesma conta vira prestador em "Seja prestador": foto do rosto, celular (privado), serviços com preço por diária/hora/serviço e especificações, endereços de atendimento no mapa, bio, Instagram, portfólio de 8 fotos (4 aparecem e "ver mais"), horários, painel financeiro (semana, mês, 6 meses).
+- **Planos do prestador** (Pix via SyncPay, sem comissão):
+  - **Completo R$ 15,85/mês** (R$ 10,00 plataforma + R$ 5,85 impostos e taxas): 3 endereços, aparece primeiro, selo ★ Recomendado, pacotes de **+2 endereços por R$ 3,85/mês** (até 11). O pacote libera na hora, entra na próxima mensalidade e pode ser retirado.
+  - **Básico R$ 6,85/mês** (R$ 3,00 + R$ 3,85): 1 endereço, aparece depois do Completo.
+  - **3 dias grátis do Completo uma única vez por CPF** — o CPF fica guardado (só o código, sem nome) mesmo se a conta for apagada.
+- **Sem telefone/WhatsApp**: bio, legendas, serviços e chat bloqueiam números de telefone e palavras como "zap". Toda contratação fica no app.
+- **Chat** estilo WhatsApp: texto, áudio, foto e vídeo, com respostas rápidas ("Chego em 30 min").
+- **Pagamento do serviço** é direto ao prestador (Pix, dinheiro ou cartão se ele tiver maquininha).
 
-> A HoraLimp substituiu a Eduvia neste repositório. A migração `37_horalimp` **apaga todas as tabelas e dados da Eduvia** (pedido do dono) e cria as da HoraLimp.
+> O Diária Paga substituiu a HoraLimp no mesmo serviço do Render. A migração `38_diaria_paga` **apaga todas as tabelas e dados da HoraLimp** e cria as novas.
 
-## Como funciona a contratação
+## Contrate rápido (estilo app de corrida)
 
-1. Cliente escolhe o município → vê profissionais aprovados, com assinatura ativa e sem pausa.
-2. Escolhe serviços, horas, data/horário e endereço (localização atual com permissão, CEP, endereço salvo ou ponto no mapa).
-3. Vê o **valor estimado = preço por hora × horas** e envia. Nada é cobrado do cliente.
-4. O profissional **aceita ou recusa**. Sem resposta no prazo (padrão 12 h, ajustável no admin), a solicitação expira.
-5. Só depois do aceite: **chat** (texto, áudio e foto) e **endereço completo** para o profissional.
-6. Andamento: a caminho → chegou → iniciado → concluído. Cada mudança fica no histórico (quem, quando, motivo).
-7. Concluído: cliente e profissional se avaliam (1 a 5 estrelas). Só quem participou pode avaliar.
+1. Cliente escolhe o serviço e a quantidade; a localização vem do aparelho (com permissão).
+2. Aparece o **valor mínimo** (menor preço da plataforma para o serviço × quantidade, não editável). O cliente define **até quanto paga**: quanto maior, mais prestadores (inclusive mais longe) recebem.
+3. O servidor toca em rodadas (padrão: 3 prestadores por vez, 45 s cada, até 40 km, por 8 min) os que estão **Disponíveis**, dentro do horário, mais perto e com menos chamados na semana; Completo tem prioridade na mesma faixa de distância.
+4. Toque: com o app aberto, som de chamado + vibração e tela de Aceitar/Recusar; com o app fechado, notificação com vibração forte que fica na tela (som personalizado não é possível em notificação web).
+5. **O primeiro que aceita leva** e tem **2 horas para chegar**. Endereço e chat liberam no aceite.
+6. Penalidades:
+   - Prestador não chegou em 2 h → cancelado automaticamente e **7 dias fora do Contrate rápido**.
+   - Cliente não estava (o prestador marca "Cheguei" e só depois de 15 min pode registrar) → cliente fica **30 dias sem contratar** ou paga **R$ 2,85** para liberar na hora.
+   - O admin pode retirar penalidades em **Admin → Penalidades**.
 
-## Segurança e privacidade (LGPD)
+## Admin
 
-- Login por **CPF + senha** (hash forte do Better Auth). O CPF é guardado como código (HMAC) e criptografado (AES-GCM); nunca aparece publicamente. O cadastro direto pela API de login fica desligado.
-- WhatsApp do profissional criptografado e visível só para o admin (cada visualização fica na auditoria).
-- Endereço visível só para o cliente, para o profissional que aceitou (enquanto a contratação está ativa) e para o admin. Depois de 90 dias do fim, o endereço exato é apagado.
-- Fotos e áudios do chat só abrem para as partes da contratação; o tipo do arquivo é conferido pelo conteúdo. Admin só abre conversa com justificativa registrada.
-- Webhook da SyncPay autenticado por token secreto e idempotente; a assinatura só é liberada depois de o servidor conferir o Pix direto na API.
-- Limite de tentativas no login, no chat, nas denúncias e nos pedidos. Denunciar e bloquear em perfis, contratações e avaliações.
-- Senha esquecida: a conta não tem e-mail, então o pedido vira um chamado; o admin confirma a identidade e gera um **link de uso único** (24 h).
+Resumo (planos, rápido, receita), prestadores (suspender, liberar dias de plano, tirar penalidade, ver CPF/celular com registro), usuários (bloquear, link de nova senha), pedidos, pagamentos, penalidades, denúncias (inclui fotos do portfólio), suporte, configurações do Contrate rápido e auditoria. Não há fila de aprovação: quem paga aparece; quem descumpre as regras é suspenso.
 
 ## Rodar localmente
 
@@ -40,34 +40,30 @@ npx prisma migrate deploy
 npm run dev                   # http://localhost:3000
 ```
 
-Crie uma conta de **cliente** com o CPF de `ADMIN_CPF` para entrar como administrador.
+Crie uma conta com o CPF de `ADMIN_CPF` para entrar como administrador.
 
 ## Testes
 
 ```bash
-npm test                      # regras do negócio (Vitest)
+npm test                      # regras (Vitest) — com DATABASE_URL também testa no banco: teste grátis, rápido, penalidades, pacotes
 npm run build && npm start    # em outro terminal
-npx playwright test           # fluxo completo no navegador (celular)
+npx playwright test           # fluxo completo no navegador de celular (prestador + cliente + admin)
 ```
 
 ## Deploy no Render
 
-O `render.yaml` descreve o serviço web (com disco em `/var/data` para fotos e áudios) e o banco. No painel do serviço → **Environment**, preencha:
+O `render.yaml` descreve o serviço web (disco em `/var/data` para fotos, áudios e vídeos) e o banco. No painel do serviço → **Environment**, preencha:
 
 | Variável | Para quê |
 |---|---|
-| `ADMIN_CPF` | CPF do dono. A conta de cliente criada com ele vira admin. |
-| `SYNCPAY_CLIENT_ID` / `SYNCPAY_CLIENT_SECRET` | Pix da assinatura do profissional. Sem elas, o admin libera a assinatura manualmente. |
-| `BETTER_AUTH_SECRET` | Gerada sozinha. Não troque depois de ter contas (protege CPF e WhatsApp). |
+| `ADMIN_CPF` | CPF do dono. A conta criada com ele vira admin. |
+| `SYNCPAY_CLIENT_ID` / `SYNCPAY_CLIENT_SECRET` | Pix dos planos e da taxa de desbloqueio. Sem elas, o admin libera planos manualmente. |
+| `BETTER_AUTH_SECRET` | Gerada sozinha. Não troque depois de ter contas (protege CPF e celular). |
 
-As rotinas (expirar pedidos, lembretes, conferir Pix, aviso de vencimento, apagar endereços antigos) rodam no próprio servidor a cada 5 minutos.
-
-## Mapas
-
-Mapa do **OpenStreetMap** (grátis, sem chave), CEP pelo **ViaCEP** e busca de endereço pelo **Nominatim**, chamados pelo navegador. Para muito volume, troque por um provedor pago no `src/lib/geo-client.ts` e `src/components/map-picker.tsx`.
+Rotinas no próprio servidor: Contrate rápido a cada 10 s; expirar pedidos, lembretes, conferir Pix, vencimentos e apagar endereços antigos a cada 5 min.
 
 ## Antes de lançar oficialmente
 
-- Termos de uso, privacidade e cancelamento são **texto-base**: revisar com advogado.
-- Classificação contábil/tributária dos R$ 0,85 da assinatura: validar com contador.
-- Lista de municípios: `src/data/municipios.json` (27 UFs; o DF inclui as regiões administrativas).
+- Termos, privacidade e cancelamento são **texto-base**: revisar com advogado.
+- Divisão "plataforma + impostos e taxas" dos planos: validar com contador.
+- Mapas grátis (OpenStreetMap/ViaCEP/Nominatim, pelo navegador). Para muito volume, troque por um provedor pago em `src/lib/geo-client.ts`.

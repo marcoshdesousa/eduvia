@@ -7,12 +7,12 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const display = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", weight: ["600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: { default: "HoraLimp — Sua casa em boas mãos, no seu tempo", template: "%s · HoraLimp" },
-  description: "Encontre profissionais de limpeza residencial na sua cidade, compare preços por hora e contrate pelo app. Grátis para clientes.",
-  applicationName: "HoraLimp",
+  title: { default: "Diária Paga — contrate diaristas, pedreiros, cuidadores e mais", template: "%s · Diária Paga" },
+  description: "Encontre quem faz o serviço perto de você: diarista, pedreiro, eletricista, cuidador, babá, motorista e muito mais. Grátis para quem contrata.",
+  applicationName: "Diária Paga",
 };
 
-export const viewport: Viewport = { themeColor: "#5b3cc4", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#0a7d55", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -4,7 +4,7 @@ import type { Map as LMap, Marker } from "leaflet";
 
 export type LatLng = { lat: number; lng: number };
 
-const pinHtml = `<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:#5b3cc4;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>`;
+const pinHtml = `<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:#0a7d55;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>`;
 
 /**
  * Mapa do OpenStreetMap (grátis, sem chave). Com `onPick`, tocar no mapa ou arrastar o marcador escolhe o ponto.

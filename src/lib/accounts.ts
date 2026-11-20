@@ -31,7 +31,7 @@ export function checkCpf(raw: string) {
   return cpf;
 }
 
-/** CPF do dono (variável ADMIN_CPF no Render): a conta de cliente com este CPF vira administradora. */
+/** CPF do dono (variável ADMIN_CPF no Render): a conta criada com este CPF vira administradora. */
 export const isAdminCpf = (cpf: string) => !!process.env.ADMIN_CPF && onlyDigits(process.env.ADMIN_CPF) === onlyDigits(cpf);
 
 /** Cria a conta (usuário + senha) numa transação; `extra` cria o perfil do profissional junto. */
@@ -45,7 +45,7 @@ export async function createAccount(
   const password = await hashPassword(input.password);
   try {
     await db.$transaction(async (tx) => {
-      const role = input.role === "CLIENT" && isAdminCpf(input.cpf) ? "ADMIN" : input.role;
+      const role = isAdminCpf(input.cpf) ? "ADMIN" : input.role;
       await tx.user.create({ data: { id, name: input.name, email: internalEmail(), role, cpfHash: hash, cpfSealed: sealCpf(input.cpf) } });
       await tx.account.create({ data: { id: randomUUID(), userId: id, providerId: "credential", accountId: id, password } });
       if (extra) await extra(tx, id);
@@ -82,6 +82,6 @@ export async function signInWithCpf(rawCpf: string, password: string) {
     throw await fail();
   }
   await clearAttempts(`login:${hash}`);
-  if (user.role === "CLIENT" && isAdminCpf(cpf)) return db.user.update({ where: { id: user.id }, data: { role: "ADMIN" } });
+  if (user.role === "USER" && isAdminCpf(cpf)) return db.user.update({ where: { id: user.id }, data: { role: "ADMIN" } });
   return user;
 }

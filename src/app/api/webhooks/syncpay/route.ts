@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     throw e;
   }
   const ids = webhookChargeIds(payload);
-  const payments = ids.length ? await db.subscriptionPayment.findMany({ where: { providerId: { in: ids }, status: "PENDING" }, select: { id: true } }) : [];
+  const payments = ids.length ? await db.payment.findMany({ where: { providerId: { in: ids }, status: "PENDING" }, select: { id: true } }) : [];
   for (const p of payments) await confirmPayment(p.id).catch((e) => console.error("[syncpay] conferir", e)); // a verificação periódica tenta de novo
   return NextResponse.json({ ok: true });
 }

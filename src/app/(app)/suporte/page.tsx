@@ -17,7 +17,7 @@ export default async function SupportPage() {
   const [tickets, settings] = await Promise.all([db.supportTicket.findMany({ where: { userId: user.id }, orderBy: { updatedAt: "desc" } }), getSettings()]);
   return (
     <div className="space-y-4">
-      <PageTitle title="Suporte" subtitle="Fale com a equipe da HoraLimp.">
+      <PageTitle title="Suporte" subtitle="Fale com a equipe do Diária Paga.">
         <Link href="/suporte/novo" className={buttonClass("primary", "sm")}>Novo chamado</Link>
       </PageTitle>
       {settings.supportWhatsapp && <p className="text-sm text-muted">Também atendemos pelo WhatsApp {settings.supportWhatsapp}.</p>}

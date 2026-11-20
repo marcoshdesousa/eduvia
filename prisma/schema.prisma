@@ -1,5 +1,6 @@
-// HoraLimp — marketplace de profissionais de limpeza residencial.
-// Cliente usa de graça; o profissional paga a assinatura mensal (R$ 15,85). A limpeza é paga direto ao profissional.
+// Diária Paga — plataforma de serviços por diária (diarista, pedreiro, cuidador, babá, motorista, eletricista…).
+// Quem contrata usa de graça. Quem oferece serviço paga um plano mensal (Básico R$ 6,85 ou Completo R$ 15,85).
+// O serviço é pago direto ao prestador (dinheiro, Pix ou cartão dele): a Diária Paga não recebe esse valor.
 
 generator client {
   provider = "prisma-client"
@@ -10,54 +11,53 @@ datasource db {
   provider = "postgresql"
 }
 
-// ───────────────────────── Contas (Better Auth + campos da HoraLimp) ─────────────────────────
+// ───────────────────────── Contas ─────────────────────────
 
 enum Role {
-  CLIENT
-  PRO
+  USER
   ADMIN
 }
 
+/// Toda conta pode contratar. Quem também oferece serviço tem um ProviderProfile.
 model User {
   id            String   @id
   name          String
-  /// e-mail técnico interno exigido pelo Better Auth (derivado de um código aleatório; nunca exibido nem usado para envio)
+  /// e-mail técnico interno exigido pelo Better Auth (aleatório; nunca exibido nem usado)
   email         String   @unique
   emailVerified Boolean  @default(false)
   image         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  role      Role      @default(CLIENT)
-  /// CPF guardado de dois jeitos: código (HMAC) para login e para impedir CPF repetido, e criptografado (AES-GCM).
-  cpfHash   String    @unique
-  cpfSealed String
-  /// conta bloqueada pelo admin (não entra)
-  blockedAt DateTime?
-  blockReason String?
-  acceptedTermsAt DateTime @default(now())
+  role            Role      @default(USER)
+  cpfHash         String    @unique
+  cpfSealed       String
+  blockedAt       DateTime?
+  blockReason     String?
+  acceptedTermsAt DateTime  @default(now())
 
-  sessions      Session[]
-  accounts      Account[]
-  pro           ProfessionalProfile?
-  addresses     Address[]
-  clientBookings Booking[]          @relation("ClientBookings")
-  favorites     Favorite[]         @relation("FavoriteClient")
-  messages      Message[]
-  reviewsGiven  Review[]           @relation("ReviewAuthor")
-  reviewsGot    Review[]           @relation("ReviewTarget")
-  reports       Report[]           @relation("Reporter")
-  reportedIn    Report[]           @relation("Reported")
-  blocks        Block[]            @relation("Blocker")
-  blockedBy     Block[]            @relation("Blocked")
-  tickets       SupportTicket[]
-  notifications Notification[]
-  pushSubs      PushSubscription[]
-  statusChanges BookingStatusHistory[]
-  auditLogs     AuditLog[]
-  resets        PasswordReset[]
+  sessions       Session[]
+  accounts       Account[]
+  provider       ProviderProfile?
+  addresses      Address[]
+  clientBookings Booking[]              @relation("ClientBookings")
+  favorites      Favorite[]
+  messages       Message[]
+  reviewsGiven   Review[]               @relation("ReviewAuthor")
+  reviewsGot     Review[]               @relation("ReviewTarget")
+  reports        Report[]               @relation("Reporter")
+  reportedIn     Report[]               @relation("Reported")
+  blocks         Block[]                @relation("Blocker")
+  blockedBy      Block[]                @relation("Blocked")
+  tickets        SupportTicket[]
+  notifications  Notification[]
+  pushSubs       PushSubscription[]
+  statusChanges  BookingStatusHistory[]
+  auditLogs      AuditLog[]
+  resets         PasswordReset[]
+  payments       Payment[]
 
-  @@index([role, createdAt])
+  @@index([createdAt])
   @@map("user")
 }
 
@@ -108,7 +108,6 @@ model Verification {
   @@map("verification")
 }
 
-/// Link de troca de senha gerado pelo admin depois de confirmar a identidade no suporte (a conta não tem e-mail).
 model PasswordReset {
   id        String    @id @default(cuid())
   userId    String
@@ -120,66 +119,108 @@ model PasswordReset {
   createdAt DateTime  @default(now())
 }
 
-// ───────────────────────── Profissional ─────────────────────────
+/// Registro permanente por CPF (fica mesmo se a conta for apagada): teste grátis já usado e penalidade do cliente.
+model CpfLedger {
+  cpfHash          String    @id
+  trialStartedAt   DateTime?
+  /// cliente que não estava no endereço no Contrate rápido: fica sem contratar até esta data (ou paga a taxa)
+  clientBlockedUntil DateTime?
+  clientBlockReason  String?
+  updatedAt        DateTime  @updatedAt
+}
 
-enum ProStatus {
-  INCOMPLETE
-  PENDING
-  APPROVED
-  REJECTED
+// ───────────────────────── Prestador ─────────────────────────
+
+enum ProviderStatus {
+  ACTIVE
   SUSPENDED
 }
 
-model ProfessionalProfile {
-  id          String    @id @default(cuid())
-  userId      String    @unique
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  birthDate   DateTime  @db.Date
-  /// WhatsApp (só dígitos, criptografado): só a HoraLimp vê; nunca aparece para clientes
-  whatsappSealed String
-  photoKey    String?
-  bio         String?
-  /// preço por hora em centavos (livre; definido pelo profissional)
-  hourlyCents Int?
-  services    String[]
-  status      ProStatus @default(INCOMPLETE)
-  statusReason String?
-  /// pausa novas solicitações (continua com as já aceitas)
-  paused      Boolean   @default(false)
-  ratingSum   Int       @default(0)
-  ratingCount Int       @default(0)
-  completedCount Int    @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+enum Plan {
+  BASIC
+  FULL
+}
 
-  areas        ServiceArea[]
+model ProviderProfile {
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  birthDate      DateTime       @db.Date
+  /// telefone (criptografado): só a plataforma vê (verificação e cobrança Pix); nunca aparece no app
+  phoneSealed    String
+  photoKey       String?
+  bio            String?
+  instagram      String?
+  status         ProviderStatus @default(ACTIVE)
+  statusReason   String?
+  /// pausa: some da vitrine e do Contrate rápido
+  paused         Boolean        @default(false)
+  /// recebe chamados do Contrate rápido agora (botão "Disponível")
+  quickOn        Boolean        @default(false)
+  /// não aceitou e não chegou em 2 horas: fica fora do Contrate rápido até esta data
+  quickBannedUntil DateTime?
+  ratingSum      Int            @default(0)
+  ratingCount    Int            @default(0)
+  completedCount Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  services     ProviderService[]
+  places       ProviderPlace[]
   availability AvailabilityRule[]
+  posts        Post[]
   bookings     Booking[]
   favoritedBy  Favorite[]
   subscription Subscription?
-  payments     SubscriptionPayment[]
-  approvals    ProfessionalApproval[]
+  offers       QuickOffer[]
 
   @@index([status])
 }
 
-/// Município onde o profissional atende (UF + nome, da lista oficial).
-model ServiceArea {
-  id    String              @id @default(cuid())
-  proId String
-  pro   ProfessionalProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
-  uf    String
-  city  String
-
-  @@unique([proId, uf, city])
-  @@index([uf, city])
+enum PriceUnit {
+  DIARIA
+  HORA
+  SERVICO
 }
 
-/// Horário de atendimento: dia da semana (0 = domingo) e faixa em minutos desde 0h.
-model AvailabilityRule {
-  id       String              @id @default(cuid())
+/// Um serviço que o prestador oferece (categoria + preço + unidade).
+model ProviderService {
+  id          String          @id @default(cuid())
+  proId       String
+  pro         ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  category    String
+  priceCents  Int
+  unit        PriceUnit       @default(DIARIA)
+  description String?
+  createdAt   DateTime        @default(now())
+
+  @@unique([proId, category])
+  @@index([category, priceCents])
+}
+
+/// Endereço do prestador no mapa (de onde ele é "puxado" para quem está perto). Básico: 1; Completo: 3 + pacotes.
+model ProviderPlace {
+  id       String          @id @default(cuid())
   proId    String
-  pro      ProfessionalProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  pro      ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  label    String
+  district String?
+  city     String
+  uf       String
+  lat      Float
+  lng      Float
+  /// fora do limite do plano (ex.: voltou para o Básico): fica guardado, mas não conta
+  active   Boolean         @default(true)
+  createdAt DateTime       @default(now())
+
+  @@index([uf, city])
+  @@index([lat, lng])
+}
+
+model AvailabilityRule {
+  id       String          @id @default(cuid())
+  proId    String
+  pro      ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
   weekday  Int
   startMin Int
   endMin   Int
@@ -187,30 +228,41 @@ model AvailabilityRule {
   @@index([proId, weekday])
 }
 
-/// Histórico da verificação (quem aprovou/reprovou/suspendeu e por quê).
-model ProfessionalApproval {
-  id        String              @id @default(cuid())
+/// Foto do portfólio (até 8 por prestador).
+model Post {
+  id        String          @id @default(cuid())
   proId     String
-  pro       ProfessionalProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
-  status    ProStatus
-  reason    String?
-  adminId   String?
-  createdAt DateTime            @default(now())
+  pro       ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  imageKey  String
+  caption   String?
+  createdAt DateTime        @default(now())
 
   @@index([proId, createdAt])
+  @@index([createdAt])
 }
 
-// ───────────────────────── Assinatura do profissional (R$ 15,85/mês, Pix SyncPay) ─────────────────────────
+// ───────────────────────── Planos e pagamentos (Pix SyncPay) ─────────────────────────
 
 model Subscription {
-  id               String              @id @default(cuid())
-  proId            String              @unique
-  pro              ProfessionalProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
-  /// assinatura vale até aqui (vencida = fora da vitrine)
+  id               String          @id @default(cuid())
+  proId            String          @unique
+  pro              ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  /// plano em vigor e pacotes de +2 endereços (só no Completo)
+  plan             Plan            @default(FULL)
+  packs            Int             @default(0)
+  /// o que vale a partir da próxima cobrança (mudança de plano ou retirada de pacotes)
+  nextPlan         Plan?
+  nextPacks        Int?
+  trial            Boolean         @default(false)
   currentPeriodEnd DateTime?
-  canceledAt       DateTime?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+enum PaymentKind {
+  SUBSCRIPTION
+  UPGRADE
+  UNLOCK
 }
 
 enum PaymentStatus {
@@ -219,26 +271,26 @@ enum PaymentStatus {
   FAILED
 }
 
-model SubscriptionPayment {
-  id          String              @id @default(cuid())
-  proId       String
-  pro         ProfessionalProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+model Payment {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        PaymentKind
   amountCents Int
-  status      PaymentStatus       @default(PENDING)
+  status      PaymentStatus @default(PENDING)
   /// "SYNCPAY" (Pix) ou "MANUAL" (liberado pelo admin)
-  provider    String              @default("SYNCPAY")
-  providerId  String?             @unique
+  provider    String        @default("SYNCPAY")
+  providerId  String?       @unique
   pixCode     String?
-  periodStart DateTime?
-  periodEnd   DateTime?
+  /// o que este pagamento libera (plano, pacotes, período)
+  meta        Json?
   paidAt      DateTime?
-  createdAt   DateTime            @default(now())
+  createdAt   DateTime      @default(now())
 
-  @@index([proId, createdAt])
+  @@index([userId, createdAt])
   @@index([status, createdAt])
 }
 
-/// Avisos (webhooks) recebidos: guardados uma vez só (idempotência) e para auditoria.
 model ProviderEvent {
   id        String   @id @default(cuid())
   provider  String
@@ -249,10 +301,11 @@ model ProviderEvent {
 
 // ───────────────────────── Contratação ─────────────────────────
 
+/// Endereços salvos do cliente.
 model Address {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   clientId   String
-  client     User      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client     User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
   label      String
   cep        String?
   street     String
@@ -263,15 +316,20 @@ model Address {
   uf         String
   lat        Float?
   lng        Float?
-  lastUsedAt DateTime  @default(now())
-  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   @@index([clientId, lastUsedAt])
 }
 
+enum BookingMode {
+  NORMAL
+  QUICK
+}
+
 enum BookingStatus {
-  DRAFT
-  READY
+  SEARCHING
+  NO_PROVIDER
   WAITING_PRO
   ACCEPTED
   REFUSED
@@ -282,27 +340,33 @@ enum BookingStatus {
   COMPLETED
   CANCELED_CLIENT
   CANCELED_PRO
+  NO_SHOW_PRO
+  NO_SHOW_CLIENT
   IN_REVIEW
 }
 
-/// Solicitação e contratação (vira contratação quando o profissional aceita).
 model Booking {
-  id           String              @id @default(cuid())
-  clientId     String
-  client       User                @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
-  proId        String
-  pro          ProfessionalProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
-  status       BookingStatus       @default(WAITING_PRO)
-  services     String[]
-  hours        Int
-  scheduledAt  DateTime
-  /// preço por hora no momento do pedido (centavos) e o valor estimado = preço × horas (pago direto ao profissional)
-  hourlyCents  Int
-  estimateCents Int
-  notes        String?
-  homeSize     String?
-  rooms        Int?
-  // endereço (só cliente, profissional que aceitou e admin veem)
+  id            String           @id @default(cuid())
+  mode          BookingMode      @default(NORMAL)
+  clientId      String
+  client        User             @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
+  /// no Contrate rápido fica vazio até alguém aceitar
+  proId         String?
+  pro           ProviderProfile? @relation(fields: [proId], references: [id], onDelete: Cascade)
+  status        BookingStatus
+  category      String
+  unit          PriceUnit
+  quantity      Int
+  unitPriceCents Int?
+  estimateCents Int?
+  /// Contrate rápido: o máximo que o cliente quer gastar
+  maxCents      Int?
+  /// valor que o prestador informou ter recebido ao concluir (vai para o financeiro dele)
+  finalCents    Int?
+  scheduledAt   DateTime
+  /// Contrate rápido: precisa chegar até aqui (2 horas depois do aceite)
+  arriveBy      DateTime?
+  notes         String?
   addrStreet     String
   addrNumber     String?
   addrComplement String?
@@ -313,38 +377,66 @@ model Booking {
   addrReference  String?
   lat            Float?
   lng            Float?
-  /// forma de pagamento declarada (a HoraLimp não processa): CASH ou PIX
-  payMethod    String?
-  expiresAt    DateTime?
-  acceptedAt   DateTime?
-  completedAt  DateTime?
-  canceledAt   DateTime?
-  cancelReason String?
-  /// endereço apagado depois do prazo (privacidade)
+  payMethod     String?
+  expiresAt     DateTime?
+  acceptedAt    DateTime?
+  arrivedAt     DateTime?
+  completedAt   DateTime?
+  canceledAt    DateTime?
+  cancelReason  String?
   addressPurgedAt DateTime?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   history  BookingStatusHistory[]
   messages Message[]
   reviews  Review[]
   reports  Report[]
+  offers   QuickOffer[]
 
   @@index([clientId, createdAt])
   @@index([proId, status, scheduledAt])
   @@index([status, expiresAt])
+  @@index([mode, status])
+}
+
+enum OfferState {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  LOST
+}
+
+/// Chamado do Contrate rápido enviado para um prestador (toca no celular dele).
+model QuickOffer {
+  id          String          @id @default(cuid())
+  bookingId   String
+  booking     Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  proId       String
+  pro         ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  wave        Int
+  distanceKm  Float
+  priceCents  Int
+  state       OfferState      @default(PENDING)
+  sentAt      DateTime        @default(now())
+  expiresAt   DateTime
+  respondedAt DateTime?
+
+  @@unique([bookingId, proId])
+  @@index([proId, state, expiresAt])
 }
 
 model BookingStatusHistory {
-  id        String        @id @default(cuid())
+  id        String         @id @default(cuid())
   bookingId String
-  booking   Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking   Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   from      BookingStatus?
   to        BookingStatus
   byUserId  String?
-  by        User?         @relation(fields: [byUserId], references: [id], onDelete: SetNull)
+  by        User?          @relation(fields: [byUserId], references: [id], onDelete: SetNull)
   reason    String?
-  createdAt DateTime      @default(now())
+  createdAt DateTime       @default(now())
 
   @@index([bookingId, createdAt])
 }
@@ -353,31 +445,32 @@ enum MessageKind {
   TEXT
   AUDIO
   IMAGE
+  VIDEO
 }
 
 model Message {
-  id         String      @id @default(cuid())
-  bookingId  String
-  booking    Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  senderId   String
-  sender     User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  kind       MessageKind
-  text       String?
-  fileKey    String?
-  mime       String?
+  id          String      @id @default(cuid())
+  bookingId   String
+  booking     Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  senderId    String
+  sender      User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  kind        MessageKind
+  text        String?
+  fileKey     String?
+  mime        String?
   durationSec Int?
-  readAt     DateTime?
-  createdAt  DateTime    @default(now())
+  readAt      DateTime?
+  createdAt   DateTime    @default(now())
 
   @@index([bookingId, createdAt])
 }
 
 model Favorite {
   clientId  String
-  client    User                @relation("FavoriteClient", fields: [clientId], references: [id], onDelete: Cascade)
+  client    User            @relation(fields: [clientId], references: [id], onDelete: Cascade)
   proId     String
-  pro       ProfessionalProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
-  createdAt DateTime            @default(now())
+  pro       ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now())
 
   @@id([clientId, proId])
 }
@@ -417,6 +510,7 @@ model Report {
   booking    Booking?     @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   messageId  String?
   reviewId   String?
+  postId     String?
   reason     String
   details    String?
   status     ReportStatus @default(OPEN)
@@ -509,7 +603,6 @@ model AuditLog {
   @@index([targetType, targetId])
 }
 
-/// Configurações da plataforma (valor JSON), editadas no admin.
 model PlatformSetting {
   key       String   @id
   value     Json

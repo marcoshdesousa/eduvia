@@ -1,5 +1,5 @@
 {
-  "name": "horalimp",
+  "name": "diariapaga",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "postinstall": "prisma generate",
     "test:e2e": "playwright test",
-    "admin": "tsx scripts/make-admin.ts"
+    "admin": "echo use ADMIN_CPF"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1142.0",

@@ -14,6 +14,7 @@ export function ReportButton({
   bookingId,
   messageId,
   reviewId,
+  postId,
   label = "Denunciar",
   small,
 }: {
@@ -23,6 +24,7 @@ export function ReportButton({
   bookingId?: string;
   messageId?: string;
   reviewId?: string;
+  postId?: string;
   label?: string;
   small?: boolean;
 }) {
@@ -40,6 +42,7 @@ export function ReportButton({
         {bookingId && <input type="hidden" name="bookingId" value={bookingId} />}
         {messageId && <input type="hidden" name="messageId" value={messageId} />}
         {reviewId && <input type="hidden" name="reviewId" value={reviewId} />}
+        {postId && <input type="hidden" name="postId" value={postId} />}
         <Select name="reason" required defaultValue="" aria-label="Motivo da denúncia">
           <option value="" disabled>Escolha o motivo</option>
           {reasons.map((r) => <option key={r}>{r}</option>)}

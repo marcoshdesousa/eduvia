@@ -9,7 +9,7 @@ export async function chatAccess(bookingId: string, user: { id: string; role: st
   const as = roleIn(b, user);
   if (!as) return null;
   const open = chatOpen(b);
-  const other = as === "CLIENT" ? b.pro.userId : as === "PRO" ? b.clientId : null;
+  const other = as === "CLIENT" ? (b.pro?.userId ?? null) : as === "PRO" ? b.clientId : null;
   const blocked = other ? !!(await db.block.findFirst({ where: { OR: [{ blockerId: user.id, blockedId: other }, { blockerId: other, blockedId: user.id }] } })) : false;
   return { booking: b, as, other, read: open.read, write: open.write && as !== "ADMIN" && !blocked, blocked };
 }

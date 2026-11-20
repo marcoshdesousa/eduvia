@@ -31,3 +31,41 @@ export async function logout() {
   await auth.api.signOut({ headers: await headers() });
   redirect("/");
 }
+
+/**
+ * A pessoa apaga a própria conta. O CPF continua guardado (sem nome) na lista de CPFs para não ganhar
+ * outro teste grátis e não escapar de penalidade criando a conta de novo.
+ */
+export async function deleteAccount(_: ActionResult, d: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  if (user.role === "ADMIN") return { error: "A conta de administração não pode ser apagada por aqui." };
+  if (String(d.get("confirm") ?? "").trim().toUpperCase() !== "APAGAR") return { error: "Digite APAGAR para confirmar." };
+  const { signInWithCpf } = await import("@/lib/accounts");
+  const { openCpf } = await import("@/lib/cpf");
+  const cpf = openCpf(user.cpfSealed);
+  try {
+    if (!cpf) throw new Error();
+    await signInWithCpf(cpf, String(d.get("password") ?? ""));
+  } catch {
+    return { error: "Senha incorreta." };
+  }
+  const { ACTIVE_STATUSES } = await import("@/lib/domain");
+  const busy = await db.booking.count({
+    where: { status: { in: ["SEARCHING", "WAITING_PRO", ...ACTIVE_STATUSES, "IN_REVIEW"] }, OR: [{ clientId: user.id }, ...(user.provider ? [{ proId: user.provider.id }] : [])] },
+  });
+  if (busy) return { error: "Você tem pedidos em aberto ou em andamento. Conclua ou cancele antes de apagar a conta." };
+  const { deleteObject } = await import("@/lib/storage");
+  const files = user.provider ? [user.provider.photoKey, ...(await db.post.findMany({ where: { proId: user.provider.id }, select: { imageKey: true } })).map((p) => p.imageKey)] : [];
+  // prestadores que esta pessoa avaliou: a nota deles é recalculada sem as avaliações dela
+  const reviewed = await db.review.findMany({ where: { authorId: user.id, booking: { proId: { not: null } } }, select: { booking: { select: { proId: true } } } });
+  await db.cpfLedger.upsert({ where: { cpfHash: user.cpfHash }, create: { cpfHash: user.cpfHash }, update: {} });
+  await db.user.delete({ where: { id: user.id } });
+  for (const proId of new Set(reviewed.map((r) => r.booking.proId!))) {
+    const pro = await db.providerProfile.findUnique({ where: { id: proId }, select: { userId: true } });
+    if (!pro) continue;
+    const agg = await db.review.aggregate({ where: { targetId: pro.userId, booking: { proId } }, _sum: { stars: true }, _count: true });
+    await db.providerProfile.update({ where: { id: proId }, data: { ratingSum: agg._sum.stars ?? 0, ratingCount: agg._count } });
+  }
+  for (const k of files) if (k) await deleteObject(k).catch(() => {});
+  redirect("/?conta=apagada");
+}

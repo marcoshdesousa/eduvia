@@ -1,106 +1,136 @@
 import { describe, expect, it } from "vitest";
 import {
-  SUBSCRIPTION_CENTS,
+  CATEGORIES,
+  MAX_PACKS,
+  PLANS,
   ageOn,
-  canReview,
-  chatOpen,
+  containsPhone,
+  distanceKm,
   estimateCents,
-  fitsAvailability,
   formatBRL,
-  nextSteps,
+  monthlyCents,
+  normalizeInstagram,
   parseBRL,
   parseDateOnly,
-  proSeesAddress,
-  proVisible,
-  shortName,
+  placesLimit,
+  providerVisible,
+  quickEligible,
+  rankProviders,
+  rankQuick,
   transitionRule,
+  upgradeCents,
 } from "./domain";
 
-describe("regras comerciais", () => {
-  it("assinatura do profissional: R$ 15,00 + R$ 0,85 = R$ 15,85", () => {
-    expect(SUBSCRIPTION_CENTS).toBe(1585);
-    expect(formatBRL(SUBSCRIPTION_CENTS).replace(/\s/g, " ")).toBe("R$ 15,85");
+const brl = (c: number) => formatBRL(c).replace(/\s/g, " ");
+
+describe("planos do prestador", () => {
+  it("Completo R$ 15,85 = R$ 10,00 + R$ 5,85; Básico R$ 6,85 = R$ 3,00 + R$ 3,85", () => {
+    expect(brl(PLANS.FULL.priceCents)).toBe("R$ 15,85");
+    expect(PLANS.FULL.platformCents + PLANS.FULL.feesCents).toBe(1585);
+    expect(PLANS.FULL.platformCents).toBe(1000);
+    expect(brl(PLANS.BASIC.priceCents)).toBe("R$ 6,85");
+    expect(PLANS.BASIC.platformCents + PLANS.BASIC.feesCents).toBe(685);
+    expect(PLANS.BASIC.platformCents).toBe(300);
   });
-  it("valor estimado = preço por hora × horas (de 1 a 12)", () => {
-    expect(estimateCents(2500, 4)).toBe(10_000); // exemplo do documento: R$ 25 × 4 h = R$ 100
-    expect(estimateCents(3333, 12)).toBe(39_996);
-    expect(() => estimateCents(2500, 0)).toThrow();
-    expect(() => estimateCents(2500, 13)).toThrow();
-    expect(() => estimateCents(2500, 2.5)).toThrow();
+  it("endereços: Básico 1, Completo 3, cada pacote de R$ 3,85 dá mais 2, no máximo 11", () => {
+    expect(placesLimit("BASIC", 0)).toBe(1);
+    expect(placesLimit("BASIC", 3)).toBe(1); // Básico não tem pacote
+    expect(placesLimit("FULL", 0)).toBe(3);
+    expect(placesLimit("FULL", 1)).toBe(5);
+    expect(MAX_PACKS).toBe(4);
+    expect(placesLimit("FULL", 4)).toBe(11);
+    expect(placesLimit("FULL", 9)).toBe(11);
   });
-  it("lê preço digitado em reais", () => {
-    expect(parseBRL("25")).toBe(2500);
-    expect(parseBRL("25,50")).toBe(2550);
-    expect(parseBRL("R$ 1.200,00")).toBe(120_000);
-    expect(parseBRL("abc")).toBeNull();
+  it("valor do mês soma os pacotes", () => {
+    expect(monthlyCents("FULL", 0)).toBe(1585);
+    expect(monthlyCents("FULL", 1)).toBe(1970);
+    expect(monthlyCents("FULL", 4)).toBe(1585 + 4 * 385);
+    expect(monthlyCents("BASIC", 2)).toBe(685);
+  });
+  it("subir para o Completo no meio do mês paga só a diferença dos dias que faltam", () => {
+    const now = new Date("2026-11-20T12:00:00Z");
+    expect(upgradeCents(new Date("2026-12-05T12:00:00Z"), now)).toBe(450); // 15 dias de 9,00
+    expect(upgradeCents(null, now)).toBe(1585);
+    expect(upgradeCents(new Date("2026-11-20T13:00:00Z"), now)).toBe(100); // mínimo R$ 1,00
   });
 });
 
-describe("idade do profissional (18 anos completos)", () => {
-  const birth = parseDateOnly("2008-03-15")!;
-  it("um dia antes do aniversário de 18: 17", () => expect(ageOn(birth, new Date(Date.UTC(2026, 2, 14)))).toBe(17));
-  it("no dia do aniversário de 18: 18", () => expect(ageOn(birth, new Date(Date.UTC(2026, 2, 15)))).toBe(18));
-  it("data inválida é recusada", () => {
-    expect(parseDateOnly("2008-02-30")).toBeNull();
-    expect(parseDateOnly("15/03/2008")).toBeNull();
-  });
-});
-
-describe("vitrine", () => {
+describe("prestador visível e Contrate rápido", () => {
   const future = new Date(Date.now() + 86_400_000);
-  const base = { status: "APPROVED" as const, paused: false, hourlyCents: 2500, subscriptionEnd: future };
-  it("aparece só aprovado, com assinatura em dia, sem pausa e com preço", () => {
-    expect(proVisible(base)).toBe(true);
-    expect(proVisible({ ...base, status: "PENDING" })).toBe(false);
-    expect(proVisible({ ...base, subscriptionEnd: new Date(Date.now() - 1000) })).toBe(false);
-    expect(proVisible({ ...base, subscriptionEnd: null })).toBe(false);
-    expect(proVisible({ ...base, paused: true })).toBe(false);
-    expect(proVisible({ ...base, hourlyCents: null })).toBe(false);
-    expect(proVisible({ ...base, blocked: true })).toBe(false);
+  const base = { status: "ACTIVE" as const, paused: false, photoKey: "f", subscriptionEnd: future, services: 1, places: 1 };
+  it("aparece com plano em dia, foto, serviço e endereço", () => {
+    expect(providerVisible(base)).toBe(true);
+    expect(providerVisible({ ...base, subscriptionEnd: new Date(Date.now() - 1) })).toBe(false);
+    expect(providerVisible({ ...base, photoKey: null })).toBe(false);
+    expect(providerVisible({ ...base, services: 0 })).toBe(false);
+    expect(providerVisible({ ...base, places: 0 })).toBe(false);
+    expect(providerVisible({ ...base, status: "SUSPENDED" })).toBe(false);
   });
-  it("nome curto na vitrine", () => expect(shortName("Maria da Silva Souza")).toBe("Maria S."));
+  it("Contrate rápido: precisa estar Disponível e sem penalidade", () => {
+    expect(quickEligible({ ...base, quickOn: true, quickBannedUntil: null })).toBe(true);
+    expect(quickEligible({ ...base, quickOn: false, quickBannedUntil: null })).toBe(false);
+    expect(quickEligible({ ...base, quickOn: true, quickBannedUntil: future })).toBe(false);
+  });
+  it("vitrine: Completo primeiro, depois quem cabe no valor, depois o mais perto", () => {
+    const list = [
+      { id: "basico-perto", plan: "BASIC" as const, distanceKm: 0.5, priceCents: 10000 },
+      { id: "completo-longe", plan: "FULL" as const, distanceKm: 8, priceCents: 12000 },
+      { id: "completo-perto-caro", plan: "FULL" as const, distanceKm: 1, priceCents: 30000 },
+      { id: "completo-perto", plan: "FULL" as const, distanceKm: 2, priceCents: 15000 },
+    ];
+    expect(rankProviders(list, 20000).map((p) => p.id)).toEqual(["completo-perto", "completo-longe", "completo-perto-caro", "basico-perto"]);
+  });
+  it("Contrate rápido: mais perto primeiro e, perto, quem fez menos serviços", () => {
+    const list = [
+      { id: "longe", distanceKm: 12, recentJobs: 0, plan: "FULL" as const },
+      { id: "perto-ocupado", distanceKm: 1, recentJobs: 9, plan: "FULL" as const },
+      { id: "perto-livre", distanceKm: 1.8, recentJobs: 1, plan: "FULL" as const },
+    ];
+    expect(rankQuick(list).map((p) => p.id)).toEqual(["perto-livre", "perto-ocupado", "longe"]);
+  });
+  it("distância em km", () => {
+    // Parauapebas → Marabá ~ 125 km em linha reta
+    const d = distanceKm({ lat: -6.0675, lng: -49.9022 }, { lat: -5.3686, lng: -49.1178 });
+    expect(d).toBeGreaterThan(110);
+    expect(d).toBeLessThan(130);
+  });
 });
 
-describe("solicitação e contratação", () => {
-  it("só o profissional aceita ou recusa; o cliente não confirma sozinho", () => {
-    expect(transitionRule("WAITING_PRO", "ACCEPTED", "PRO")).toBeTruthy();
-    expect(transitionRule("WAITING_PRO", "ACCEPTED", "CLIENT")).toBeNull();
-    expect(transitionRule("WAITING_PRO", "REFUSED", "PRO")).toBeTruthy();
-    expect(transitionRule("WAITING_PRO", "EXPIRED", "SYSTEM")).toBeTruthy();
+describe("proibido telefone / WhatsApp", () => {
+  it("bloqueia telefone em vários formatos", () => {
+    for (const t of ["me chama 94 99123-4567", "(94) 99123 4567", "+55 94 991234567", "991234567", "9 9123-4567", "chama no zap", "manda no WhatsApp", "nove nove um dois tres quatro cinco seis sete"]) expect(containsPhone(t), t).toBe(true);
   });
-  it("cancelar depois do aceite exige motivo; antes, não", () => {
-    expect(transitionRule("WAITING_PRO", "CANCELED_CLIENT", "CLIENT")?.reason).toBeFalsy();
-    expect(transitionRule("ACCEPTED", "CANCELED_CLIENT", "CLIENT")?.reason).toBe(true);
-    expect(transitionRule("ACCEPTED", "CANCELED_PRO", "PRO")?.reason).toBe(true);
+  it("libera endereço, CEP, valores e datas", () => {
+    for (const t of ["Rua 10, número 550, CEP 68515-000", "Cobro R$ 150,00 a diária", "Chego às 14:30 do dia 21/11/2026", "Apto 1203, bloco 4", "Faço 8 horas por dia"]) expect(containsPhone(t), t).toBe(false);
   });
-  it("andamento do serviço segue a ordem", () => {
-    expect(nextSteps("ACCEPTED", "PRO").map((s) => s.to)).toEqual(["ON_THE_WAY", "ARRIVED", "STARTED", "CANCELED_PRO"]);
-    expect(transitionRule("ACCEPTED", "COMPLETED", "PRO")).toBeNull();
-    expect(transitionRule("STARTED", "COMPLETED", "PRO")).toBeTruthy();
-    expect(transitionRule("COMPLETED", "CANCELED_CLIENT", "CLIENT")).toBeNull();
+  it("Instagram", () => {
+    expect(normalizeInstagram("@Joao.Pintor")).toBe("joao.pintor");
+    expect(normalizeInstagram("https://instagram.com/joao_pintor/")).toBe("joao_pintor");
+    expect(normalizeInstagram("joão pintor")).toBeNull();
   });
-  it("chat só depois do aceite", () => {
-    const b = { status: "WAITING_PRO" as const, acceptedAt: null, completedAt: null, canceledAt: null };
-    expect(chatOpen(b)).toEqual({ read: false, write: false });
-    expect(chatOpen({ ...b, status: "ACCEPTED", acceptedAt: new Date() })).toEqual({ read: true, write: true });
-    const old = new Date(Date.now() - 10 * 86_400_000);
-    expect(chatOpen({ status: "COMPLETED", acceptedAt: old, completedAt: old, canceledAt: null })).toEqual({ read: true, write: false });
+});
+
+describe("serviços e contratação", () => {
+  it("tem as categorias pedidas", () => {
+    const slugs = CATEGORIES.map((c) => c.slug);
+    for (const s of ["diarista", "pedreiro", "cuidador-idoso", "baba", "compras", "motorista", "pintor", "encanador", "eletricista"]) expect(slugs).toContain(s);
   });
-  it("endereço para o profissional só depois do aceite", () => {
-    expect(proSeesAddress({ status: "WAITING_PRO", acceptedAt: null, completedAt: null, canceledAt: null })).toBe(false);
-    expect(proSeesAddress({ status: "ACCEPTED", acceptedAt: new Date(), completedAt: null, canceledAt: null })).toBe(true);
-    expect(proSeesAddress({ status: "CANCELED_CLIENT", acceptedAt: new Date(), completedAt: null, canceledAt: new Date() })).toBe(false);
+  it("valor estimado = preço × quantidade", () => {
+    expect(estimateCents(12000, 3, "DIARIA")).toBe(36000);
+    expect(() => estimateCents(12000, 13, "HORA")).toThrow();
+    expect(parseBRL("R$ 1.200,50")).toBe(120050);
   });
-  it("avaliação só de serviço concluído, uma vez", () => {
-    expect(canReview({ status: "COMPLETED" }, false)).toBe(true);
-    expect(canReview({ status: "COMPLETED" }, true)).toBe(false);
-    expect(canReview({ status: "ACCEPTED" }, false)).toBe(false);
+  it("Contrate rápido: só prestador aceita; não chegou em 2 h vira 'não chegou'", () => {
+    expect(transitionRule("SEARCHING", "ACCEPTED", "PRO", "QUICK")).toBeTruthy();
+    expect(transitionRule("SEARCHING", "ACCEPTED", "CLIENT", "QUICK")).toBeNull();
+    expect(transitionRule("WAITING_PRO", "ACCEPTED", "PRO", "QUICK")).toBeNull();
+    expect(transitionRule("ACCEPTED", "NO_SHOW_PRO", "SYSTEM", "QUICK")).toBeTruthy();
+    expect(transitionRule("ARRIVED", "NO_SHOW_CLIENT", "PRO", "QUICK")).toBeTruthy();
+    expect(transitionRule("ARRIVED", "NO_SHOW_CLIENT", "PRO", "NORMAL")).toBeNull();
   });
-  it("agenda: o horário pedido precisa caber na faixa do dia", () => {
-    const rules = [{ weekday: 1, startMin: 8 * 60, endMin: 17 * 60 }];
-    expect(fitsAvailability(rules, 1, 8 * 60, 4)).toBe(true);
-    expect(fitsAvailability(rules, 1, 14 * 60, 4)).toBe(false);
-    expect(fitsAvailability(rules, 2, 8 * 60, 1)).toBe(false);
-    expect(fitsAvailability([], 2, 8 * 60, 1)).toBe(true);
+  it("idade mínima de 18", () => {
+    const b = parseDateOnly("2008-11-21")!;
+    expect(ageOn(b, new Date(Date.UTC(2026, 10, 20)))).toBe(17);
+    expect(ageOn(b, new Date(Date.UTC(2026, 10, 21)))).toBe(18);
   });
 });

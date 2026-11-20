@@ -7,15 +7,15 @@ import { db } from "@/lib/db";
 export const getCurrentUser = cache(async () => {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
-  const user = await db.user.findUnique({ where: { id: session.user.id }, include: { pro: true } });
+  const user = await db.user.findUnique({ where: { id: session.user.id }, include: { provider: true } });
   if (!user || user.blockedAt) return null;
   return user;
 });
 
 export type CurrentUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
 
-/** Página inicial de cada tipo de conta. */
-export const homeOf = (u: { role: string }) => (u.role === "ADMIN" ? "/admin" : u.role === "PRO" ? "/painel" : "/buscar");
+/** Tela inicial de cada conta. */
+export const homeOf = (u: { role: string }) => (u.role === "ADMIN" ? "/admin" : "/inicio");
 
 export async function requireUser(next?: string) {
   const user = await getCurrentUser();
@@ -23,16 +23,11 @@ export async function requireUser(next?: string) {
   return user;
 }
 
-export async function requireClient(next?: string) {
-  const user = await requireUser(next);
-  if (user.role !== "CLIENT") redirect(homeOf(user));
-  return user;
-}
-
-export async function requirePro() {
-  const user = await requireUser();
-  if (user.role !== "PRO" || !user.pro) redirect(homeOf(user));
-  return user as typeof user & { pro: NonNullable<typeof user.pro> };
+/** Quem oferece serviço (tem perfil de prestador). Sem perfil, vai para "Seja prestador". */
+export async function requireProvider() {
+  const user = await requireUser("/painel");
+  if (!user.provider) redirect("/seja-prestador");
+  return user as typeof user & { provider: NonNullable<typeof user.provider> };
 }
 
 export async function requireAdmin() {

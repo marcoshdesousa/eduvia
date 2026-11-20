@@ -31,7 +31,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
         {t.messages.map((m) => (
           <div key={m.id} className={cn("flex", m.fromAdmin ? "justify-start" : "justify-end")}>
             <Card className={cn("max-w-[85%] py-2", m.fromAdmin ? "border-primary/40" : "bg-surface-2")}>
-              <p className="text-xs font-medium text-muted">{m.fromAdmin ? "Suporte HoraLimp" : "Você"} · {m.createdAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p>
+              <p className="text-xs font-medium text-muted">{m.fromAdmin ? "Suporte Diária Paga" : "Você"} · {m.createdAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p>
               <p className="whitespace-pre-wrap text-sm">{m.text}</p>
             </Card>
           </div>

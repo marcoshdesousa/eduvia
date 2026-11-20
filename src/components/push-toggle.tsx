@@ -36,7 +36,7 @@ export function PushToggle() {
     await fetch("/api/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub) });
     setState("on");
   };
-  if (state === "unsupported") return <p className="text-sm text-muted">Este navegador não recebe notificações. No iPhone, adicione a HoraLimp à tela de início primeiro.</p>;
+  if (state === "unsupported") return <p className="text-sm text-muted">Este navegador não recebe notificações. No iPhone, adicione o Diária Paga à tela de início primeiro (veja “Instalar o app”).</p>;
   if (state === "denied") return <p className="text-sm text-muted">As notificações estão bloqueadas nas configurações do navegador.</p>;
   return (
     <Button type="button" variant="outline" size="sm" onClick={toggle} disabled={state === "loading"}>

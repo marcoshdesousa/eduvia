@@ -13,7 +13,7 @@ function key() {
 }
 
 export function cpfHash(cpf: string) {
-  return createHmac("sha256", key()).update(`horalimp-cpf:${onlyDigits(cpf)}`).digest("hex");
+  return createHmac("sha256", key()).update(`diariapaga-cpf:${onlyDigits(cpf)}`).digest("hex");
 }
 
 export const sealCpf = (cpf: string) => sealSecret(onlyDigits(cpf));

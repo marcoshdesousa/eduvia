@@ -1,14 +1,15 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Check, CheckCheck, Clock, Loader2, Mic, Send, Square, Trash2, X } from "lucide-react";
+import { Camera, Check, CheckCheck, Clock, Loader2, Mic, Send, Square, Trash2, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type Msg = { id: string; mine: boolean; kind: "TEXT" | "AUDIO" | "IMAGE"; text: string | null; url: string | null; durationSec: number | null; createdAt: string; read: boolean; state?: "sending" | "error"; localUrl?: string };
+type Msg = { id: string; mine: boolean; kind: "TEXT" | "AUDIO" | "IMAGE" | "VIDEO"; text: string | null; url: string | null; durationSec: number | null; createdAt: string; read: boolean; state?: "sending" | "error"; localUrl?: string };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const MAX_REC = 180;
+const MAX_VIDEO = 40 * 1024 * 1024;
 
 /** Diminui a foto no aparelho antes de enviar (lado maior até 1600 px, JPEG). */
 async function shrinkImage(file: File): Promise<Blob> {
@@ -31,7 +32,7 @@ async function shrinkImage(file: File): Promise<Blob> {
   }
 }
 
-export function ChatBox({ bookingId, otherName, initialWrite }: { bookingId: string; otherName: string; initialWrite: boolean }) {
+export function ChatBox({ bookingId, otherName, initialWrite, quickReplies = [] }: { bookingId: string; otherName: string; initialWrite: boolean; quickReplies?: string[] }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [write, setWrite] = useState(initialWrite);
@@ -44,6 +45,7 @@ export function ChatBox({ bookingId, otherName, initialWrite }: { bookingId: str
   const last = useRef<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const videoInput = useRef<HTMLInputElement>(null);
 
   const scrollDown = () => requestAnimationFrame(() => list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" }));
 
@@ -87,10 +89,10 @@ export function ChatBox({ bookingId, otherName, initialWrite }: { bookingId: str
     last.current = body.message.createdAt > (last.current ?? "") ? body.message.createdAt : last.current;
   };
 
-  const sendText = async () => {
-    const t = text.trim();
+  const sendText = async (preset?: string) => {
+    const t = (preset ?? text).trim();
     if (!t) return;
-    setText("");
+    if (!preset) setText("");
     const f = new FormData();
     f.set("kind", "TEXT");
     f.set("text", t);
@@ -107,6 +109,14 @@ export function ChatBox({ bookingId, otherName, initialWrite }: { bookingId: str
     setPhoto(null);
     setText("");
     await send(f, { kind: "IMAGE", text: text.trim() || null, url: null, durationSec: null, localUrl: p.url });
+  };
+
+  const sendVideo = async (file: File) => {
+    if (file.size > MAX_VIDEO) return setError("Vídeo grande demais (máximo 40 MB, cerca de 1 minuto).");
+    const f = new FormData();
+    f.set("kind", "VIDEO");
+    f.set("file", file, file.name || "video.mp4");
+    await send(f, { kind: "VIDEO", text: null, url: null, durationSec: null, localUrl: URL.createObjectURL(file) });
   };
 
   const startRec = async () => {
@@ -153,7 +163,7 @@ export function ChatBox({ bookingId, otherName, initialWrite }: { bookingId: str
     <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface" id="chat">
       <div className="border-b border-border px-4 py-2">
         <p className="font-semibold">Conversa com {otherName}</p>
-        <p className="text-xs text-muted">Combine detalhes e extras aqui. Fotos podem mostrar dados pessoais: envie só o necessário.</p>
+        <p className="text-xs text-muted">Texto, áudio, foto e vídeo. Não é permitido passar telefone ou WhatsApp: combine tudo por aqui.</p>
       </div>
       <div ref={list} className="h-[55vh] max-h-[520px] space-y-2 overflow-y-auto bg-surface-2/50 p-3" aria-live="polite">
         {!loaded && <p className="text-center text-sm text-muted"><Loader2 className="mr-1 inline animate-spin" size={14} /> Carregando…</p>}
@@ -166,6 +176,9 @@ export function ChatBox({ bookingId, otherName, initialWrite }: { bookingId: str
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={m.localUrl ?? m.url!} alt="Foto enviada no chat" className="max-h-64 rounded-lg" loading="lazy" />
                 </a>
+              )}
+              {m.kind === "VIDEO" && (m.localUrl || m.url) && (
+                <video controls playsInline preload="metadata" src={m.localUrl ?? m.url!} className="mb-1 max-h-72 max-w-full rounded-lg" />
               )}
               {m.kind === "AUDIO" && (m.localUrl || m.url) && (
                 <div className="flex items-center gap-2">
@@ -185,6 +198,15 @@ export function ChatBox({ bookingId, otherName, initialWrite }: { bookingId: str
       {error && <p className="bg-danger/10 px-3 py-1.5 text-xs text-danger">{error}</p>}
       {write ? (
         <div className="space-y-2 border-t border-border p-2">
+          {quickReplies.length > 0 && !rec && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {quickReplies.map((q) => (
+                <button key={q} type="button" onClick={() => void sendText(q)} className="shrink-0 rounded-full border border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10">
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
           {photo && (
             <div className="flex items-center gap-2 rounded-lg bg-surface-2 p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -218,7 +240,19 @@ export function ChatBox({ bookingId, otherName, initialWrite }: { bookingId: str
                   }
                 }}
               />
-              <Button type="button" variant="ghost" size="sm" className="h-10" onClick={() => fileInput.current?.click()} aria-label="Enviar foto"><Camera size={20} /></Button>
+              <input
+                ref={videoInput}
+                type="file"
+                accept="video/mp4,video/quicktime,video/webm,video/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void sendVideo(f);
+                }}
+              />
+              <Button type="button" variant="ghost" size="sm" className="h-10 px-2" onClick={() => fileInput.current?.click()} aria-label="Enviar foto"><Camera size={20} /></Button>
+              <Button type="button" variant="ghost" size="sm" className="h-10 px-2" onClick={() => videoInput.current?.click()} aria-label="Enviar vídeo"><Video size={20} /></Button>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}

@@ -1,18 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BadgeCheck, CalendarClock, HandCoins, MapPin, MessagesSquare, ShieldCheck, Sparkles, Star } from "lucide-react";
+import { BadgeCheck, BellRing, HandCoins, MapPin, MessagesSquare, ShieldCheck, Smartphone, Star, Zap } from "lucide-react";
 import { Logo } from "@/components/brand";
-import { CityPicker } from "@/components/city-picker";
 import { SiteFooter } from "@/components/site-footer";
-import { Button, buttonClass } from "@/components/ui/button";
+import { buttonClass } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { SUBSCRIPTION_CENTS, formatBRL } from "@/lib/domain";
-import { UFS } from "@/lib/places";
+import { CATEGORIES, PACK_CENTS, PACK_PLACES, PLANS, TRIAL_DAYS, formatBRL } from "@/lib/domain";
 import { getCurrentUser, homeOf } from "@/lib/session";
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ conta?: string }> }) {
   const user = await getCurrentUser();
   if (user) redirect(homeOf(user));
+  const { conta } = await searchParams;
   return (
     <div className="min-h-dvh">
       <header className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4">
@@ -21,50 +20,42 @@ export default async function Home() {
         <Link href="/entrar" className={buttonClass("ghost", "sm")}>Entrar</Link>
         <Link href="/cadastro" className={buttonClass("primary", "sm")}>Criar conta</Link>
       </header>
+      {conta === "apagada" && <p className="mx-auto max-w-6xl px-4 text-sm text-muted">Sua conta foi apagada. Obrigado por ter usado o Diária Paga.</p>}
 
       <section className="hl-hero">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 pb-14 pt-8 md:grid-cols-[1.1fr_1fr] md:items-center md:pt-14">
           <div className="space-y-5">
             <p className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
-              <Sparkles size={14} /> Grátis para quem contrata
+              <HandCoins size={14} /> Grátis para quem contrata
             </p>
-            <h1 className="text-4xl font-extrabold leading-tight text-brand-ink md:text-5xl">Sua casa em boas mãos, no seu tempo.</h1>
+            <h1 className="text-4xl font-extrabold leading-tight text-brand-ink md:text-5xl">Quem faz o serviço, perto de você. Hoje.</h1>
             <p className="max-w-xl text-lg text-muted">
-              Encontre profissionais de limpeza residencial na sua cidade, compare o preço por hora e as avaliações, e combine tudo pelo chat do app.
+              Diarista, pedreiro, cuidador de idoso, babá, motorista, eletricista e muito mais. Compare preço e avaliações, ou chame na hora com o <strong className="text-foreground">Contrate rápido</strong>.
             </p>
-            <Card className="space-y-3 shadow-lg shadow-primary/5">
-              <p className="font-semibold">Onde você precisa de limpeza?</p>
-              <form action="/buscar" className="space-y-3">
-                <CityPicker ufs={UFS} />
-                <Button type="submit" size="lg" className="w-full">Ver profissionais</Button>
-              </form>
-            </Card>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/rapido" className={buttonClass("primary", "lg", "dp-ring")}><Zap size={18} /> Contratar agora</Link>
+              <Link href="/buscar" className={buttonClass("outline", "lg")}>Ver prestadores</Link>
+            </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              { icon: MapPin, t: "Busque pela sua cidade", d: "Veja quem atende no seu município, com foto, preço por hora e serviços." },
-              { icon: CalendarClock, t: "Escolha as horas", d: "De 1 a 12 horas, com data e horário. O valor estimado aparece na hora." },
-              { icon: MessagesSquare, t: "Converse no app", d: "Depois do aceite, o chat libera texto, áudio e fotos." },
-              { icon: HandCoins, t: "Pague direto ao profissional", d: "Em dinheiro ou Pix, sem taxa da plataforma para você." },
-            ].map(({ icon: Icon, t, d }, i) => (
-              <Card key={t} className="hl-in space-y-2" style={{ animationDelay: `${i * 70}ms` }}>
-                <Icon className="text-primary" size={22} />
-                <p className="font-semibold">{t}</p>
-                <p className="text-sm text-muted">{d}</p>
-              </Card>
+          <div className="grid grid-cols-4 gap-2">
+            {CATEGORIES.slice(0, 16).map((c, i) => (
+              <Link key={c.slug} href={`/buscar?servico=${c.slug}`} className="hl-in flex flex-col items-center gap-1 rounded-2xl border border-border bg-surface p-2 text-center text-[11px] font-medium shadow-sm transition hover:border-primary" style={{ animationDelay: `${i * 30}ms` }}>
+                <span className="text-2xl">{c.emoji}</span>
+                <span className="leading-tight">{c.label}</span>
+              </Link>
             ))}
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl space-y-6 px-4 py-12">
-        <h2 className="text-2xl font-bold text-brand-ink">Como funciona</h2>
+        <h2 className="text-2xl font-bold text-brand-ink">⚡ Contrate rápido: como um app de corrida, só que para serviços</h2>
         <ol className="grid gap-3 md:grid-cols-4">
           {[
-            "Crie sua conta grátis só com nome, CPF e senha.",
-            "Escolha o profissional, os serviços, as horas, a data e o endereço.",
-            "O profissional aceita ou recusa. A contratação só vale depois do aceite.",
-            "Depois do serviço, vocês dois se avaliam.",
+            "Escolha o serviço e libere a sua localização.",
+            "Veja o menor preço da plataforma e diga até quanto você paga.",
+            "Tocamos no celular de quem está mais perto. O primeiro que aceitar leva.",
+            "O prestador chega em até 2 horas. Vocês conversam pelo chat.",
           ].map((t, i) => (
             <li key={t} className="flex gap-3 rounded-xl border border-border bg-surface p-4">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">{i + 1}</span>
@@ -72,43 +63,59 @@ export default async function Home() {
             </li>
           ))}
         </ol>
-        <div className="grid gap-3 md:grid-cols-3">
-          <Card className="space-y-2">
-            <ShieldCheck className="text-accent" />
-            <p className="font-semibold">Profissionais verificados</p>
-            <p className="text-sm text-muted">Todo profissional passa por verificação e precisa ter 18 anos ou mais.</p>
-          </Card>
-          <Card className="space-y-2">
-            <MapPin className="text-accent" />
-            <p className="font-semibold">Seu endereço protegido</p>
-            <p className="text-sm text-muted">O endereço só aparece para o profissional que aceitou o seu pedido.</p>
-          </Card>
-          <Card className="space-y-2">
-            <Star className="text-accent" />
-            <p className="font-semibold">Avaliações reais</p>
-            <p className="text-sm text-muted">Só quem fez um serviço concluído pode avaliar.</p>
-          </Card>
+        <div className="grid gap-3 md:grid-cols-4">
+          {[
+            { icon: ShieldCheck, t: "CPF verificado", d: "Uma conta por CPF. Prestadores com 18 anos ou mais." },
+            { icon: MapPin, t: "Endereço protegido", d: "Só quem aceitou vê o seu endereço." },
+            { icon: MessagesSquare, t: "Tudo pelo chat", d: "Texto, áudio, foto e vídeo. Sem passar telefone." },
+            { icon: Star, t: "Avaliações reais", d: "Só quem concluiu um serviço pode avaliar." },
+          ].map(({ icon: Icon, t, d }) => (
+            <Card key={t} className="space-y-2">
+              <Icon className="text-primary" />
+              <p className="font-semibold">{t}</p>
+              <p className="text-sm text-muted">{d}</p>
+            </Card>
+          ))}
         </div>
       </section>
 
       <section className="border-y border-border bg-surface">
-        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-12 md:grid-cols-2 md:items-center">
+        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-12 md:grid-cols-[1fr_1.2fr] md:items-center">
           <div className="space-y-3">
-            <h2 className="text-2xl font-bold text-brand-ink">Você é profissional de limpeza?</h2>
-            <p className="text-muted">Apareça para clientes da sua cidade, defina o seu preço por hora e aceite só os serviços que quiser.</p>
+            <h2 className="text-2xl font-bold text-brand-ink">Você presta serviço? Trabalhe com a gente.</h2>
+            <p className="text-muted">Receba chamados de clientes perto de você e monte o seu perfil com fotos dos trabalhos.</p>
             <ul className="space-y-2 text-sm">
-              {["Sem comissão sobre os seus serviços", "Você recebe direto do cliente, em dinheiro ou Pix", "Escolha seus horários e pause quando quiser"].map((t) => (
-                <li key={t} className="flex items-center gap-2"><BadgeCheck size={18} className="text-accent" /> {t}</li>
+              {["Sem comissão: o cliente paga direto para você (Pix, dinheiro ou cartão)", `Comece com ${TRIAL_DAYS} dias grátis do plano Completo`, "Painel financeiro: quanto entrou na semana e no mês", "Escolha seus horários e pause quando quiser"].map((t) => (
+                <li key={t} className="flex items-center gap-2"><BadgeCheck size={18} className="shrink-0 text-primary" /> {t}</li>
               ))}
             </ul>
           </div>
-          <Card className="space-y-3 text-center">
-            <p className="text-sm font-medium text-muted">Assinatura mensal do profissional</p>
-            <p className="text-4xl font-extrabold text-brand-ink">{formatBRL(SUBSCRIPTION_CENTS)}<span className="text-base font-medium text-muted">/mês</span></p>
-            <p className="text-xs text-muted">Sem taxa por serviço, sem cobrança por hora. Pagamento por Pix.</p>
-            <Link href="/cadastro/profissional" className={buttonClass("primary", "lg", "w-full")}>Quero ser profissional</Link>
-          </Card>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(["FULL", "BASIC"] as const).map((k) => {
+              const p = PLANS[k];
+              return (
+                <Card key={k} className={k === "FULL" ? "space-y-2 border-2 border-primary" : "space-y-2"}>
+                  <p className="flex items-center justify-between font-semibold">{p.name} {p.recommended && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent">★ Recomendado</span>}</p>
+                  <p className="text-3xl font-extrabold text-brand-ink">{formatBRL(p.priceCents)}<span className="text-sm font-medium text-muted">/mês</span></p>
+                  <p className="text-xs text-muted">{formatBRL(p.platformCents)} da plataforma + {formatBRL(p.feesCents)} de impostos e taxas</p>
+                  <p className="text-sm">{k === "FULL" ? `Aparece primeiro, ${p.places} endereços e pacotes de +${PACK_PLACES} por ${formatBRL(PACK_CENTS)}` : `${p.places} endereço de atendimento`}</p>
+                </Card>
+              );
+            })}
+            <Link href="/cadastro?quero=trabalhar" className={buttonClass("primary", "lg", "sm:col-span-2")}>Quero trabalhar · {TRIAL_DAYS} dias grátis</Link>
+          </div>
         </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-12">
+        <Card className="flex flex-col items-center gap-3 bg-brand-ink p-6 text-center text-white md:flex-row md:text-left">
+          <Smartphone size={40} className="shrink-0 text-amber-300" />
+          <div className="flex-1">
+            <p className="text-lg font-bold">Instale o app no seu celular</p>
+            <p className="text-sm text-white/80">Funciona no Android e no iPhone, sem loja. Com o app instalado você recebe os avisos de pedidos e chamados na hora. <BellRing size={14} className="inline" /></p>
+          </div>
+          <Link href="/baixar" className={buttonClass("secondary", "lg")}>Como instalar</Link>
+        </Card>
       </section>
 
       <SiteFooter />

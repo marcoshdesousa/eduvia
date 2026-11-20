@@ -9,7 +9,7 @@ import { openTicket } from "../actions";
 
 export const metadata: Metadata = { title: "Novo chamado" };
 
-const SUBJECTS = ["Problema com uma contratação", "Cancelamento", "Pagamento da assinatura", "Verificação do perfil", "Meus dados / excluir conta", "Denúncia ou segurança", "Sugestão", "Outro assunto"];
+const SUBJECTS = ["Problema com uma contratação", "Cancelamento", "Pagamento do plano", "Contrate rápido (penalidade)", "Meus dados", "Denúncia ou segurança", "Sugestão", "Outro assunto"];
 
 export default async function NewTicket({ searchParams }: { searchParams: Promise<{ pedido?: string; assunto?: string }> }) {
   await requireUser("/suporte/novo");
