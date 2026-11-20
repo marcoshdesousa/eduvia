@@ -3,7 +3,6 @@ import type { MessageKind } from "@/generated/prisma/enums";
 import { apiUser, jsonError } from "@/lib/api";
 import { cleanText, conversationAccess } from "@/lib/chat";
 import { db } from "@/lib/db";
-import { PHONE_BLOCKED_MSG, containsPhone } from "@/lib/domain";
 import { MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, audioType, imageType, newKey, videoType } from "@/lib/files";
 import { notify } from "@/lib/notifications";
 import { allowAttempt } from "@/lib/rate-limit";
@@ -80,7 +79,6 @@ export async function POST(req: Request, { params }: Ctx) {
   if (kind === "TEXT") {
     const text = cleanText(String(form.get("text") ?? ""));
     if (!text) return jsonError("Escreva a mensagem.");
-    if (containsPhone(text)) return jsonError(PHONE_BLOCKED_MSG);
     data = { kind: "TEXT", text };
   } else if (kind === "IMAGE" || kind === "AUDIO" || kind === "VIDEO") {
     const file = form.get("file");
@@ -88,7 +86,6 @@ export async function POST(req: Request, { params }: Ctx) {
     const max = kind === "IMAGE" ? MAX_IMAGE_BYTES : kind === "VIDEO" ? MAX_VIDEO_BYTES : MAX_AUDIO_BYTES;
     if (file.size > max) return jsonError(kind === "IMAGE" ? "Foto grande demais." : kind === "VIDEO" ? "Vídeo grande demais (máximo 40 MB, cerca de 1 minuto)." : "Áudio longo demais.");
     const caption = cleanText(String(form.get("text") ?? ""));
-    if (caption && containsPhone(caption)) return jsonError(PHONE_BLOCKED_MSG);
     const bytes = Buffer.from(await file.arrayBuffer());
     const type = kind === "IMAGE" ? imageType(bytes) : kind === "VIDEO" ? videoType(bytes) : audioType(bytes);
     if (!type) return jsonError(kind === "IMAGE" ? "A foto precisa ser JPG, PNG ou WebP." : kind === "VIDEO" ? "O vídeo precisa ser MP4, MOV ou WebM." : "Formato de áudio não aceito.");

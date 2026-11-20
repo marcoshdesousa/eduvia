@@ -11,7 +11,7 @@ import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/form";
 import { db } from "@/lib/db";
-import { MAX_POSTS, UNIT_LABEL, category, formatBRL } from "@/lib/domain";
+import { MAX_POSTS, UNIT_LABEL, category, formatBRL, whatsappLabel } from "@/lib/domain";
 import { postImageUrl, profilePhotoUrl } from "@/lib/providers";
 import { requireProvider } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -59,7 +59,7 @@ export default async function ProfilesPage({ searchParams }: { searchParams: Pro
       <Card className="flex items-center justify-between gap-2">
         <div>
           <p className="font-bold">{c?.emoji} {c?.label}</p>
-          <p className="text-sm text-muted">{formatBRL(cur.priceCents)} / {UNIT_LABEL[cur.unit].one}</p>
+          <p className="text-sm text-muted">{formatBRL(cur.priceCents)} / {UNIT_LABEL[cur.unit].one}{cur.hourCents ? ` · ${formatBRL(cur.hourCents)} / hora` : ""}</p>
         </div>
         <Link href={`/prestador/${user.provider.id}?perfil=${cur.category}`} className={buttonClass("outline", "sm")}><Eye size={14} /> Ver como cliente</Link>
       </Card>
@@ -71,12 +71,17 @@ export default async function ProfilesPage({ searchParams }: { searchParams: Pro
 
       <Card>
         <ActionForm action={updateProfileAction.bind(null, cur.id)} className="space-y-4">
-          <ServiceFields lockCategory defaults={{ category: cur.category, price: brl(cur.priceCents), unit: cur.unit, description: cur.description ?? "" }} />
+          <ServiceFields lockCategory defaults={{ category: cur.category, price: brl(cur.priceCents), unit: cur.unit, description: cur.description ?? "", hourPrice: cur.hourCents ? brl(cur.hourCents) : "" }} />
           <div>
             <Label htmlFor="bio">Sobre você nesta profissão</Label>
             <Textarea id="bio" name="bio" rows={4} maxLength={700} defaultValue={cur.bio ?? ""} placeholder="Experiência, o que você faz de melhor, como trabalha…" />
           </div>
+          <p className="text-sm font-semibold">Contato e redes sociais <span className="font-normal text-muted">(opcional, aparecem no seu perfil)</span></p>
           <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="whatsapp">WhatsApp</Label>
+              <Input id="whatsapp" name="whatsapp" inputMode="tel" defaultValue={cur.whatsapp ? whatsappLabel(cur.whatsapp) : ""} placeholder="(91) 98888-7777" maxLength={20} />
+            </div>
             <div>
               <Label htmlFor="instagram">Instagram</Label>
               <Input id="instagram" name="instagram" defaultValue={cur.instagram ? `@${cur.instagram}` : ""} placeholder="@seu.perfil" maxLength={60} />
@@ -85,8 +90,16 @@ export default async function ProfilesPage({ searchParams }: { searchParams: Pro
               <Label htmlFor="website">Site ou página da empresa</Label>
               <Input id="website" name="website" defaultValue={cur.website ?? ""} placeholder="www.suaempresa.com.br" maxLength={200} />
             </div>
+            <div>
+              <Label htmlFor="tiktok">TikTok</Label>
+              <Input id="tiktok" name="tiktok" defaultValue={cur.tiktok ? `@${cur.tiktok}` : ""} placeholder="@seu.perfil" maxLength={60} />
+            </div>
+            <div>
+              <Label htmlFor="youtube">YouTube</Label>
+              <Input id="youtube" name="youtube" defaultValue={cur.youtube ?? ""} placeholder="@seucanal ou link" maxLength={200} />
+            </div>
           </div>
-          <p className="text-xs text-muted">Não é permitido colocar telefone ou WhatsApp. Todo contato é pelo app.</p>
+          <p className="text-xs text-muted">No Instagram e no TikTok, basta o @. O WhatsApp vira um botão para o cliente te chamar. Só nas legendas das fotos é que não pode ter telefone.</p>
           <SubmitButton className="w-full" pendingText="Salvando…">Salvar perfil</SubmitButton>
         </ActionForm>
       </Card>

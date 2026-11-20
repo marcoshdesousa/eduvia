@@ -8,7 +8,9 @@
   - **Completo R$ 15,85/mês** (R$ 10,00 plataforma + R$ 5,85 impostos e taxas): 3 endereços, aparece primeiro, selo ★ Recomendado, pacotes de **+2 endereços por R$ 3,85/mês** (até 11). O pacote libera na hora, entra na próxima mensalidade e pode ser retirado.
   - **Básico R$ 6,85/mês** (R$ 3,00 + R$ 3,85): 1 endereço, aparece depois do Completo.
   - **3 dias grátis do Completo uma única vez por CPF** — o CPF fica guardado (só o código, sem nome) mesmo se a conta for apagada.
-- **Sem telefone/WhatsApp**: bio, legendas, serviços e chat bloqueiam números de telefone e palavras como "zap". Toda contratação fica no app.
+- **Contato liberado, menos nas fotos**: WhatsApp (botão wa.me), Instagram, TikTok e YouTube em cada perfil; telefone pode no chat e na bio. Só a legenda das fotos de trabalho bloqueia telefone.
+- **Por hora e várias diárias**: a diária é de até 8 h; o prestador pode marcar "também trabalho por hora" (de 1 a 8 h, mais cara que diária ÷ 8). Até 30 diárias seguidas pelo valor cheio. No Contrate rápido a hora tem valor fixo (padrão diária ÷ 8 × 1,5) e só toca para quem trabalha por hora.
+- **Distância ao vivo**: o chamado mostra a distância de cada endereço do prestador e de onde ele está agora; depois do aceite, o cliente vê "está a X km de você" (sem a posição exata).
 - **Chat** estilo WhatsApp: texto, áudio, foto e vídeo, com respostas rápidas ("Chego em 30 min").
 - **Pagamento do serviço** é direto ao prestador (Pix, dinheiro ou cartão se ele tiver maquininha).
 

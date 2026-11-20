@@ -62,6 +62,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                       ratingCount: p.ratingCount,
                       priceCents: p.priceCents,
                       unit: p.service.unit,
+                      hourCents: p.service.unit !== "HORA" ? p.service.hourCents : null,
                       plan: p.plan,
                       distanceKm: p.distanceKm,
                       place: `${place.district ? `${place.district}, ` : ""}${place.city}`,

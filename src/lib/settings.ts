@@ -14,6 +14,8 @@ export const SETTING_DEFAULTS = {
   quickSearchMinutes: 8,
   /** Contrate rápido: valor fixo de cada profissão trocado pelo admin (centavos; sem valor = o padrão) */
   quickPrices: {} as Record<string, number>,
+  /** Contrate rápido: valor fixo da HORA trocado pelo admin (sem valor = diária ÷ 8 × 1,5) */
+  quickHourPrices: {} as Record<string, number>,
   /** WhatsApp do suporte (opcional; aparece na tela de suporte) */
   supportWhatsapp: "",
 };

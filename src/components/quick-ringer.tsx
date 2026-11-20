@@ -1,10 +1,10 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BellRing, Loader2, MapPin, X } from "lucide-react";
+import { BellRing, Loader2, MapPin, Navigation, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type Offer = { id: string; bookingId: string; category: string; qty: string; price: string; distance: string; place: string; notes: string | null; expiresAt: string };
+type Offer = { id: string; bookingId: string; category: string; qty: string; byHour?: boolean; price: string; distance: string; place: string; notes: string | null; expiresAt: string; fromPlaces?: { label: string; distance: string; nearest: boolean }[]; here?: string | null };
 
 /** Som de chamado (dois tons repetidos, tipo app de corrida), feito no próprio navegador. */
 function useRingtone() {
@@ -67,13 +67,31 @@ export function QuickRinger() {
   const [msg, setMsg] = useState<string | null>(null);
   const [on, setOn] = useState(false);
   const ring = useRingtone();
+  // posição do celular (só enquanto um chamado está tocando) para mostrar a distância em tempo real
+  const pos = useRef<{ lat: number; lng: number } | null>(null);
 
   const poll = useCallback(async () => {
-    const r = await fetch("/api/rapido/ofertas", { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+    const q = pos.current ? `?lat=${pos.current.lat.toFixed(5)}&lng=${pos.current.lng.toFixed(5)}` : "";
+    const r = await fetch(`/api/rapido/ofertas${q}`, { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
     if (!r) return;
     setOn(!!r.on);
-    setOffer((cur) => (r.offers[0] ? (cur?.id === r.offers[0].id ? cur : r.offers[0]) : null));
+    // mesmo chamado: atualiza só as distâncias (mantém o contador)
+    setOffer((cur) => (r.offers[0] ? (cur?.id === r.offers[0].id ? { ...cur, here: r.offers[0].here, fromPlaces: r.offers[0].fromPlaces } : r.offers[0]) : null));
   }, []);
+
+  useEffect(() => {
+    if (!offer?.id || !("geolocation" in navigator)) return;
+    const w = navigator.geolocation.watchPosition(
+      (p) => {
+        const first = !pos.current;
+        pos.current = { lat: p.coords.latitude, lng: p.coords.longitude };
+        if (first) void poll();
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 },
+    );
+    return () => navigator.geolocation.clearWatch(w);
+  }, [offer?.id, poll]);
 
   useEffect(() => {
     void poll();
@@ -142,14 +160,29 @@ export function QuickRinger() {
               <div className="dp-ring flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground"><BellRing /></div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-primary">Contrate rápido</p>
-                <h2 id="chamado-titulo" className="text-xl font-bold">{offer.category}</h2>
+                <h2 id="chamado-titulo" className="text-xl font-bold">{offer.category}{offer.byHour ? " · por hora" : ""}</h2>
               </div>
               <span className="ml-auto rounded-full bg-surface-2 px-2.5 py-1 text-sm font-bold tabular-nums">{left}s</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="rounded-xl bg-surface-2 p-3"><p className="text-muted">Você recebe</p><p className="text-lg font-bold">{offer.price}</p><p className="text-xs text-muted">{offer.qty}</p></div>
-              <div className="rounded-xl bg-surface-2 p-3"><p className="text-muted">Distância</p><p className="text-lg font-bold">{offer.distance}</p><p className="flex items-center gap-1 text-xs text-muted"><MapPin size={12} /> {offer.place}</p></div>
+              <div className="rounded-xl bg-surface-2 p-3">
+                <p className="text-muted">{offer.here ? "De você agora" : "Distância"}</p>
+                <p className="text-lg font-bold">{offer.here ?? offer.distance}</p>
+                <p className="flex items-center gap-1 text-xs text-muted"><MapPin size={12} /> {offer.place}</p>
+              </div>
             </div>
+            {offer.fromPlaces && offer.fromPlaces.length > 0 && (
+              <ul className="space-y-1 rounded-xl border border-border p-3 text-sm" aria-label="Distância dos seus endereços">
+                {offer.here && <li className="flex justify-between font-semibold"><span className="flex items-center gap-1"><Navigation size={13} className="text-primary" /> Onde você está agora</span><span>{offer.here}</span></li>}
+                {offer.fromPlaces.map((p) => (
+                  <li key={p.label} className="flex justify-between">
+                    <span className="truncate">{p.nearest ? "Perto do seu " : "Do seu "}{p.label.charAt(0).toLowerCase() + p.label.slice(1)}</span>
+                    <span className={p.nearest ? "font-semibold text-primary" : "text-muted"}>{p.distance}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             {offer.notes && <div className="rounded-xl bg-surface-2 p-3 text-sm"><p className="text-xs font-semibold uppercase text-muted">O que o cliente precisa</p><p className="mt-1 whitespace-pre-line">{offer.notes}</p></div>}
             <p className="text-xs text-muted">Aceitando, você tem até 2 horas para chegar. O endereço completo aparece depois do aceite. Recusar muito faz você tocar menos.</p>
             <div className="grid grid-cols-[1fr_2fr] gap-2">

@@ -6,24 +6,29 @@ import { SubmitButton } from "@/components/submit-button";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { quickStats } from "@/lib/bookings";
-import { ARRIVE_HOURS, CLIENT_NOSHOW_WAIT_MIN, PRO_QUICK_BAN_DAYS, QUICK_MIN_SAMPLE, UNIT_LABEL, acceptRate, acceptTier, category, formatBRL, quickPrice } from "@/lib/domain";
+import { ARRIVE_HOURS, CLIENT_NOSHOW_WAIT_MIN, PRO_QUICK_BAN_DAYS, QUICK_MIN_SAMPLE, UNIT_LABEL, acceptRate, acceptTier, category, formatBRL, quickHourPrice, quickPrice } from "@/lib/domain";
 import { getSettings } from "@/lib/settings";
 import { acceptQuickTermsAction, leaveQuickAction, setQuickAction } from "./actions";
 
 const fmt = (d: Date) => d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 
 /** Contrate rápido no painel: só plano Completo; primeiro aceita as regras (caixinha), depois liga o Disponível. */
-export async function QuickCard({ pro, full, visible }: { pro: { id: string; quickOn: boolean; quickTermsAt: Date | null; quickBannedUntil: Date | null; services: { category: string }[] }; full: boolean; visible: boolean }) {
+export async function QuickCard({ pro, full, visible }: { pro: { id: string; quickOn: boolean; quickTermsAt: Date | null; quickBannedUntil: Date | null; services: { category: string; unit?: string; hourCents?: number | null }[] }; full: boolean; visible: boolean }) {
   const banned = pro.quickBannedUntil && pro.quickBannedUntil > new Date() ? pro.quickBannedUntil : null;
-  const { quickPrices } = await getSettings();
+  const { quickPrices, quickHourPrices } = await getSettings();
   const prices = (
     <ul className="divide-y divide-border rounded-xl bg-surface-2 px-3 text-sm">
       {pro.services.map((s) => {
         const c = category(s.category);
+        const hour = quickHourPrice(s.category, quickPrices, quickHourPrices);
+        const byHour = hour != null && c?.unit !== "HORA" && (s.hourCents || s.unit === "HORA");
         return (
-          <li key={s.category} className="flex justify-between py-2">
+          <li key={s.category} className="flex justify-between gap-2 py-2">
             <span>{c?.emoji} {c?.label}</span>
-            <strong>{formatBRL(quickPrice(s.category, quickPrices) ?? 0)} <span className="text-xs font-normal text-muted">{c && UNIT_LABEL[c.unit].per}</span></strong>
+            <span className="text-right">
+              <strong>{formatBRL(quickPrice(s.category, quickPrices) ?? 0)} <span className="text-xs font-normal text-muted">{c && UNIT_LABEL[c.unit].per}</span></strong>
+              {byHour && <span className="block text-xs text-muted">e {formatBRL(hour)} por hora</span>}
+            </span>
           </li>
         );
       })}
@@ -51,6 +56,7 @@ export async function QuickCard({ pro, full, visible }: { pro: { id: string; qui
           <li>Você pode recusar, mas <strong>quem aceita mais toca primeiro</strong>. Quem recusa muito (ou deixa tocar sem responder) desce na fila e quase não recebe chamado.</li>
           <li>Cliente não estava? Marque “Cheguei” e, depois de {CLIENT_NOSHOW_WAIT_MIN} minutos, registre: o cliente é penalizado.</li>
           <li>Terminou um serviço? Você volta a receber chamados na hora.</li>
+          <li><strong>Chamados por hora</strong> só tocam para quem marcou “Também trabalho por hora” no perfil. A diária é de até 8 horas.</li>
         </ul>
         <p className="text-sm font-medium">Valores fixos dos seus serviços:</p>
         {prices}

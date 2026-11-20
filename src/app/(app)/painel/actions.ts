@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/components/action-form";
 import type { Plan } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
-import { MAX_PLACES, PHONE_BLOCKED_MSG, WEEKDAYS, containsPhone, hhmmToMinutes, isPayMethod, placesLimit, providerVisible } from "@/lib/domain";
+import { MAX_PLACES, WEEKDAYS, hhmmToMinutes, isPayMethod, placesLimit, providerVisible } from "@/lib/domain";
 import { InputError, readPlace, readProfile } from "@/lib/provider-input";
 import { requireProvider } from "@/lib/session";
 import { PaymentError, addPack, removePack, setNextPlan, startSubscriptionPix, startUpgradePix, subscriptionActive } from "@/lib/subscription";
@@ -103,7 +103,6 @@ export async function addQuickReplyAction(_: ActionResult, f: FormData): Promise
   const user = await requireProvider();
   const text = String(f.get("text") ?? "").trim().slice(0, 300);
   if (text.length < 2) return { error: "Escreva a mensagem." };
-  if (containsPhone(text)) return { error: PHONE_BLOCKED_MSG };
   if ((await db.quickReply.count({ where: { proId: user.provider.id } })) >= 30) return { error: "Até 30 mensagens rápidas." };
   await db.quickReply.create({ data: { proId: user.provider.id, text } });
   return done("Mensagem rápida salva.", "/painel/mensagens-rapidas");

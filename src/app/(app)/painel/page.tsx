@@ -23,7 +23,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
   const { novo } = await searchParams;
   const pro = await db.providerProfile.findUniqueOrThrow({
     where: { id: user.provider.id },
-    include: { subscription: true, services: { orderBy: { createdAt: "asc" }, select: { id: true, category: true, photoKey: true } }, _count: { select: { services: { where: { photoKey: { not: null } } }, places: { where: { active: true } } } } },
+    include: { subscription: true, services: { orderBy: { createdAt: "asc" }, select: { id: true, category: true, photoKey: true, unit: true, hourCents: true } }, _count: { select: { services: { where: { photoKey: { not: null } } }, places: { where: { active: true } } } } },
   });
   const sub = pro.subscription;
   const active = subscriptionActive(sub);

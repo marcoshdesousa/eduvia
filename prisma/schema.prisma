@@ -216,6 +216,12 @@ model ProviderService {
   bio         String?
   instagram   String?
   website     String?
+  /// também trabalha por hora (valor da hora); vazio = não aceita por hora
+  hourCents   Int?
+  /// redes do perfil (aparecem como botões): WhatsApp (só números), TikTok (@), YouTube (@ ou link)
+  whatsapp    String?
+  tiktok      String?
+  youtube     String?
   posts       Post[]
   createdAt   DateTime        @default(now())
 
@@ -412,6 +418,10 @@ model Booking {
   acceptedAt    DateTime?
   arrivedAt     DateTime?
   completedAt   DateTime?
+  /// posição do trabalhador a caminho (para o cliente ver a distância em tempo real)
+  proLat        Float?
+  proLng        Float?
+  proPosAt      DateTime?
   canceledAt    DateTime?
   cancelReason  String?
   addressPurgedAt DateTime?

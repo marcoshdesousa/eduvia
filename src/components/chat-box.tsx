@@ -26,7 +26,7 @@ type Msg = {
   state?: "sending" | "error";
   localUrl?: string;
 };
-type Extras = { as: "CLIENT" | "PRO"; quickReplies: string[]; payText: string | null; services: { category: string; label: string; unit: PriceUnit; units: PriceUnit[]; priceCents: number }[] };
+type Extras = { as: "CLIENT" | "PRO"; quickReplies: string[]; payText: string | null; services: { category: string; label: string; unit: PriceUnit; units: PriceUnit[]; priceCents: number; hourCents?: number | null }[] };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -462,7 +462,7 @@ function ScheduleForm({ services, action, onClose, onDone }: { services: Extras[
           </div>
           <div>
             <Label htmlFor="sc-qty">Quantidade</Label>
-            <Input id="sc-qty" name="quantity" type="number" min={1} max={30} defaultValue={1} required />
+            <Input id="sc-qty" name="quantity" type="number" min={1} max={unit === "HORA" ? 8 : 30} defaultValue={1} required />
           </div>
           <div>
             <Label htmlFor="sc-unit">Cobrança</Label>
@@ -472,7 +472,7 @@ function ScheduleForm({ services, action, onClose, onDone }: { services: Extras[
           </div>
           <div className="col-span-2">
             <Label htmlFor="sc-price">Valor por {UNIT_LABEL[unit].one} (R$)</Label>
-            <Input key={cat} id="sc-price" name="price" inputMode="decimal" defaultValue={s ? (s.priceCents / 100).toFixed(2).replace(".", ",") : ""} required />
+            <Input key={`${cat}-${unit}`} id="sc-price" name="price" inputMode="decimal" defaultValue={s ? (((unit === "HORA" && s.unit !== "HORA" && s.hourCents) || s.priceCents) / 100).toFixed(2).replace(".", ",") : ""} required />
           </div>
           <Input name="notes" maxLength={600} placeholder="Anotação para o cliente (opcional)" aria-label="Anotação" className="col-span-2" />
         </div>

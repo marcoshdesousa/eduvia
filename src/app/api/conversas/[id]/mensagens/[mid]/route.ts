@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { apiUser, jsonError } from "@/lib/api";
 import { cleanText, conversationAccess } from "@/lib/chat";
 import { db } from "@/lib/db";
-import { PHONE_BLOCKED_MSG, containsPhone } from "@/lib/domain";
 import { deleteObject } from "@/lib/storage";
 
 type Ctx = { params: Promise<{ id: string; mid: string }> };
@@ -26,7 +25,6 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const body = (await req.json().catch(() => null)) as { text?: string } | null;
   const text = cleanText(String(body?.text ?? ""));
   if (!text && r.m.kind === "TEXT") return jsonError("Escreva a mensagem.");
-  if (containsPhone(text)) return jsonError(PHONE_BLOCKED_MSG);
   const m = await db.message.update({ where: { id: r.m.id }, data: { text: text || null, editedAt: new Date() } });
   return NextResponse.json({ ok: true, text: m.text });
 }

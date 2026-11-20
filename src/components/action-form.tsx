@@ -1,6 +1,7 @@
 "use client";
-import { useActionState, useEffect, useRef } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { FormError } from "@/components/ui/form";
+import { PendingContext } from "@/components/submit-button";
 
 export type ActionResult = { error?: string; ok?: string } | null;
 
@@ -21,7 +22,7 @@ export function ActionForm({
   resetOnOk?: boolean;
   confirm?: string;
 }) {
-  const [state, run] = useActionState(action, null);
+  const [state, run, pending] = useActionState(action, null);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state?.ok && resetOnOk) ref.current?.reset();
@@ -29,13 +30,16 @@ export function ActionForm({
   return (
     <form
       ref={ref}
-      action={run}
       className={className}
       onSubmit={(e) => {
-        if (confirm && !window.confirm(confirm)) e.preventDefault();
+        // envia sem o React limpar o formulário (assim nada do que foi digitado some se der erro)
+        e.preventDefault();
+        if (confirm && !window.confirm(confirm)) return;
+        const data = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+        startTransition(() => run(data));
       }}
     >
-      {children}
+      <PendingContext.Provider value={pending}>{children}</PendingContext.Provider>
       <div className="mt-3 empty:hidden">
         <FormError message={state?.error} />
         {state?.ok && <div role="status" className="rounded-2xl border border-success/30 bg-success/10 px-4 py-2.5 text-sm font-medium text-success">{state.ok}</div>}

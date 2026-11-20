@@ -63,7 +63,11 @@ export const UNIT_LABEL: Record<PriceUnit, { one: string; many: string; per: str
   SERVICO: { one: "serviço", many: "serviços", per: "por serviço" },
 };
 export const qtyLabel = (unit: PriceUnit, n: number) => `${n} ${n === 1 ? UNIT_LABEL[unit].one : UNIT_LABEL[unit].many}`;
-export const MAX_QTY: Record<PriceUnit, number> = { DIARIA: 30, HORA: 12, SERVICO: 10 };
+/** "3 diárias (até 8 h por dia)" */
+export const qtyLong = (unit: PriceUnit, n: number) => `${qtyLabel(unit, n)}${unit === "DIARIA" ? ` (até ${DIARIA_HOURS} h por dia)` : ""}`;
+/** Diária = até 8 horas de trabalho. Por hora: de 1 a 8 horas (mais que isso, é diária). Diárias: até 30 (sem desconto). */
+export const DIARIA_HOURS = 8;
+export const MAX_QTY: Record<PriceUnit, number> = { DIARIA: 30, HORA: DIARIA_HOURS, SERVICO: 10 };
 
 export const CATEGORY_GROUPS = ["Casa e limpeza", "Obras e reparos", "Cuidados", "Transporte e entregas", "Beleza e bem-estar", "Outros"] as const;
 
@@ -127,6 +131,37 @@ export const unitsOf = (slug: string): PriceUnit[] => {
   const c = CAT.get(slug);
   return c ? [c.unit, ...(EXTRA_UNITS[slug] ?? [])] : ["DIARIA", "HORA", "SERVICO"];
 };
+// ───────────── Redes sociais do perfil ─────────────
+
+/** WhatsApp: guarda só os números com o 55 do Brasil (link wa.me). null se inválido. */
+export function normalizeWhatsapp(raw: string): string | null {
+  const d = raw.replace(/\D/g, "").replace(/^0+/, "");
+  const local = d.replace(/^55(?=\d{10,11}$)/, "");
+  return /^\d{10,11}$/.test(local) ? `55${local}` : null;
+}
+export const whatsappLink = (n: string) => `https://wa.me/${n}`;
+export const whatsappLabel = (n: string) => n.replace(/^55(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3");
+/** TikTok: "@usuario" ou link → "usuario". */
+export function normalizeTiktok(raw: string): string | null {
+  const t = raw.trim().replace(/^https?:\/\/(www\.)?tiktok\.com\//i, "").replace(/^@/, "").replace(/[/?].*$/, "");
+  if (!t) return null;
+  return /^[a-zA-Z0-9._]{2,24}$/.test(t) ? t.toLowerCase() : null;
+}
+/** YouTube: "@canal" ou link do canal/vídeo. Guarda "@canal" ou o link. */
+export function normalizeYoutube(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+  if (/^@?[a-zA-Z0-9._-]{3,30}$/.test(t)) return `@${t.replace(/^@/, "")}`;
+  try {
+    const u = new URL(/^https?:\/\//i.test(t) ? t : `https://${t}`);
+    if (!/(^|\.)youtube\.com$|^youtu\.be$/i.test(u.hostname)) return null;
+    return u.toString().slice(0, 200);
+  } catch {
+    return null;
+  }
+}
+export const youtubeLink = (y: string) => (y.startsWith("@") ? `https://www.youtube.com/${y}` : y);
+
 /** "R$ 180,00 / diária" */
 export const priceTag = (cents: number, unit: PriceUnit) => `${formatBRL(cents)} / ${UNIT_LABEL[unit].one}`;
 
@@ -146,6 +181,30 @@ export function quickPrice(slug: string, overrides: Record<string, number> = {})
   const o = overrides[slug];
   return Number.isInteger(o) && o >= 100 ? o : c.quick;
 }
+
+/** A hora sai mais cara que a diária dividida por 8: diária ÷ 8 × 1,5 (ex.: diária R$ 80 → hora R$ 15). */
+export const HOUR_MARKUP = 1.5;
+export const hourFromDaily = (dailyCents: number) => Math.ceil((dailyCents / DIARIA_HOURS) * HOUR_MARKUP / 100) * 100;
+
+/**
+ * Valor fixo da HORA no Contrate rápido. Profissões por diária: diária ÷ 8 × 1,5. Profissões cobradas por hora: o próprio
+ * valor. Profissões por serviço (eletricista, frete…) não têm hora no rápido, a não ser que o admin defina.
+ */
+export function quickHourPrice(slug: string, overrides: Record<string, number> = {}, hourOverrides: Record<string, number> = {}) {
+  const c = CAT.get(slug);
+  if (!c) return null;
+  const o = hourOverrides[slug];
+  if (Number.isInteger(o) && o >= 100) return o;
+  const base = quickPrice(slug, overrides)!;
+  return c.unit === "DIARIA" ? hourFromDaily(base) : c.unit === "HORA" ? base : null;
+}
+
+/** Valor fixo do rápido para a cobrança escolhida (diária/serviço ou hora). */
+export const quickUnitPrice = (slug: string, unit: PriceUnit, overrides: Record<string, number> = {}, hourOverrides: Record<string, number> = {}) => {
+  const c = CAT.get(slug);
+  if (!c) return null;
+  return unit === "HORA" ? quickHourPrice(slug, overrides, hourOverrides) : unit === c.unit ? quickPrice(slug, overrides) : null;
+};
 
 // ───────────── Dinheiro, datas e idade ─────────────
 
@@ -269,7 +328,7 @@ export function containsPhone(text: string) {
   if (new RegExp(`((${NUM_WORDS})[\\s,.-]+){7,}(${NUM_WORDS})`, "i").test(t)) return true;
   return false;
 }
-export const PHONE_BLOCKED_MSG = "Não é permitido passar telefone ou WhatsApp. Combine tudo pelo chat do Diária Paga.";
+export const PHONE_BLOCKED_MSG = "Na legenda da foto não pode ter telefone ou WhatsApp. Coloque seu WhatsApp no campo próprio do perfil.";
 
 /** "@joao.silva", "instagram.com/joao.silva" ou "joao.silva" → "joao.silva" (null se inválido). */
 export function normalizeInstagram(raw: string): string | null {
@@ -414,7 +473,7 @@ export function shortName(name: string) {
   return p.length > 1 ? `${p[0]} ${p[p.length - 1][0].toUpperCase()}.` : p[0];
 }
 
-export const REPORT_REASONS = ["Comportamento inadequado", "Assédio ou ameaça", "Perfil falso ou dados errados", "Passou telefone/WhatsApp", "Pediu pagamento fora do combinado", "Não compareceu", "Foto imprópria", "Spam ou propaganda", "Outro motivo"] as const;
+export const REPORT_REASONS = ["Comportamento inadequado", "Assédio ou ameaça", "Perfil falso ou dados errados", "Pediu pagamento fora do combinado", "Não compareceu", "Foto imprópria", "Spam ou propaganda", "Outro motivo"] as const;
 
 export const TICKET_LABEL = { OPEN: ["Aberto", "warning"], ANSWERED: ["Respondido", "success"], CLOSED: ["Encerrado", "neutral"] } as const;
 

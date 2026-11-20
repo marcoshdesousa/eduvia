@@ -157,3 +157,30 @@ describe("serviços e contratação", () => {
     expect(ageOn(b, new Date(Date.UTC(2026, 10, 21)))).toBe(18);
   });
 });
+
+describe("hora, diárias e redes", () => {
+  it("hora sai mais cara que a diária ÷ 8", async () => {
+    const { hourFromDaily, quickHourPrice, quickUnitPrice, MAX_QTY } = await import("./domain");
+    expect(hourFromDaily(8000)).toBe(1500);
+    expect(hourFromDaily(15000)).toBe(2900);
+    expect(MAX_QTY.HORA).toBe(8);
+    expect(MAX_QTY.DIARIA).toBe(30);
+    expect(quickHourPrice("diarista", { diarista: 8000 })).toBe(1500);
+    expect(quickHourPrice("diarista", {}, { diarista: 2000 })).toBe(2000);
+    expect(quickUnitPrice("diarista", "HORA", { diarista: 8000 })).toBe(1500);
+    expect(quickUnitPrice("diarista", "DIARIA", { diarista: 8000 })).toBe(8000);
+  });
+  it("normaliza WhatsApp, TikTok e YouTube", async () => {
+    const { normalizeWhatsapp, normalizeTiktok, normalizeYoutube, whatsappLink, youtubeLink } = await import("./domain");
+    expect(normalizeWhatsapp("(91) 98888-7777")).toBe("5591988887777");
+    expect(normalizeWhatsapp("+55 91 98888-7777")).toBe("5591988887777");
+    expect(normalizeWhatsapp("1234")).toBeNull();
+    expect(whatsappLink("5591988887777")).toBe("https://wa.me/5591988887777");
+    expect(normalizeTiktok("@Maria.Diarista")).toBe("maria.diarista");
+    expect(normalizeTiktok("https://www.tiktok.com/@maria.diarista?lang=pt")).toBe("maria.diarista");
+    expect(normalizeYoutube("@canaldamaria")).toBe("@canaldamaria");
+    expect(youtubeLink("@canaldamaria")).toBe("https://www.youtube.com/@canaldamaria");
+    expect(normalizeYoutube("https://youtube.com/watch?v=abc")).toMatch(/^https:\/\/youtube\.com/);
+    expect(normalizeYoutube("https://evil.com/x")).toBeNull();
+  });
+});

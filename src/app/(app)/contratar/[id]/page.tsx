@@ -48,7 +48,7 @@ export default async function HirePage({ params, searchParams }: { params: Promi
           saved={await savedAddresses(user.id)}
           ufs={UFS}
           payMethods={pro.payMethods}
-          services={pro.services.map((s) => ({ category: s.category, label: category(s.category)?.label ?? s.category, emoji: category(s.category)?.emoji ?? "🛠️", priceCents: s.priceCents, unit: s.unit, description: s.description }))}
+          services={pro.services.map((s) => ({ category: s.category, label: category(s.category)?.label ?? s.category, emoji: category(s.category)?.emoji ?? "🛠️", priceCents: s.priceCents, unit: s.unit, hourCents: s.hourCents, description: s.description }))}
         />
       )}
     </div>

@@ -6,10 +6,8 @@ import { notify, sendPush } from "@/lib/notifications";
 import { getSettings } from "@/lib/settings";
 import {
   ACTIVE_STATUSES,
-  PHONE_BLOCKED_MSG,
   acceptRate,
-  containsPhone,
-  quickPrice,
+  quickUnitPrice,
   ARRIVE_HOURS,
   BOOKING_LABEL,
   CLIENT_BLOCK_DAYS,
@@ -22,6 +20,7 @@ import {
   fitsAvailability,
   formatBRL,
   formatKm,
+  DIARIA_HOURS,
   providerVisible,
   qtyLabel,
   rankQuick,
@@ -38,7 +37,7 @@ export class BookingError extends Error {}
 
 const H = 3_600_000;
 /** Quanto tempo um serviço ocupa (para não aceitar dois ao mesmo tempo). */
-const busyHours = (unit: PriceUnit, qty: number) => (unit === "HORA" ? qty : unit === "DIARIA" ? 9 * qty : 3);
+const busyHours = (unit: PriceUnit, qty: number) => (unit === "HORA" ? qty : unit === "DIARIA" ? DIARIA_HOURS * qty : 3);
 
 export type AddressInput = { street: string; number?: string | null; complement?: string | null; district?: string | null; city: string; uf: string; cep?: string | null; reference?: string | null; lat?: number | null; lng?: number | null };
 
@@ -88,6 +87,8 @@ export type BookingInput = {
   address: AddressInput;
   saveAddressLabel?: string | null;
   payMethod?: string | null;
+  /** "HORA" para contratar por hora quem também trabalha por hora; vazio = cobrança principal do perfil */
+  unit?: PriceUnit | null;
 };
 
 export async function createBooking(input: BookingInput, now = new Date()) {
@@ -110,12 +111,17 @@ export async function createBooking(input: BookingInput, now = new Date()) {
   if (blocked) throw new BookingError("Não é possível enviar pedido para este prestador.");
   const service = pro.services.find((s) => s.category === input.category);
   if (!service) throw new BookingError("Escolha um serviço que este prestador oferece.");
-  const estimate = estimateCents(service.priceCents, input.quantity, service.unit);
+  // por hora: só se o prestador também trabalha por hora (valor da hora do perfil)
+  const byHour = input.unit === "HORA" && service.unit !== "HORA";
+  if (byHour && !service.hourCents) throw new BookingError("Este prestador não trabalha por hora nessa profissão.");
+  const unit: PriceUnit = byHour ? "HORA" : service.unit;
+  const unitPrice = byHour ? service.hourCents! : service.priceCents;
+  const estimate = estimateCents(unitPrice, input.quantity, unit);
   const at = localParts(input.scheduledAt, input.address.uf);
   if (!fitsAvailability(pro.availability, at.weekday, at.minutes, 1)) throw new BookingError("Esse horário está fora da agenda do prestador. Veja os horários no perfil.");
   const settings = await getSettings();
   const addr = addressData(input.address, city);
-  const end = new Date(input.scheduledAt.getTime() + busyHours(service.unit, input.quantity) * H);
+  const end = new Date(input.scheduledAt.getTime() + busyHours(unit, input.quantity) * H);
   const booking = await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${pro.id}))`;
     if (await slotTaken(tx, pro.id, input.scheduledAt, end)) throw new BookingError("O prestador já tem um compromisso nesse horário. Escolha outro horário.");
@@ -127,9 +133,9 @@ export async function createBooking(input: BookingInput, now = new Date()) {
         proId: pro.id,
         status: "WAITING_PRO",
         category: service.category,
-        unit: service.unit,
+        unit,
         quantity: input.quantity,
-        unitPriceCents: service.priceCents,
+        unitPriceCents: unitPrice,
         estimateCents: estimate,
         scheduledAt: input.scheduledAt,
         notes: input.notes?.trim().slice(0, 1000) || null,
@@ -152,7 +158,7 @@ export async function createBooking(input: BookingInput, now = new Date()) {
 
 // ───────────────────────── Contrate rápido ─────────────────────────
 
-export type QuickInput = { clientId: string; category: string; quantity: number; notes: string; address: AddressInput & { lat: number; lng: number }; saveAddressLabel?: string | null; payMethod?: string | null };
+export type QuickInput = { clientId: string; category: string; quantity: number; unit?: PriceUnit | null; notes: string; address: AddressInput & { lat: number; lng: number }; saveAddressLabel?: string | null; payMethod?: string | null };
 
 /** Cria o chamado e já toca para a primeira rodada de prestadores perto. */
 export async function createQuick(input: QuickInput, now = new Date()) {
@@ -165,10 +171,12 @@ export async function createQuick(input: QuickInput, now = new Date()) {
   if (!Number.isFinite(input.address.lat) || !Number.isFinite(input.address.lng)) throw new BookingError("Precisamos da sua localização no mapa para achar quem está perto.");
   const notes = input.notes?.trim().slice(0, 1000) ?? "";
   if (notes.length < 10) throw new BookingError("Descreva o serviço que você precisa (pelo menos uma frase). O prestador lê antes de aceitar.");
-  if (containsPhone(notes)) throw new BookingError(PHONE_BLOCKED_MSG);
   const settings = await getSettings();
-  const unitPrice = quickPrice(cat.slug, settings.quickPrices)!;
-  const total = estimateCents(unitPrice, input.quantity, cat.unit); // também confere a quantidade
+  // diária(s)/serviço pelo valor fixo, ou hora(s) pelo valor fixo da hora (só toca para quem trabalha por hora)
+  const unit: PriceUnit = input.unit === "HORA" ? "HORA" : cat.unit;
+  const unitPrice = quickUnitPrice(cat.slug, unit, settings.quickPrices, settings.quickHourPrices);
+  if (unitPrice == null) throw new BookingError("Essa profissão não tem contratação por hora no rápido.");
+  const total = estimateCents(unitPrice, input.quantity, unit); // também confere a quantidade
   if ((await db.booking.count({ where: { clientId: input.clientId, mode: "QUICK", status: "SEARCHING" } })) >= 1) throw new BookingError("Você já tem um Contrate rápido procurando prestador. Espere ou cancele o anterior.");
   const addr = addressData(input.address, city);
   const booking = await db.booking.create({
@@ -177,7 +185,7 @@ export async function createQuick(input: QuickInput, now = new Date()) {
       clientId: input.clientId,
       status: "SEARCHING",
       category: cat.slug,
-      unit: cat.unit,
+      unit,
       quantity: input.quantity,
       // valor fixo da profissão (não muda com o prestador que aceitar)
       unitPriceCents: unitPrice,
@@ -224,7 +232,8 @@ export async function quickCandidates(b: { id: string; clientId: string; categor
       subscription: { plan: "FULL", currentPeriodEnd: { gt: now } },
       OR: [{ quickBannedUntil: null }, { quickBannedUntil: { lt: now } }],
       userId: { not: b.clientId },
-      services: { some: { category: b.category, photoKey: { not: null } } },
+      // por hora: só quem também trabalha por hora nessa profissão
+      services: { some: { category: b.category, photoKey: { not: null }, ...(b.unit === "HORA" ? { OR: [{ unit: "HORA" }, { hourCents: { not: null } }] } : {}) } },
       places: { some: { active: true, ...bbox(point, settings.quickMaxKm) } },
       offers: { none: { bookingId: b.id } },
       NOT: { user: { OR: [{ blocks: { some: { blockedId: b.clientId } } }, { blockedBy: { some: { blockerId: b.clientId } } }] } },
@@ -470,7 +479,6 @@ export async function proposeSchedule(conversationId: string, proUserId: string,
   if (!Number.isInteger(input.priceCents) || input.priceCents < 500 || input.priceCents > 500_000) throw new BookingError("Confira o valor (de R$ 5,00 a R$ 5.000,00).");
   const total = estimateCents(input.priceCents, input.quantity, input.unit);
   const notes = input.notes?.trim().slice(0, 600) || null;
-  if (notes && containsPhone(notes)) throw new BookingError(PHONE_BLOCKED_MSG);
   const place = conv.pro.places[0];
   const end = new Date(input.scheduledAt.getTime() + busyHours(input.unit, input.quantity) * H);
   const booking = await db.$transaction(async (tx) => {
@@ -530,7 +538,7 @@ export async function purgeAddresses(now = new Date()) {
   const before = new Date(now.getTime() - ADDRESS_RETENTION_DAYS * 24 * H);
   const r = await db.booking.updateMany({
     where: { addressPurgedAt: null, status: { in: ["COMPLETED", "CANCELED_CLIENT", "CANCELED_PRO", "REFUSED", "EXPIRED", "NO_PROVIDER", "NO_SHOW_PRO", "NO_SHOW_CLIENT"] }, updatedAt: { lt: before } },
-    data: { addrStreet: "(endereço removido)", addrNumber: null, addrComplement: null, addrDistrict: null, addrCep: null, addrReference: null, lat: null, lng: null, addressPurgedAt: now },
+    data: { addrStreet: "(endereço removido)", addrNumber: null, addrComplement: null, addrDistrict: null, addrCep: null, addrReference: null, lat: null, lng: null, proLat: null, proLng: null, proPosAt: null, addressPurgedAt: now },
   });
   return r.count;
 }

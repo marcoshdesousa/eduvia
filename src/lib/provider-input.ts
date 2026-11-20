@@ -1,6 +1,6 @@
 // Leitura e conferência do que o prestador digita (serviço, endereço, bio).
 import type { PriceUnit } from "@/generated/prisma/enums";
-import { PHONE_BLOCKED_MSG, category, containsPhone, normalizeInstagram, parseBRL, unitsOf } from "@/lib/domain";
+import { DIARIA_HOURS, category, hourFromDaily, normalizeInstagram, normalizeTiktok, normalizeWhatsapp, normalizeYoutube, parseBRL, unitsOf } from "@/lib/domain";
 import { officialCity } from "@/lib/places";
 
 export class InputError extends Error {}
@@ -15,8 +15,15 @@ export function readService(f: FormData) {
   const unitRaw = str(f, "unit") as PriceUnit;
   const unit = unitsOf(cat.slug).includes(unitRaw) ? unitRaw : cat.unit;
   const description = str(f, "description").slice(0, 600) || null;
-  if (description && containsPhone(description)) throw new InputError(PHONE_BLOCKED_MSG);
-  return { category: cat.slug, priceCents: price, unit, description };
+  // também por hora (opcional): mais cara que a diária ÷ 8
+  let hourCents: number | null = null;
+  if (unit !== "HORA" && f.get("byHour") === "on") {
+    const h = parseBRL(str(f, "hourPrice"));
+    if (h == null || h < 500 || h > 100_000) throw new InputError("Informe o valor da hora (de R$ 5,00 a R$ 1.000,00).");
+    if (unit === "DIARIA" && h * DIARIA_HOURS < price) throw new InputError(`8 horas não podem sair mais baratas que a diária. Sugestão: ${(hourFromDaily(price) / 100).toFixed(0)} reais a hora.`);
+    hourCents = h;
+  }
+  return { category: cat.slug, priceCents: price, unit, description, hourCents };
 }
 
 export function readPlace(f: FormData) {
@@ -28,17 +35,15 @@ export function readPlace(f: FormData) {
   if (!city) throw new InputError("Confira o município e a UF do endereço.");
   const district = str(f, "district").slice(0, 80) || null;
   const label = str(f, "label").slice(0, 40) || district || city;
-  if (containsPhone(label)) throw new InputError(PHONE_BLOCKED_MSG);
   return { lat, lng, uf, city, district, label };
 }
 
 export function readBio(f: FormData) {
   const bio = str(f, "bio").slice(0, 700) || null;
-  if (bio && containsPhone(bio)) throw new InputError(PHONE_BLOCKED_MSG);
   return bio;
 }
 
-/** Link do site/empresa: só http(s), sem telefone. */
+/** Link do site/empresa: só http(s). */
 export function readWebsite(raw: string) {
   const t = raw.trim();
   if (!t) return null;
@@ -46,10 +51,8 @@ export function readWebsite(raw: string) {
   try {
     const u = new URL(url);
     if (!u.hostname.includes(".")) throw new Error();
-    if (/wa\.me|whatsapp|api\.whatsapp|t\.me|telegram/i.test(u.hostname + u.pathname)) throw new InputError(PHONE_BLOCKED_MSG);
     return u.toString().slice(0, 200);
-  } catch (e) {
-    if (e instanceof InputError) throw e;
+  } catch {
     throw new InputError("Link inválido. Ex.: www.suaempresa.com.br");
   }
 }
@@ -62,5 +65,19 @@ export function readProfile(f: FormData, creating = false) {
   const instagram = igRaw ? normalizeInstagram(igRaw) : null;
   if (igRaw && !instagram) throw new InputError("Instagram inválido. Use só o nome, ex.: @maria.diarista");
   const website = readWebsite(str(f, "website"));
-  return { ...(creating ? { category: svc.category } : { category: undefined }), priceCents: svc.priceCents, unit: svc.unit, description: svc.description, bio, instagram, website };
+  const social = (k: string, fn: (v: string) => string | null, msg: string) => {
+    const raw = str(f, k);
+    if (!raw) return null;
+    const v = fn(raw);
+    if (!v) throw new InputError(msg);
+    return v;
+  };
+  const whatsapp = social("whatsapp", normalizeWhatsapp, "WhatsApp inválido. Use DDD + número, ex.: (91) 98888-7777");
+  const tiktok = social("tiktok", normalizeTiktok, "TikTok inválido. Use só o @, ex.: @maria.diarista");
+  const youtube = social("youtube", normalizeYoutube, "YouTube inválido. Use o @ do canal ou o link do YouTube.");
+  return {
+    ...(creating ? { category: svc.category } : { category: undefined }),
+    priceCents: svc.priceCents, unit: svc.unit, hourCents: svc.hourCents, description: svc.description,
+    bio, instagram, website, whatsapp, tiktok, youtube,
+  };
 }

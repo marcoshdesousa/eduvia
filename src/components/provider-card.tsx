@@ -13,6 +13,7 @@ export type ProviderCardData = {
   ratingCount: number;
   priceCents: number;
   unit: PriceUnit;
+  hourCents?: number | null;
   plan: "BASIC" | "FULL";
   distanceKm: number | null;
   place: string;
@@ -40,6 +41,7 @@ export function ProviderCard({ p, href }: { p: ProviderCardData; href: string })
         <div className="text-right">
           <p className={`font-extrabold ${p.overBudget ? "text-muted" : ""}`}>{formatBRL(p.priceCents)}</p>
           <p className="text-[11px] text-muted">{UNIT_LABEL[p.unit].per}</p>
+          {p.hourCents ? <p className="text-[11px] font-semibold text-muted">{formatBRL(p.hourCents)}/hora</p> : null}
           {p.overBudget && <p className="text-[10px] text-warning">acima do seu valor</p>}
         </div>
       </Card>

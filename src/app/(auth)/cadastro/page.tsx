@@ -48,7 +48,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
         {work && (
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" name="adult" required className="mt-1 h-4 w-4 accent-[var(--primary)]" />
-            <span>Tenho 18 anos ou mais e sei que não posso passar telefone ou WhatsApp para os clientes.</span>
+            <span>Tenho 18 anos ou mais e sei que nas legendas das fotos não pode ter telefone (o WhatsApp vai no campo próprio do perfil).</span>
           </label>
         )}
         <label className="flex items-start gap-2 text-sm">

@@ -1,13 +1,13 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { AtSign, CalendarClock, CheckCircle2, CreditCard, Globe, Heart, MapPin, MessageCircle, ShieldCheck, Zap } from "lucide-react";
+import { AtSign, CalendarClock, Music2, Phone, SquarePlay, CheckCircle2, CreditCard, Globe, Heart, MapPin, MessageCircle, ShieldCheck, Zap } from "lucide-react";
 import { PageTitle, ProPhoto, Rating, RecommendedBadge, Stars } from "@/components/bits";
 import { ReportButton } from "@/components/report-dialog";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { PAY_METHODS, POSTS_PREVIEW, REPORT_REASONS, UNIT_LABEL, WEEKDAYS, category, formatBRL, isPayMethod, minutesToHHMM, providerVisible, ratingOf, shortName } from "@/lib/domain";
+import { PAY_METHODS, POSTS_PREVIEW, REPORT_REASONS, DIARIA_HOURS, UNIT_LABEL, WEEKDAYS, category, formatBRL, whatsappLabel, whatsappLink, youtubeLink, isPayMethod, minutesToHHMM, providerVisible, ratingOf, shortName } from "@/lib/domain";
 import { postImageUrl, profilePhotoUrl } from "@/lib/providers";
 import { getCurrentUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -93,13 +93,22 @@ export default async function ProviderPage({ params, searchParams }: { params: P
         {cur && (
           <div className="rounded-xl bg-surface-2 p-3">
             <p className="text-2xl font-extrabold">{formatBRL(cur.priceCents)} <span className="text-sm font-medium text-muted">/ {UNIT_LABEL[cur.unit].one}</span></p>
+            {cur.hourCents ? <p className="text-lg font-bold">{formatBRL(cur.hourCents)} <span className="text-sm font-medium text-muted">/ hora (de 1 a {DIARIA_HOURS} horas)</span></p> : null}
+            {cur.unit === "DIARIA" && <p className="text-xs text-muted">Diária de até {DIARIA_HOURS} horas. Dá para contratar várias diárias seguidas.</p>}
             {cur.description && <p className="mt-1 whitespace-pre-line text-sm">{cur.description}</p>}
           </div>
         )}
         {cur?.bio && <p className="whitespace-pre-line text-sm">{cur.bio}</p>}
+        {cur?.whatsapp && (
+          <a href={whatsappLink(cur.whatsapp)} target="_blank" rel="noreferrer nofollow" className={cn(buttonClass("outline"), "w-full border-[#25D366] text-[#128C7E]")}>
+            <Phone size={16} /> WhatsApp {whatsappLabel(cur.whatsapp)}
+          </a>
+        )}
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
           <span className="flex items-center gap-1"><MapPin size={14} /> {cities.join(" · ") || "—"}</span>
           {cur?.instagram && <a href={`https://instagram.com/${cur.instagram}`} target="_blank" rel="noreferrer nofollow" className="flex items-center gap-1 text-primary hover:underline"><AtSign size={14} /> Instagram @{cur.instagram}</a>}
+          {cur?.tiktok && <a href={`https://www.tiktok.com/@${cur.tiktok}`} target="_blank" rel="noreferrer nofollow" className="flex items-center gap-1 text-primary hover:underline"><Music2 size={14} /> TikTok @{cur.tiktok}</a>}
+          {cur?.youtube && <a href={youtubeLink(cur.youtube)} target="_blank" rel="noreferrer nofollow" className="flex items-center gap-1 text-primary hover:underline"><SquarePlay size={14} /> YouTube{cur.youtube.startsWith("@") ? ` ${cur.youtube}` : ""}</a>}
           {cur?.website && <a href={cur.website} target="_blank" rel="noreferrer nofollow" className="flex items-center gap-1 text-primary hover:underline"><Globe size={14} /> {new URL(cur.website).hostname.replace(/^www\./, "")}</a>}
         </div>
         {pays.length > 0 && <p className="flex items-center gap-1 text-sm text-muted"><CreditCard size={14} /> Aceita: {pays.join(", ")}</p>}

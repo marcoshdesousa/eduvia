@@ -16,13 +16,13 @@ import { buttonClass } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { roleIn } from "@/lib/bookings";
 import { db } from "@/lib/db";
-import { ARRIVE_HOURS, BOOKING_LABEL, CLIENT_NOSHOW_WAIT_MIN, REPORT_REASONS, UNIT_LABEL, canReview, category, chatOpen, formatBRL, nextSteps, proSeesAddress, qtyLabel, ratingOf, shortName } from "@/lib/domain";
+import { ARRIVE_HOURS, BOOKING_LABEL, CLIENT_NOSHOW_WAIT_MIN, REPORT_REASONS, UNIT_LABEL, canReview, category, chatOpen, formatBRL, nextSteps, proSeesAddress, qtyLabel, qtyLong, ratingOf, shortName } from "@/lib/domain";
 import { formatWhen } from "@/lib/places";
 import { accountPhotoUrl } from "@/lib/providers";
 import { requireUser } from "@/lib/session";
 import { report, toggleBlock } from "../../social-actions";
 import { cancelSearchAction, changeStatusAction, clientNoShowAction, reviewAction } from "./actions";
-import { AutoRefresh, Countdown, Radar } from "./live";
+import { AutoRefresh, Countdown, LiveDistance, Radar } from "./live";
 import { ReviewForm } from "./review-form";
 import { StatusActions } from "./status-actions";
 
@@ -108,6 +108,13 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
         </Card>
       )}
 
+      {(b.status === "ACCEPTED" || b.status === "ON_THE_WAY") && (isPro || isClient) && b.lat != null && (
+        <Card className="flex items-center gap-3 py-3">
+          <MapPin className="shrink-0 text-primary" />
+          <LiveDistance bookingId={b.id} as={isPro ? "PRO" : "CLIENT"} />
+        </Card>
+      )}
+
       {arriving && (
         <Card className="flex items-center gap-3 border-primary/40 bg-primary/5">
           <Timer className="shrink-0 text-primary" />
@@ -144,7 +151,7 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
             <CalendarClock size={18} className="shrink-0 text-primary" />
             <div>
               <dt className="text-muted">{cat?.emoji} {cat?.label ?? b.category}</dt>
-              <dd className="font-medium">{quick ? "Agora (Contrate rápido)" : formatWhen(b.scheduledAt, b.addrUf)} · {qtyLabel(b.unit, b.quantity)}</dd>
+              <dd className="font-medium">{quick ? "Agora (Contrate rápido)" : formatWhen(b.scheduledAt, b.addrUf)} · {qtyLong(b.unit, b.quantity)}</dd>
             </div>
           </div>
           <div className="flex gap-2">

@@ -143,8 +143,9 @@ export async function adminReply(ticketId: string, _: ActionResult, d: FormData)
 /** Valores fixos do Contrate rápido por profissão (vazio = volta ao padrão). */
 export async function saveQuickPrices(_: ActionResult, d: FormData): Promise<ActionResult> {
   const admin = await requireAdmin();
-  const { CATEGORIES, parseBRL } = await import("@/lib/domain");
+  const { CATEGORIES, parseBRL, quickHourPrice } = await import("@/lib/domain");
   const out: Record<string, number> = {};
+  const hours: Record<string, number> = {};
   for (const c of CATEGORIES) {
     const raw = s(d, `price_${c.slug}`);
     if (!raw) continue;
@@ -152,8 +153,16 @@ export async function saveQuickPrices(_: ActionResult, d: FormData): Promise<Act
     if (v == null || v < 500 || v > 500_000) return { error: `Valor inválido para ${c.label}: use de R$ 5,00 a R$ 5.000,00.` };
     if (v !== c.quick) out[c.slug] = v;
   }
+  for (const c of CATEGORIES) {
+    const raw = s(d, `hour_${c.slug}`);
+    if (!raw || c.unit === "HORA") continue;
+    const v = parseBRL(raw);
+    if (v == null || v < 500 || v > 100_000) return { error: `Valor da hora inválido para ${c.label}: use de R$ 5,00 a R$ 1.000,00.` };
+    if (v !== quickHourPrice(c.slug, out)) hours[c.slug] = v;
+  }
   await saveSetting("quickPrices", out);
-  await audit(admin.id, "settings.quick_prices", "PlatformSetting", null, out);
+  await saveSetting("quickHourPrices", hours);
+  await audit(admin.id, "settings.quick_prices", "PlatformSetting", null, { ...out, horas: hours });
   revalidatePath("/admin/config");
   revalidatePath("/rapido");
   return { ok: "Valores do Contrate rápido salvos. Chamados novos já usam os valores novos." };

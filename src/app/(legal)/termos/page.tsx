@@ -42,7 +42,7 @@ export default function Terms() {
       <p>O Diária Paga funciona instalado no aparelho (aplicativo pelo navegador) e com as notificações ativadas, que são o meio de avisar sobre mensagens, pedidos e chamados.</p>
       <h2>7. Conduta</h2>
       <ul>
-        <li>É proibido passar telefone, WhatsApp ou outro contato fora do app em perfis, fotos, legendas ou no chat. Toda contratação acontece dentro do Diária Paga.</li>
+        <li>O prestador pode informar o WhatsApp, o Instagram, o TikTok e o YouTube nos campos do perfil, e os dois podem trocar contato pelo chat. Só nas fotos de trabalho (e nas legendas delas) é proibido colocar telefone ou contato.</li>
         <li>É proibido usar a plataforma para assédio, ameaça, fraude, spam, conteúdo impróprio ou qualquer atividade ilegal.</li>
         <li>Avaliações devem ser verdadeiras e só podem ser feitas por quem participou de um serviço concluído.</li>
         <li>O Diária Paga pode remover conteúdo e suspender ou bloquear contas que descumprirem estes termos, com registro do motivo.</li>

@@ -40,13 +40,21 @@ test("Diária Paga: trabalhador com perfis, vitrine, mensagens com agendamento, 
   await pro.locator('input[type="file"]:not([capture])').first().setInputFiles(path.join(import.meta.dirname, "fixtures/rosto.png"));
   await pro.getByRole("button", { name: "Usar esta foto" }).click();
   await fillPickedPlace(pro);
-  await pro.getByLabel(/Sobre você nesta profissão/).fill("Faxina caprichada. Me chama no zap 11 98765-4321");
-  await pro.getByRole("button", { name: "Criar perfil" }).click();
-  await expect(pro.getByText(/Não é permitido passar telefone/)).toBeVisible();
-  await pro.getByLabel(/Sobre você nesta profissão/).fill("Faxina caprichada, 10 anos de experiência.");
+  // telefone liberado na bio (só a legenda das fotos bloqueia)
+  await pro.getByLabel(/Sobre você nesta profissão/).fill("Faxina caprichada, 10 anos de experiência. Zap 11 98765-4321");
   await pro.getByRole("button", { name: "Criar perfil" }).click();
   await expect(pro).toHaveURL(/\/painel\/perfil\?p=/, { timeout: 20_000 });
   await expect(pro.getByRole("heading", { name: "Meu perfil" })).toBeVisible();
+  // redes sociais e valor por hora
+  await pro.getByRole("textbox", { name: "WhatsApp" }).fill("(11) 98765-4321");
+  await pro.getByLabel("TikTok").fill("@bia.faxina");
+  await pro.getByText("Também trabalho por hora").click();
+  await pro.getByLabel("Valor da hora (R$)").fill("10");
+  await pro.getByRole("button", { name: "Salvar perfil" }).click();
+  await expect(pro.getByText(/não podem sair mais baratas que a diária/)).toBeVisible();
+  await pro.getByLabel("Valor da hora (R$)").fill("30");
+  await pro.getByRole("button", { name: "Salvar perfil" }).click();
+  await expect(pro.getByText("R$ 30,00 / hora", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
   await shot(pro, "02-meu-perfil");
 
   // agenda aberta o dia todo (o teste roda a qualquer hora)
@@ -73,7 +81,10 @@ test("Diária Paga: trabalhador com perfis, vitrine, mensagens com agendamento, 
   await expect(card.getByText("★ Recomendado")).toBeVisible();
   await shot(cli, "05-vitrine");
   await card.click();
-  await expect(cli.getByText("Faxina caprichada, 10 anos de experiência.")).toBeVisible();
+  await expect(cli.getByText(/Faxina caprichada, 10 anos de experiência/)).toBeVisible();
+  await expect(cli.getByRole("link", { name: /WhatsApp \(11\) 98765-4321/ })).toHaveAttribute("href", "https://wa.me/5511987654321");
+  await expect(cli.getByRole("link", { name: /TikTok @bia.faxina/ })).toHaveAttribute("href", "https://www.tiktok.com/@bia.faxina");
+  await expect(cli.getByText(/\/ hora \(de 1 a 8 horas\)/)).toBeVisible();
 
   // 4. mensagens: cliente manda, edita; trabalhador agenda pela conversa; cliente confirma com o endereço
   await cli.getByRole("button", { name: /Mensagem/ }).click();
@@ -120,6 +131,11 @@ test("Diária Paga: trabalhador com perfis, vitrine, mensagens com agendamento, 
   await sql(`UPDATE "ProviderProfile" SET "quickOn" = false WHERE id <> $1 AND "userId" IN (SELECT id FROM "user" WHERE name LIKE 'Bia % Souza')`, [proRow.id]);
   await cli.goto("/rapido?servico=diarista");
   await expect(cli.getByText("5. Valor fixo")).toBeVisible({ timeout: 20_000 });
+  // por hora: valor fixo da hora (diária ÷ 8 × 1,5)
+  await cli.getByRole("radio", { name: /Por hora/ }).click();
+  await expect(cli.getByText(/De 1 a 8 horas/)).toBeVisible();
+  await expect(cli.getByText("R$ 29,00").last()).toBeVisible();
+  await cli.getByRole("radio", { name: /Diária/ }).click();
   await cli.getByRole("button", { name: "Mais" }).click();
   await expect(cli.getByText("R$ 300,00")).toBeVisible();
   await cli.getByLabel("Rua / avenida").fill("Rua das Flores");
@@ -141,14 +157,14 @@ test("Diária Paga: trabalhador com perfis, vitrine, mensagens com agendamento, 
   await expect(pro.getByText(/Você tem para chegar/)).toBeVisible();
   await expect(cli.getByText(/Chega em até/)).toBeVisible({ timeout: 20_000 });
 
-  // mensagem rápida pelo menu dos 4 quadradinhos; telefone bloqueado
+  // mensagem rápida pelo menu dos 4 quadradinhos; telefone liberado no chat
   await pro.getByRole("button", { name: /Mais opções/ }).click();
   await pro.getByRole("button", { name: /Rápidas/ }).click();
   await pro.getByRole("button", { name: "Chego em 30 minutos" }).click();
   await expect(cli.getByText("Chego em 30 minutos").first()).toBeVisible({ timeout: 20_000 });
   await cli.getByLabel("Mensagem").fill("me liga 11 91234-5678");
   await cli.getByRole("button", { name: "Enviar", exact: true }).click();
-  await expect(cli.getByText(/Não é permitido passar telefone/)).toBeVisible();
+  await expect(pro.getByText("me liga 11 91234-5678")).toBeVisible({ timeout: 20_000 });
 
   for (const step of ["Estou a caminho", "Cheguei", "Iniciar serviço"]) {
     await pro.getByRole("button", { name: step, exact: true }).click();

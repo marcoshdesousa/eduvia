@@ -23,6 +23,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     as: "PRO",
     quickReplies: pro.quickReplies.map((q) => q.text),
     payText: methods.length ? `💳 Formas de pagamento que eu aceito: ${methods.join(", ")}. O pagamento é feito direto para mim, no dia do serviço.` : null,
-    services: pro.services.map((s) => ({ category: s.category, label: `${category(s.category)?.emoji ?? ""} ${category(s.category)?.label ?? s.category}`, unit: s.unit, units: unitsOf(s.category), priceCents: s.priceCents })),
+    services: pro.services.map((s) => ({ category: s.category, label: `${category(s.category)?.emoji ?? ""} ${category(s.category)?.label ?? s.category}`, unit: s.unit, units: s.hourCents && !unitsOf(s.category).includes("HORA") ? [...unitsOf(s.category), "HORA" as const] : unitsOf(s.category), priceCents: s.priceCents, hourCents: s.hourCents })),
   });
 }

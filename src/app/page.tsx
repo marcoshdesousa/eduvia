@@ -67,7 +67,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
           {[
             { icon: ShieldCheck, t: "CPF verificado", d: "Uma conta por CPF. Prestadores com 18 anos ou mais." },
             { icon: MapPin, t: "Endereço protegido", d: "Só quem aceitou vê o seu endereço." },
-            { icon: MessagesSquare, t: "Tudo pelo chat", d: "Texto, áudio, foto e vídeo. Sem passar telefone." },
+            { icon: MessagesSquare, t: "Tudo pelo chat", d: "Texto, áudio, foto e vídeo. E o WhatsApp do prestador no perfil, se ele quiser." },
             { icon: Star, t: "Avaliações reais", d: "Só quem concluiu um serviço pode avaliar." },
           ].map(({ icon: Icon, t, d }) => (
             <Card key={t} className="space-y-2">
