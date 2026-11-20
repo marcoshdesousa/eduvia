@@ -39,6 +39,11 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
   }
 
   const address = { street: "Rua Teste", number: "1", district: "Sé", city: "São Paulo", uf: "SP", lat: -23.551, lng: -46.631 };
+  // cada teste do rápido numa cidade diferente (longe uma da outra) para os prestadores não se misturarem
+  const MANAUS = { street: "Rua Teste", number: "1", city: "Manaus", uf: "AM", lat: -3.1019, lng: -60.025 };
+  const RECIFE = { street: "Rua Teste", number: "1", city: "Recife", uf: "PE", lat: -8.0476, lng: -34.877 };
+  const BELEM = { street: "Rua Teste", number: "1", city: "Belém", uf: "PA", lat: -1.4558, lng: -48.4902 };
+  const POA = { street: "Rua Teste", number: "1", city: "Porto Alegre", uf: "RS", lat: -30.0346, lng: -51.2177 };
 
   afterAll(async () => {
     await db.user.deleteMany({ where: { id: { in: created } } });
@@ -59,13 +64,13 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
 
   it("Contrate rápido: valor fixo; só toca para Completo com a caixinha aceita e perto; o primeiro que aceita leva", async () => {
     const { createQuick, acceptOffer, BookingError } = await import("./bookings");
-    const near = await provider("Perto", 12000);
-    const far = await provider("Longe", 12000, -23.9, -46.9); // ~50 km
-    const basic = await provider("Básico", 12000, -23.55, -46.63, { plan: "BASIC" });
-    const noTerms = await provider("Sem caixinha", 12000, -23.55, -46.63, { terms: false });
+    const near = await provider("Perto", 12000, BELEM.lat, BELEM.lng);
+    const far = await provider("Longe", 12000, BELEM.lat - 0.45, BELEM.lng - 0.2); // ~55 km
+    const basic = await provider("Básico", 12000, BELEM.lat, BELEM.lng, { plan: "BASIC" });
+    const noTerms = await provider("Sem caixinha", 12000, BELEM.lat, BELEM.lng, { terms: false });
     const client = await user("Cliente Rápido");
-    await expect(createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "", address })).rejects.toBeInstanceOf(BookingError);
-    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 2, notes: "Faxina completa, casa de 2 quartos", address });
+    await expect(createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "", address: BELEM })).rejects.toBeInstanceOf(BookingError);
+    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 2, notes: "Faxina completa, casa de 2 quartos", address: BELEM });
     expect(b.estimateCents).toBe(2 * 15000); // valor fixo da diarista × 2 diárias, não o preço do perfil
     const offers = await db.quickOffer.findMany({ where: { bookingId: b.id } });
     const ids = offers.map((o) => o.proId);
@@ -87,9 +92,9 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
 
   it("prestador que não chega em 2 horas: cancelado e 7 dias fora do rápido", async () => {
     const { createQuick, acceptOffer, quickSweep } = await import("./bookings");
-    const pro = await provider("Atrasado", 11000, -23.552, -46.632);
+    const pro = await provider("Atrasado", 11000, MANAUS.lat, MANAUS.lng);
     const client = await user("Cliente Espera");
-    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "Faxina completa na casa", address });
+    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "Faxina completa na casa", address: MANAUS });
     const offer = await db.quickOffer.findFirstOrThrow({ where: { bookingId: b.id, proId: pro.proId } });
     await acceptOffer(offer.id, pro.id);
     await quickSweep(new Date(Date.now() + 2 * 3_600_000 + 60_000));
@@ -101,9 +106,9 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
 
   it("cliente que não estava: só depois de 15 min no local; fica 30 dias sem contratar", async () => {
     const { createQuick, acceptOffer, changeStatus, clientNoShow, BookingError } = await import("./bookings");
-    const pro = await provider("Pontual", 10500, -23.553, -46.633);
+    const pro = await provider("Pontual", 10500, RECIFE.lat, RECIFE.lng);
     const client = await user("Cliente Sumido");
-    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "Faxina completa na casa", address });
+    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "Faxina completa na casa", address: RECIFE });
     const offer = await db.quickOffer.findFirstOrThrow({ where: { bookingId: b.id, proId: pro.proId } });
     await acceptOffer(offer.id, pro.id);
     await changeStatus(b.id, "ARRIVED", { id: pro.id, as: "PRO" });
@@ -116,13 +121,10 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
 
   it("quem recusa muito vai para o fim da fila", async () => {
     const { createQuick, quickCandidates, quickStats } = await import("./bookings");
-    const refuser = await provider("Recusa Muito", 12000, -23.5506, -46.6334);
-    const good = await provider("Aceita Sempre", 12000, -23.62, -46.7); // mais longe
+    const refuser = await provider("Recusa Muito", 12000, POA.lat, POA.lng);
+    const good = await provider("Aceita Sempre", 12000, POA.lat - 0.08, POA.lng - 0.08); // mais longe
     const client = await user("Cliente Fila");
     // histórico: o primeiro recusou 8 de 10; o segundo aceitou 6 de 6
-    const old = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "Chamado antigo para o teste", address });
-    await db.booking.update({ where: { id: old.id }, data: { status: "CANCELED_CLIENT" } });
-    await db.quickOffer.deleteMany({ where: { bookingId: old.id } });
     const mk = (proId: string, state: "ACCEPTED" | "DECLINED", n: number) =>
       Promise.all(Array.from({ length: n }, () => db.booking.create({ data: { mode: "QUICK", clientId: client.id, status: "CANCELED_CLIENT", category: "diarista", unit: "DIARIA", quantity: 1, scheduledAt: new Date(), addrStreet: "x", addrCity: "São Paulo", addrUf: "SP", offers: { create: { proId, wave: 1, distanceKm: 1, priceCents: 15000, state, expiresAt: new Date() } } } })));
     await mk(refuser.proId, "DECLINED", 8);
@@ -130,7 +132,7 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
     await mk(good.proId, "ACCEPTED", 6);
     const stats = await quickStats([refuser.proId, good.proId]);
     expect(stats.get(refuser.proId)).toEqual({ accepted: 2, missed: 8 });
-    const b = await db.booking.create({ data: { mode: "QUICK", clientId: client.id, status: "SEARCHING", category: "diarista", unit: "DIARIA", quantity: 1, estimateCents: 15000, scheduledAt: new Date(), addrStreet: "x", addrCity: "São Paulo", addrUf: "SP", lat: address.lat, lng: address.lng } });
+    const b = await db.booking.create({ data: { mode: "QUICK", clientId: client.id, status: "SEARCHING", category: "diarista", unit: "DIARIA", quantity: 1, estimateCents: 15000, scheduledAt: new Date(), addrStreet: "x", addrCity: "Porto Alegre", addrUf: "RS", lat: POA.lat, lng: POA.lng } });
     const order = (await quickCandidates(b)).map((p) => p.id).filter((id) => id === refuser.proId || id === good.proId);
     expect(order).toEqual([good.proId, refuser.proId]);
     await db.booking.update({ where: { id: b.id }, data: { status: "CANCELED_CLIENT" } });
