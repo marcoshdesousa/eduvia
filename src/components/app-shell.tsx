@@ -11,7 +11,7 @@ import { ACTIVE_STATUSES } from "@/lib/domain";
 import { unreadCount } from "@/lib/notifications";
 import { getMode, type CurrentUser, type Mode } from "@/lib/session";
 
-async function itemsFor(user: CurrentUser, mode: Mode): Promise<NavItem[]> {
+async function itemsFor(user: CurrentUser, mode: Mode, pending: number): Promise<NavItem[]> {
   if (user.role === "ADMIN") {
     return [
       { href: "/admin", label: "Resumo", icon: "LayoutDashboard" },
@@ -34,6 +34,7 @@ async function itemsFor(user: CurrentUser, mode: Mode): Promise<NavItem[]> {
   }
   return [
     { href: "/inicio", label: "Início", icon: "Home" },
+    { href: "/pedidos", label: "Pedidos", icon: "ClipboardList", badge: pending },
     { href: "/rapido", label: "Rápido", icon: "Zap", big: true },
     { href: "/mensagens", label: "Mensagens", icon: "MessageCircle", badge: messages },
     { href: "/conta", label: "Conta", icon: "User" },
@@ -43,7 +44,6 @@ async function itemsFor(user: CurrentUser, mode: Mode): Promise<NavItem[]> {
 /** Moldura das telas: topo com logo, Pedidos e avisos; menu de baixo no celular. Sem login, mostra Entrar/Criar conta. */
 export async function AppShell({ user, children }: { user: CurrentUser | null; children: React.ReactNode }) {
   const mode = await getMode(user);
-  const items = user ? await itemsFor(user, mode) : [];
   const unread = user ? await unreadCount(user.id) : 0;
   const pending =
     user && user.role !== "ADMIN"
@@ -51,6 +51,7 @@ export async function AppShell({ user, children }: { user: CurrentUser | null; c
         ? await db.booking.count({ where: { proId: user.provider.id, status: { in: ["WAITING_PRO", ...ACTIVE_STATUSES] } } })
         : await db.booking.count({ where: { clientId: user.id, status: { in: ["PROPOSED", "SEARCHING", "WAITING_PRO", ...ACTIVE_STATUSES] } } })
       : 0;
+  const items = user ? await itemsFor(user, mode, pending) : [];
   return (
     <div className="min-h-dvh pb-24 md:pb-8">
       <header className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur">
@@ -61,7 +62,7 @@ export async function AppShell({ user, children }: { user: CurrentUser | null; c
           {user ? (
             <>
               <TopNav items={items} />
-              {user.role !== "ADMIN" && (
+              {user.role !== "ADMIN" && mode === "trabalho" && (
                 <Link href="/pedidos" className="relative inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-semibold hover:bg-surface-2" aria-label={`Pedidos${pending ? ` (${pending} em andamento)` : ""}`}>
                   <ClipboardList size={17} className="text-primary" /> Pedidos
                   {pending > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">{pending > 9 ? "9+" : pending}</span>}
