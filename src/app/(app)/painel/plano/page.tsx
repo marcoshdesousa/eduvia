@@ -44,7 +44,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
       <PageTitle title="Seu plano" subtitle="Para o cliente é grátis. Você paga só a mensalidade, sem comissão: o valor do serviço é todo seu." />
       {!active && (
         <Card className="border-danger/50 bg-danger/5">
-          <p className="font-semibold">🔒 {sub?.trial || bloqueado ? "Seu teste grátis acabou" : "Seu plano venceu"}</p>
+          <p className="font-semibold">🔒 {sub?.trial ? "Seu teste grátis acabou" : "Seu plano venceu"}</p>
           <p className="text-sm">A área de trabalho fica bloqueada (perfis, agenda, mensagens, financeiro e histórico) até você pagar. Sua conta de cliente continua liberada.</p>
         </Card>
       )}
