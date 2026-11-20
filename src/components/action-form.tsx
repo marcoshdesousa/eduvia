@@ -38,7 +38,7 @@ export function ActionForm({
       {children}
       <div className="mt-3 empty:hidden">
         <FormError message={state?.error} />
-        {state?.ok && <div role="status" className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">{state.ok}</div>}
+        {state?.ok && <div role="status" className="rounded-2xl border border-success/30 bg-success/10 px-4 py-2.5 text-sm font-medium text-success">{state.ok}</div>}
       </div>
     </form>
   );

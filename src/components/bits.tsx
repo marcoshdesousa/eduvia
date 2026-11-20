@@ -43,13 +43,13 @@ export function BookingBadge({ status }: { status: BookingStatus }) {
 
 /** Selo do plano Completo na vitrine. */
 export function RecommendedBadge() {
-  return <Badge tone="warning" className="bg-accent-soft text-accent">★ Recomendado</Badge>;
+  return <Badge tone="warning" className="bg-gradient-to-r from-amber-100 to-amber-200 text-amber-800 ring-1 ring-amber-300/60 dark:from-amber-900/40 dark:to-amber-800/40 dark:text-amber-200">★ Recomendado</Badge>;
 }
 
 export function Empty({ icon, title, children }: { icon?: React.ReactNode; title: string; children?: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
-      {icon && <div className="mb-2 flex justify-center text-muted">{icon}</div>}
+    <div className="rounded-3xl border border-dashed border-border bg-surface/60 px-4 py-10 text-center">
+      {icon && <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">{icon}</div>}
       <p className="font-semibold">{title}</p>
       {children && <div className="mt-1 text-sm text-muted">{children}</div>}
     </div>
@@ -60,8 +60,8 @@ export function PageTitle({ title, subtitle, children }: { title: string; subtit
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-bold text-brand-ink">{title}</h1>
-        {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
+        <h1 className="text-[1.65rem] font-extrabold leading-tight tracking-tight text-brand-ink">{title}</h1>
+        {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
       </div>
       {children}
     </div>
