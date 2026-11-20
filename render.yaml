@@ -1,0 +1,50 @@
+# Blueprint do Render do Diária Paga: um serviço web (site + rotinas: Contrate rápido a cada 10 s, o resto a cada
+# 5 min) com disco para as fotos, áudios e vídeos, e o PostgreSQL. (Os nomes "eduvia" ficaram para não criar serviços novos no Render.)
+# Depois preencha as variáveis marcadas com sync: false (painel → serviço → Environment).
+
+services:
+  - type: web
+    name: eduvia
+    runtime: node
+    plan: standard
+    region: virginia
+    buildCommand: npm ci && npm run build
+    # aplica as migrações do banco (a 38_diaria_paga apaga as tabelas antigas da HoraLimp)
+    preDeployCommand: npx prisma migrate deploy && npm run db:seed
+    startCommand: npm start
+    healthCheckPath: /termos
+    disk:
+      name: eduvia-arquivos
+      mountPath: /var/data
+      sizeGB: 5 # fotos de perfil, portfólio e fotos/áudios/vídeos do chat
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eduvia-db
+          property: connectionString
+      - key: NODE_VERSION
+        value: "22"
+      # O endereço do app é detectado sozinho (RENDER_EXTERNAL_URL). Só preencha APP_URL com domínio próprio.
+      - key: BETTER_AUTH_SECRET
+        generateValue: true # também protege CPF e celular guardados: não troque depois de ter contas
+      - key: STORAGE_DRIVER
+        value: local
+      - key: STORAGE_LOCAL_DIR
+        value: /var/data/uploads
+      # CPF do dono: a conta criada com este CPF vira administradora
+      - key: ADMIN_CPF
+        sync: false
+      # Pix dos planos e da taxa de desbloqueio (SyncPay)
+      - key: SYNCPAY_CLIENT_ID
+        sync: false
+      - key: SYNCPAY_CLIENT_SECRET
+        sync: false
+      # notificações push: as chaves são geradas sozinhas e guardadas no banco na primeira vez
+      - key: VAPID_SUBJECT
+        value: mailto:suporte@diariapaga.com.br
+
+databases:
+  - name: eduvia-db
+    plan: basic-256mb
+    region: virginia
+    postgresMajorVersion: "16"
