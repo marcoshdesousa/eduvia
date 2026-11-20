@@ -32,7 +32,8 @@ export default async function AdminConversation({ params }: { params: Promise<{ 
       </div>
     );
   }
-  const msgs = await db.message.findMany({ where: { bookingId: id }, orderBy: { createdAt: "asc" } });
+  const conv = b.proId ? await db.conversation.findUnique({ where: { clientId_proId: { clientId: b.clientId, proId: b.proId } } }) : null;
+  const msgs = conv ? await db.message.findMany({ where: { conversationId: conv.id }, orderBy: { createdAt: "asc" } }) : [];
   return (
     <div className="space-y-4">
       <Link href={`/pedidos/${id}`} className="text-sm text-muted hover:text-foreground">← Contratação</Link>
@@ -44,7 +45,9 @@ export default async function AdminConversation({ params }: { params: Promise<{ 
             <div key={m.id} className={cn("flex", fromClient ? "justify-start" : "justify-end")}>
               <Card className="max-w-[85%] py-2 text-sm">
                 <p className="text-xs text-muted">{fromClient ? "Cliente" : "Prestador"} · {m.createdAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p>
-                {m.kind === "TEXT" && <p className="whitespace-pre-wrap">{m.text}</p>}
+                {m.deletedAt && <p className="text-xs italic text-muted">(apagada pelo autor)</p>}
+                {m.kind === "SCHEDULE" && <p className="text-xs">📅 Agendamento</p>}
+                {m.kind === "TEXT" && <p className="whitespace-pre-wrap">{m.text}{m.editedAt && <span className="text-xs text-muted"> (editada)</span>}</p>}
                 {m.kind === "IMAGE" && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={`/api/mensagens/${m.id}/arquivo`} alt="Foto do chat" className="max-h-60 rounded" />

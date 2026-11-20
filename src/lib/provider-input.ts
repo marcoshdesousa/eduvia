@@ -1,6 +1,6 @@
 // Leitura e conferência do que o prestador digita (serviço, endereço, bio).
 import type { PriceUnit } from "@/generated/prisma/enums";
-import { PHONE_BLOCKED_MSG, category, containsPhone, parseBRL } from "@/lib/domain";
+import { PHONE_BLOCKED_MSG, category, containsPhone, normalizeInstagram, parseBRL, unitsOf } from "@/lib/domain";
 import { officialCity } from "@/lib/places";
 
 export class InputError extends Error {}
@@ -12,8 +12,8 @@ export function readService(f: FormData) {
   if (!cat) throw new InputError("Escolha o serviço.");
   const price = parseBRL(str(f, "price"));
   if (price == null || price < 500 || price > 500_000) throw new InputError("Informe um valor entre R$ 5,00 e R$ 5.000,00.");
-  const unitRaw = str(f, "unit");
-  const unit = (["DIARIA", "HORA", "SERVICO"].includes(unitRaw) ? unitRaw : cat.unit) as PriceUnit;
+  const unitRaw = str(f, "unit") as PriceUnit;
+  const unit = unitsOf(cat.slug).includes(unitRaw) ? unitRaw : cat.unit;
   const description = str(f, "description").slice(0, 600) || null;
   if (description && containsPhone(description)) throw new InputError(PHONE_BLOCKED_MSG);
   return { category: cat.slug, priceCents: price, unit, description };
@@ -36,4 +36,31 @@ export function readBio(f: FormData) {
   const bio = str(f, "bio").slice(0, 700) || null;
   if (bio && containsPhone(bio)) throw new InputError(PHONE_BLOCKED_MSG);
   return bio;
+}
+
+/** Link do site/empresa: só http(s), sem telefone. */
+export function readWebsite(raw: string) {
+  const t = raw.trim();
+  if (!t) return null;
+  const url = /^https?:\/\//i.test(t) ? t : `https://${t}`;
+  try {
+    const u = new URL(url);
+    if (!u.hostname.includes(".")) throw new Error();
+    if (/wa\.me|whatsapp|api\.whatsapp|t\.me|telegram/i.test(u.hostname + u.pathname)) throw new InputError(PHONE_BLOCKED_MSG);
+    return u.toString().slice(0, 200);
+  } catch (e) {
+    if (e instanceof InputError) throw e;
+    throw new InputError("Link inválido. Ex.: www.suaempresa.com.br");
+  }
+}
+
+/** Dados de um perfil (profissão): valor, cobrança, especificações, bio, Instagram e site. */
+export function readProfile(f: FormData, creating = false) {
+  const svc = readService(f);
+  const bio = readBio(f);
+  const igRaw = str(f, "instagram");
+  const instagram = igRaw ? normalizeInstagram(igRaw) : null;
+  if (igRaw && !instagram) throw new InputError("Instagram inválido. Use só o nome, ex.: @maria.diarista");
+  const website = readWebsite(str(f, "website"));
+  return { ...(creating ? { category: svc.category } : { category: undefined }), priceCents: svc.priceCents, unit: svc.unit, description: svc.description, bio, instagram, website };
 }

@@ -26,7 +26,7 @@ async function shrink(file: File): Promise<Blob> {
   }
 }
 
-export function PostUploader({ left }: { left: number }) {
+export function PostUploader({ left, serviceId }: { left: number; serviceId: string }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -34,7 +34,7 @@ export function PostUploader({ left }: { left: number }) {
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (left <= 0) return <p className="text-center text-sm text-muted">Portfólio cheio. Apague uma foto para pôr outra.</p>;
+  if (left <= 0) return <p className="text-center text-sm text-muted">Este perfil já tem 8 fotos. Apague uma para pôr outra.</p>;
   return (
     <div className="space-y-3">
       <input
@@ -73,6 +73,7 @@ export function PostUploader({ left }: { left: number }) {
                   const data = new FormData();
                   data.set("image", await shrink(file), "foto.jpg");
                   data.set("caption", caption);
+                  data.set("serviceId", serviceId);
                   const r = await fetch("/api/painel/post", { method: "POST", body: data });
                   const body = (await r.json().catch(() => ({}))) as { error?: string };
                   if (!r.ok) throw new Error(body.error ?? "Não foi possível publicar.");

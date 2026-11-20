@@ -1,23 +1,36 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Briefcase, CalendarCheck, CreditCard, Flag, Heart, Home, LayoutDashboard, LifeBuoy, Search, Settings, ShieldCheck, User, Users, ClipboardList, Zap } from "lucide-react";
+import { Bell, Briefcase, CalendarCheck, CalendarDays, CreditCard, Flag, Heart, Home, LayoutDashboard, LifeBuoy, MessageCircle, Search, Settings, ShieldCheck, User, Users, ClipboardList, Wallet, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const ICONS = { Bell, Briefcase, CalendarCheck, CreditCard, Flag, Heart, Home, LayoutDashboard, LifeBuoy, Search, Settings, ShieldCheck, User, Users, ClipboardList, Zap };
-export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
+const ICONS = { Bell, Briefcase, CalendarCheck, CalendarDays, CreditCard, Flag, Heart, Home, LayoutDashboard, LifeBuoy, MessageCircle, Search, Settings, ShieldCheck, User, Users, ClipboardList, Wallet, Zap };
+/** `big`: botão destacado no meio do menu (o Contrate rápido). */
+export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number; big?: boolean };
 
-const active = (path: string, href: string) => (href === "/admin" ? path === href : path === href || path.startsWith(`${href}/`));
+const matches = (path: string, href: string) => path === href || path.startsWith(`${href}/`);
+/** Fica marcado o item mais específico que bate com a página (ex.: /painel/agenda marca "Agenda", não "Minha área"). */
+const pick = (path: string, items: NavItem[]) => items.filter((i) => matches(path, i.href)).sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
 /** Menu de baixo no celular (fixo) e lateral/topo no computador. */
 export function BottomNav({ items }: { items: NavItem[] }) {
   const path = usePathname();
+  const current = pick(path, items);
   return (
     <nav aria-label="Menu principal" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
       <ul className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map((it) => {
           const Icon = ICONS[it.icon];
-          const on = active(path, it.href);
+          const on = current === it.href;
+          if (it.big)
+            return (
+              <li key={it.href} className="flex justify-center">
+                <Link href={it.href} aria-current={on ? "page" : undefined} className="dp-ring -mt-6 flex h-[4.25rem] w-[4.25rem] flex-col items-center justify-center rounded-full border-4 border-surface bg-gradient-to-br from-amber-400 to-accent text-[11px] font-extrabold text-brand-ink shadow-lg">
+                  <Icon size={24} strokeWidth={2.6} className="fill-brand-ink/10" />
+                  {it.label}
+                </Link>
+              </li>
+            );
           return (
             <li key={it.href}>
               <Link href={it.href} className={cn("relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium", on ? "text-primary" : "text-muted")} aria-current={on ? "page" : undefined}>
@@ -35,13 +48,14 @@ export function BottomNav({ items }: { items: NavItem[] }) {
 
 export function TopNav({ items }: { items: NavItem[] }) {
   const path = usePathname();
+  const current = pick(path, items);
   return (
     <nav aria-label="Menu" className="hidden items-center gap-1 md:flex">
       {items.map((it) => {
         const Icon = ICONS[it.icon];
-        const on = active(path, it.href);
+        const on = current === it.href;
         return (
-          <Link key={it.href} href={it.href} className={cn("relative inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium", on ? "bg-primary/10 text-primary" : "text-muted hover:bg-surface-2 hover:text-foreground")}>
+          <Link key={it.href} href={it.href} className={cn("relative inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium", it.big ? "bg-gradient-to-r from-amber-400 to-accent font-bold text-brand-ink" : on ? "bg-primary/10 text-primary" : "text-muted hover:bg-surface-2 hover:text-foreground")}>
             <Icon size={16} />
             {it.label}
             {!!it.badge && <span className="rounded-full bg-danger px-1.5 text-[10px] leading-4 text-white">{it.badge > 9 ? "9+" : it.badge}</span>}

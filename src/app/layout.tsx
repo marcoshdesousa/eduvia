@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { AppGate } from "@/components/app-gate";
 import { ThemeProvider } from "@/components/theme";
 import "./globals.css";
 
@@ -18,7 +19,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" suppressHydrationWarning className={`${inter.variable} ${display.variable}`}>
       <body className="min-h-dvh">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <AppGate>{children}</AppGate>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -4,18 +4,20 @@ import type { Plan } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { distanceKm, ratingOf, rankProviders } from "@/lib/domain";
 
-/** Onde um prestador aparece: conta ativa, plano/teste em dia, sem pausa, com foto, serviço e endereço. */
+/** Onde um prestador aparece: conta ativa, plano/teste em dia, sem pausa, com pelo menos um perfil com foto e um endereço. */
 export function visibleWhere(now = new Date()): Prisma.ProviderProfileWhereInput {
   return {
     status: "ACTIVE",
     paused: false,
-    photoKey: { not: null },
     subscription: { currentPeriodEnd: { gt: now } },
     user: { blockedAt: null },
-    services: { some: {} },
+    services: { some: { photoKey: { not: null } } },
     places: { some: { active: true } },
   };
 }
+
+/** Perfil (profissão) pronto para aparecer: tem foto. */
+export const profileReady = { photoKey: { not: null } } satisfies Prisma.ProviderServiceWhereInput;
 
 export type SearchInput = {
   category: string;
@@ -39,13 +41,14 @@ export function bbox(p: { lat: number; lng: number }, km: number) {
   return { lat: { gte: p.lat - dLat, lte: p.lat + dLat }, lng: { gte: p.lng - dLng, lte: p.lng + dLng } };
 }
 
+/** Vitrine de uma profissão. Sem cidade e sem localização, mostra todos (Completo primeiro). */
 export async function searchProviders(f: SearchInput, opts: { clientId?: string | null; now?: Date } = {}) {
   const radius = f.radiusKm ?? 30;
-  const placeFilter: Prisma.ProviderPlaceWhereInput = f.near ? { active: true, ...bbox(f.near, radius) } : { active: true, uf: f.uf ?? undefined, city: f.city ?? undefined };
+  const placeFilter: Prisma.ProviderPlaceWhereInput = f.near ? { active: true, ...bbox(f.near, radius) } : { active: true, uf: f.uf || undefined, city: f.city || undefined };
   const rows = await db.providerProfile.findMany({
     where: {
       ...visibleWhere(opts.now),
-      services: { some: { category: f.category } },
+      services: { some: { category: f.category, ...profileReady } },
       places: { some: placeFilter },
       ...(opts.clientId ? notBlockedBy(opts.clientId) : {}),
     },
@@ -63,6 +66,13 @@ export async function searchProviders(f: SearchInput, opts: { clientId?: string 
 }
 
 export const providerPhotoUrl = (p: { id: string; photoKey: string | null }) => (p.photoKey ? `/api/foto/${p.id}?v=${p.photoKey.slice(-12, -5)}` : null);
+/** Foto de um perfil (profissão) do trabalhador. */
+export const profilePhotoUrl = (s: { id: string; photoKey: string | null }) => (s.photoKey ? `/api/perfil/${s.id}/foto?v=${s.photoKey.slice(-12, -5)}` : null);
+/** Foto que representa a conta (a do primeiro perfil com foto). */
+export const accountPhotoUrl = (p: { id: string; photoKey: string | null; services?: { id: string; photoKey: string | null }[] }) => {
+  const s = p.services?.find((x) => x.photoKey);
+  return s ? profilePhotoUrl(s) : providerPhotoUrl(p);
+};
 export const postImageUrl = (post: { id: string; imageKey: string }) => `/api/post/${post.id}?v=${post.imageKey.slice(-12, -5)}`;
 
 /** O perfil (foto e portfólio) pode ser visto por esta pessoa? Público se está na vitrine; senão, só o dono, o admin e quem já contratou. */

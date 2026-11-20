@@ -6,7 +6,7 @@ import { PhotoCropper } from "@/components/photo-cropper";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/form";
 
-export function PhotoEditor({ url }: { url: string | null }) {
+export function PhotoEditor({ url, endpoint }: { url: string | null; endpoint: string }) {
   const router = useRouter();
   const [blob, setBlob] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,7 +23,7 @@ export function PhotoEditor({ url }: { url: string | null }) {
             setBusy(true);
             const data = new FormData();
             data.set("photo", blob, "foto.jpg");
-            const r = await fetch("/api/painel/foto", { method: "POST", body: data }).catch(() => null);
+            const r = await fetch(endpoint, { method: "POST", body: data }).catch(() => null);
             const body = (await r?.json().catch(() => ({}))) as { error?: string };
             setBusy(false);
             if (!r?.ok) return setMsg({ error: body?.error ?? "Não foi possível salvar a foto." });

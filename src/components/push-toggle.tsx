@@ -2,12 +2,7 @@
 import { useEffect, useState } from "react";
 import { Bell, BellOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const b64 = (s: string) => {
-  const pad = "=".repeat((4 - (s.length % 4)) % 4);
-  const raw = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
-  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
-};
+import { ensurePushSubscribed } from "@/lib/push-client";
 
 /** Liga/desliga as notificações no celular (push). */
 export function PushToggle() {
@@ -30,11 +25,7 @@ export function PushToggle() {
     setState("loading");
     const perm = await Notification.requestPermission();
     if (perm !== "granted") return setState(perm === "denied" ? "denied" : "off");
-    const { key } = await fetch("/api/push").then((r) => r.json()).catch(() => ({ key: null }));
-    if (!key) return setState("unsupported");
-    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
-    await fetch("/api/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub) });
-    setState("on");
+    setState((await ensurePushSubscribed()) ? "on" : "unsupported");
   };
   if (state === "unsupported") return <p className="text-sm text-muted">Este navegador não recebe notificações. No iPhone, adicione o Diária Paga à tela de início primeiro (veja “Instalar o app”).</p>;
   if (state === "denied") return <p className="text-sm text-muted">As notificações estão bloqueadas nas configurações do navegador.</p>;

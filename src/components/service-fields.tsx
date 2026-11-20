@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { CATEGORIES, CATEGORY_GROUPS, UNIT_LABEL, category } from "@/lib/domain";
+import { CATEGORIES, CATEGORY_GROUPS, UNIT_LABEL, category, unitsOf } from "@/lib/domain";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
 
 type Unit = keyof typeof UNIT_LABEL;
@@ -47,16 +47,16 @@ export function ServiceFields({ defaults, lockCategory, exclude = [] }: { defaul
           <Input id="sf-price" name="price" inputMode="decimal" placeholder="150,00" defaultValue={defaults?.price} required />
         </div>
         <div>
-          <Label htmlFor="sf-unit">Cobrado</Label>
+          <Label htmlFor="sf-unit">Cobrança</Label>
           <Select id="sf-unit" name="unit" value={unit} onChange={(e) => setUnit(e.target.value as Unit)}>
-            {(Object.keys(UNIT_LABEL) as Unit[]).map((u) => (
-              <option key={u} value={u}>{UNIT_LABEL[u].per}</option>
+            {(cat ? unitsOf(cat) : (Object.keys(UNIT_LABEL) as Unit[])).map((u) => (
+              <option key={u} value={u}>/ {UNIT_LABEL[u].one}</option>
             ))}
           </Select>
         </div>
       </div>
       <div>
-        <Label htmlFor="sf-desc">Especificações (opcional)</Label>
+        <Label htmlFor="sf-desc">O que você faz (especificações)</Label>
         <Textarea id="sf-desc" name="description" rows={3} maxLength={600} defaultValue={defaults?.description} placeholder="Ex.: levo os meus produtos; faço limpeza pós-obra; atendo até 8 horas por diária." />
         <p className="mt-1 text-xs text-muted">Não coloque telefone nem WhatsApp: todo contato é pelo chat do app.</p>
       </div>

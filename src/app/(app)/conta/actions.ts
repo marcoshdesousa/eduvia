@@ -69,3 +69,13 @@ export async function deleteAccount(_: ActionResult, d: FormData): Promise<Actio
   for (const k of files) if (k) await deleteObject(k).catch(() => {});
   redirect("/?conta=apagada");
 }
+
+/** Troca entre o modo cliente (contratar) e o modo trabalho. */
+export async function setModeAction(mode: "cliente" | "trabalho") {
+  const user = await requireUser();
+  const { MODE_COOKIE } = await import("@/lib/session");
+  const { cookies } = await import("next/headers");
+  if (mode === "trabalho" && !user.provider) redirect("/seja-prestador");
+  (await cookies()).set(MODE_COOKIE, mode, { path: "/", maxAge: 365 * 86_400, sameSite: "lax" });
+  redirect(mode === "trabalho" ? "/painel" : "/inicio");
+}

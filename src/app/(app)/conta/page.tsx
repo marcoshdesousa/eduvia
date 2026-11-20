@@ -14,7 +14,13 @@ import { maskCpf } from "@/lib/core/phone";
 import { openCpf } from "@/lib/cpf";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { changePassword, deleteAccount, deleteAddress, logout } from "./actions";
+import { changePassword, deleteAccount, deleteAddress, logout, setModeAction } from "./actions";
+import { InviteBox } from "./invite-box";
+import { getMode } from "@/lib/session";
+import { referralCount } from "@/lib/subscription";
+import { REFERRAL_MAX_PCT, REFERRAL_PCT_EACH, referralPct } from "@/lib/domain";
+import { appUrl } from "@/lib/app-url";
+import { ArrowLeftRight, Rocket } from "lucide-react";
 
 export const metadata: Metadata = { title: "Minha conta" };
 
@@ -22,9 +28,35 @@ export default async function AccountPage() {
   const user = await requireUser("/conta");
   const cpf = openCpf(user.cpfSealed);
   const addresses = await db.address.findMany({ where: { clientId: user.id }, orderBy: { lastUsedAt: "desc" } });
+  const mode = await getMode(user);
+  const referrals = user.provider ? await referralCount(user.id, user.provider.referralsFrom) : 0;
   return (
     <div className="space-y-4">
       <PageTitle title="Minha conta" />
+      {user.role !== "ADMIN" &&
+        (user.provider ? (
+          <Card className="space-y-3 border-primary/40 bg-primary/5">
+            <p className="flex items-center gap-2 font-semibold"><ArrowLeftRight size={18} className="text-primary" /> Você está no modo {mode === "trabalho" ? "trabalho" : "cliente"}</p>
+            <p className="text-sm text-muted">{mode === "trabalho" ? "Quer contratar alguém? Troque para o modo cliente." : "Volte para a sua área de trabalho quando quiser."}</p>
+            <form action={setModeAction.bind(null, mode === "trabalho" ? "cliente" : "trabalho")}>
+              <Button type="submit" className="w-full">{mode === "trabalho" ? "Entrar como cliente" : "Entrar como trabalhador"}</Button>
+            </form>
+          </Card>
+        ) : (
+          <Card className="space-y-2 border-accent/40 bg-accent-soft">
+            <p className="flex items-center gap-2 font-bold"><Rocket size={18} className="text-accent" /> Turbinar conta para trabalhador</p>
+            <p className="text-sm text-muted">Ofereça os seus serviços, receba chamados e organize agenda e dinheiro. 3 dias grátis.</p>
+            <Link href="/seja-prestador" className={buttonClass("primary", "md", "w-full")}>Quero trabalhar</Link>
+          </Card>
+        ))}
+      {user.provider && user.refCode && (
+        <Card className="space-y-2">
+          <CardTitle>🎁 Indique e ganhe desconto</CardTitle>
+          <p className="text-sm text-muted">Cada pessoa que criar conta pelo seu link (cliente ou trabalhador) dá {REFERRAL_PCT_EACH.toString().replace(".", ",")}% de desconto na sua próxima mensalidade, até {REFERRAL_MAX_PCT}%. Depois de usado, recomeça.</p>
+          <p className="text-sm">Desde o último desconto: <strong>{referrals}</strong> pessoa(s) · desconto atual <strong>{referralPct(referrals).toString().replace(".", ",")}%</strong></p>
+          <InviteBox link={`${appUrl()}/convite/${user.refCode}`} />
+        </Card>
+      )}
       <Card className="space-y-1">
         <p className="font-semibold">{user.name}</p>
         <p className="text-sm text-muted">CPF {cpf ? maskCpf(cpf) : "—"} · {user.role === "ADMIN" ? "Administrador" : user.provider ? "Cliente e prestador" : "Cliente"}</p>

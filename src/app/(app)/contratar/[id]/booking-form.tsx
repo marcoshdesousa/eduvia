@@ -5,13 +5,13 @@ import { AddressFields, type SavedAddress } from "@/components/address-fields";
 import { SubmitButton } from "@/components/submit-button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { FormError, Input, Label, Textarea } from "@/components/ui/form";
-import { MAX_QTY, UNIT_LABEL, formatBRL, qtyLabel } from "@/lib/domain";
+import { MAX_QTY, PAY_METHODS, UNIT_LABEL, formatBRL, isPayMethod, qtyLabel } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { createBookingAction } from "../../hire-actions";
 
 type Service = { category: string; label: string; emoji: string; priceCents: number; unit: keyof typeof UNIT_LABEL; description: string | null };
 
-export function BookingForm({ proId, services, initial, agenda, saved, ufs }: { proId: string; services: Service[]; initial: string; agenda: string[]; saved: SavedAddress[]; ufs: { uf: string; name: string }[] }) {
+export function BookingForm({ proId, services, initial, agenda, saved, ufs, payMethods }: { proId: string; services: Service[]; initial: string; agenda: string[]; saved: SavedAddress[]; ufs: { uf: string; name: string }[]; payMethods: string[] }) {
   const [state, run] = useActionState(createBookingAction, null);
   const [cat, setCat] = useState(services.find((s) => s.category === initial)?.category ?? services[0]?.category);
   const [qty, setQty] = useState(1);
@@ -65,10 +65,10 @@ export function BookingForm({ proId, services, initial, agenda, saved, ufs }: { 
         <CardTitle>4. Detalhes</CardTitle>
         <Textarea name="notes" maxLength={1000} placeholder="Conte o que precisa ser feito (opcional)." aria-label="Observações" />
         <fieldset className="flex flex-wrap items-center gap-4 text-sm">
-          <legend className="mb-1 w-full text-sm font-medium">Como vai pagar ao prestador</legend>
-          <label className="flex items-center gap-2"><input type="radio" name="payMethod" value="PIX" defaultChecked className="accent-[var(--primary)]" /> Pix</label>
-          <label className="flex items-center gap-2"><input type="radio" name="payMethod" value="DINHEIRO" className="accent-[var(--primary)]" /> Dinheiro</label>
-          <label className="flex items-center gap-2"><input type="radio" name="payMethod" value="CARTAO" className="accent-[var(--primary)]" /> Cartão (se tiver maquininha)</label>
+          <legend className="mb-1 w-full text-sm font-medium">Como vai pagar (o prestador aceita)</legend>
+          {(payMethods.length ? payMethods : ["PIX", "DINHEIRO"]).filter(isPayMethod).map((m, i) => (
+            <label key={m} className="flex items-center gap-2"><input type="radio" name="payMethod" value={m} defaultChecked={i === 0} className="accent-[var(--primary)]" /> {PAY_METHODS[m]}</label>
+          ))}
         </fieldset>
       </Card>
       <Card className="space-y-1 border-primary/40 bg-primary/5">

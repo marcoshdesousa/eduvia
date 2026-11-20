@@ -14,6 +14,16 @@
 
 > O Diária Paga substituiu a HoraLimp no mesmo serviço do Render. A migração `38_diaria_paga` **apaga todas as tabelas e dados da HoraLimp** e cria as novas.
 
+## Novidades da reforma
+
+- **Só pelo app:** no navegador aparece só a logo e o passo a passo para instalar (iPhone, Android, computador). Instalado, pede para ativar as notificações. (Testes automáticos passam direto.)
+- **Cadastro:** cliente = nome, CPF e senha; trabalhador = + WhatsApp (privado) e 18+. 3 dias grátis. Acabou o teste/plano: a área de trabalho fica toda bloqueada até pagar.
+- **Modos:** cliente (Início · ⚡ Rápido · Mensagens · Conta) e trabalho (Minha área · Agenda · Financeiro · Mensagens · Conta); troca em Conta. **Pedidos** fica no topo, com próximos e anteriores (dia e hora).
+- **Vários perfis** por trabalhador, um por profissão (foto, bio, 8 fotos, Instagram, site, valor por diária/hora/serviço). Agenda, mensagens, financeiro e plano são únicos.
+- **Mensagens** estilo WhatsApp: editar e apagar (para os dois), mensagens rápidas, menu dos 4 quadradinhos (foto, vídeo, rápidas, formas de pagamento, **agendar**), marca d'água discreta. O agendamento reserva o horário; o cliente confirma com o endereço.
+- **Minha agenda** (serviços + compromissos, com lembrete 1 h antes) e **gestão financeira** (entradas/saídas, relatório PDF com marca d'água).
+- **Planos:** subir para o Completo paga o valor cheio; descer só quando o Completo acaba. **Indicação** `/convite/CODIGO`: 0,5% por pessoa até 30% (Básico mínimo R$ 4,85).
+
 ## Contrate rápido (estilo app de corrida)
 
 1. Cliente escolhe o serviço e a quantidade, **descreve o que precisa** (obrigatório, aparece no toque) e a localização vem do aparelho (com permissão).

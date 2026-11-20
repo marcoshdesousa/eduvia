@@ -26,10 +26,21 @@ export function placesLimit(plan: Plan, packs: number) {
 }
 
 /** Subir do Básico para o Completo no meio do mês: paga só a diferença dos dias que faltam. */
-export function upgradeCents(periodEnd: Date | null, now = new Date()) {
-  if (!periodEnd || periodEnd <= now) return PLANS.FULL.priceCents;
-  const days = Math.min(PERIOD_DAYS, (periodEnd.getTime() - now.getTime()) / 86_400_000);
-  return Math.max(100, Math.round(((PLANS.FULL.priceCents - PLANS.BASIC.priceCents) * days) / PERIOD_DAYS));
+/** Subir do Básico para o Completo: paga o Completo inteiro (sem desconto pelos dias já usados) e começa um mês novo. */
+export function upgradeCents() {
+  return PLANS.FULL.priceCents;
+}
+
+// ───────────── Indicação ─────────────
+
+/** Cada pessoa que entra pelo link dá 0,5% de desconto na próxima mensalidade, até 30%. O Básico nunca fica abaixo de R$ 4,85. */
+export const REFERRAL_PCT_EACH = 0.5;
+export const REFERRAL_MAX_PCT = 30;
+export const BASIC_MIN_CENTS = 485;
+export const referralPct = (count: number) => Math.min(REFERRAL_MAX_PCT, Math.max(0, count) * REFERRAL_PCT_EACH);
+export function discountedCents(cents: number, plan: Plan, count: number) {
+  const out = Math.round(cents * (1 - referralPct(count) / 100));
+  return plan === "BASIC" ? Math.max(Math.min(cents, BASIC_MIN_CENTS), out) : out;
 }
 
 // ───────────── Penalidades do Contrate rápido ─────────────
@@ -80,7 +91,7 @@ export const CATEGORIES = [
   { slug: "baba", label: "Babá", emoji: "🍼", unit: "DIARIA", group: "Cuidados", quick: 13000 },
   { slug: "pet", label: "Cuidador de pets / passeador", emoji: "🐕", unit: "SERVICO", group: "Cuidados", quick: 5000 },
   { slug: "enfermagem", label: "Técnico(a) de enfermagem", emoji: "🩺", unit: "DIARIA", group: "Cuidados", quick: 20000 },
-  { slug: "motorista", label: "Motorista particular", emoji: "🚗", unit: "DIARIA", group: "Transporte e entregas", quick: 20000 },
+  { slug: "motorista", label: "Motorista particular", emoji: "🚗", unit: "SERVICO", group: "Transporte e entregas", quick: 5000 },
   { slug: "compras", label: "Compras no supermercado", emoji: "🛒", unit: "SERVICO", group: "Transporte e entregas", quick: 4000 },
   { slug: "frete", label: "Frete e mudança", emoji: "🚚", unit: "SERVICO", group: "Transporte e entregas", quick: 15000 },
   { slug: "chapa", label: "Carregador / chapa", emoji: "📦", unit: "DIARIA", group: "Transporte e entregas", quick: 12000 },
@@ -101,6 +112,29 @@ const CAT = new Map<string, (typeof CATEGORIES)[number]>(CATEGORIES.map((c) => [
 export const category = (slug: string) => CAT.get(slug) ?? null;
 export const categoryLabel = (slug: string) => CAT.get(slug)?.label ?? slug;
 export const isCategory = (slug: string) => CAT.has(slug);
+
+/**
+ * Como cada profissão pode cobrar. A primeira é a padrão (e a do Contrate rápido). Ex.: compras no supermercado é só
+ * por serviço; pedreiro pode ser por diária ou por serviço (empreitada).
+ */
+const EXTRA_UNITS: Record<string, PriceUnit[]> = {
+  diarista: ["HORA"], cozinheira: ["HORA"], jardineiro: ["SERVICO"], pedreiro: ["SERVICO"], servente: ["SERVICO"], pintor: ["SERVICO"],
+  eletricista: ["DIARIA", "HORA"], encanador: ["DIARIA", "HORA"], carpinteiro: ["SERVICO"], gesseiro: ["SERVICO"], azulejista: ["SERVICO"],
+  serralheiro: ["DIARIA"], "cuidador-idoso": ["HORA"], baba: ["HORA"], pet: ["HORA"], enfermagem: ["HORA"], motorista: ["DIARIA", "HORA"],
+  chapa: ["SERVICO", "HORA"], garcom: ["HORA"], seguranca: ["HORA"], mecanico: ["HORA"], personal: ["SERVICO"], professor: ["SERVICO"], outros: ["SERVICO", "HORA"],
+};
+export const unitsOf = (slug: string): PriceUnit[] => {
+  const c = CAT.get(slug);
+  return c ? [c.unit, ...(EXTRA_UNITS[slug] ?? [])] : ["DIARIA", "HORA", "SERVICO"];
+};
+/** "R$ 180,00 / diária" */
+export const priceTag = (cents: number, unit: PriceUnit) => `${formatBRL(cents)} / ${UNIT_LABEL[unit].one}`;
+
+// ───────────── Formas de pagamento (direto ao prestador) ─────────────
+
+export const PAY_METHODS = { PIX: "Pix", DINHEIRO: "Dinheiro", DEBITO: "Cartão de débito", CREDITO: "Cartão de crédito" } as const;
+export type PayMethod = keyof typeof PAY_METHODS;
+export const isPayMethod = (v: string): v is PayMethod => v in PAY_METHODS;
 
 /**
  * Contrate rápido: valor FIXO por profissão (por diária, hora ou serviço), um pouco abaixo do mercado.
@@ -150,11 +184,12 @@ export function parseDateOnly(raw: string): Date | null {
 
 // ───────────── Vitrine e Contrate rápido ─────────────
 
-type ProLike = { status: "ACTIVE" | "SUSPENDED"; paused: boolean; photoKey: string | null; blocked?: boolean; subscriptionEnd: Date | null | undefined; services: number; places: number };
+/** `services` = perfis (profissões) com foto; `places` = endereços ativos. */
+type ProLike = { status: "ACTIVE" | "SUSPENDED"; paused: boolean; blocked?: boolean; subscriptionEnd: Date | null | undefined; services: number; places: number };
 
-/** Aparece na vitrine e recebe pedidos: conta ativa, plano (ou teste) em dia, com foto, serviço e endereço. */
+/** Aparece na vitrine e recebe pedidos: conta ativa, plano (ou teste) em dia, com pelo menos um perfil com foto e um endereço. */
 export function providerVisible(p: ProLike, now = new Date()) {
-  return p.status === "ACTIVE" && !p.paused && !p.blocked && !!p.photoKey && p.services > 0 && p.places > 0 && !!p.subscriptionEnd && p.subscriptionEnd > now;
+  return p.status === "ACTIVE" && !p.paused && !p.blocked && p.services > 0 && p.places > 0 && !!p.subscriptionEnd && p.subscriptionEnd > now;
 }
 
 /** Recebe chamados do Contrate rápido: visível, com o botão "Disponível" ligado e sem penalidade. */
@@ -246,6 +281,7 @@ export function normalizeInstagram(raw: string): string | null {
 // ───────────── Status ─────────────
 
 export const BOOKING_LABEL: Record<BookingStatus, string> = {
+  PROPOSED: "Agendado, falta o cliente confirmar",
   SEARCHING: "Procurando prestador perto de você",
   NO_PROVIDER: "Ninguém disponível agora",
   WAITING_PRO: "Aguardando resposta do prestador",
@@ -265,6 +301,7 @@ export const BOOKING_LABEL: Record<BookingStatus, string> = {
 
 export type Tone = "neutral" | "primary" | "success" | "warning" | "danger";
 export const BOOKING_TONE: Record<BookingStatus, Tone> = {
+  PROPOSED: "warning",
   SEARCHING: "warning",
   NO_PROVIDER: "neutral",
   WAITING_PRO: "warning",
@@ -283,7 +320,7 @@ export const BOOKING_TONE: Record<BookingStatus, Tone> = {
 };
 
 export const ACTIVE_STATUSES: BookingStatus[] = ["ACCEPTED", "ON_THE_WAY", "ARRIVED", "STARTED"];
-export const OPEN_STATUSES: BookingStatus[] = ["SEARCHING", "WAITING_PRO"];
+export const OPEN_STATUSES: BookingStatus[] = ["PROPOSED", "SEARCHING", "WAITING_PRO"];
 export const CLOSED_STATUSES: BookingStatus[] = ["NO_PROVIDER", "REFUSED", "EXPIRED", "COMPLETED", "CANCELED_CLIENT", "CANCELED_PRO", "NO_SHOW_PRO", "NO_SHOW_CLIENT"];
 
 export type Actor = "CLIENT" | "PRO" | "ADMIN" | "SYSTEM";
@@ -295,6 +332,11 @@ const TRANSITIONS: { from: BookingStatus[]; to: BookingStatus; by: Actor[]; reas
   { from: ["SEARCHING"], to: "CANCELED_CLIENT", by: ["CLIENT"], mode: "QUICK" },
   { from: ["ACCEPTED", "ON_THE_WAY"], to: "NO_SHOW_PRO", by: ["SYSTEM", "ADMIN"], mode: "QUICK" },
   { from: ["ARRIVED"], to: "NO_SHOW_CLIENT", by: ["PRO"], mode: "QUICK" },
+  // agendamento feito pelo prestador na conversa
+  { from: ["PROPOSED"], to: "ACCEPTED", by: ["CLIENT"], mode: "NORMAL" },
+  { from: ["PROPOSED"], to: "CANCELED_CLIENT", by: ["CLIENT"], mode: "NORMAL" },
+  { from: ["PROPOSED"], to: "CANCELED_PRO", by: ["PRO"], mode: "NORMAL" },
+  { from: ["PROPOSED"], to: "EXPIRED", by: ["SYSTEM"], mode: "NORMAL" },
   // pedido normal
   { from: ["WAITING_PRO"], to: "ACCEPTED", by: ["PRO"], mode: "NORMAL" },
   { from: ["WAITING_PRO"], to: "REFUSED", by: ["PRO"], mode: "NORMAL" },
@@ -319,7 +361,9 @@ export function transitionRule(from: BookingStatus, to: BookingStatus, by: Actor
 }
 
 export function nextSteps(from: BookingStatus, by: Actor, mode: BookingMode = "NORMAL") {
-  return TRANSITIONS.filter((t) => t.from.includes(from) && t.by.includes(by) && (!t.mode || t.mode === mode) && !(by === "PRO" && t.to === "NO_SHOW_CLIENT")).map((t) => ({ to: t.to, reason: !!t.reason }));
+  return TRANSITIONS.filter(
+    (t) => t.from.includes(from) && t.by.includes(by) && (!t.mode || t.mode === mode) && !(by === "PRO" && t.to === "NO_SHOW_CLIENT") && !(from === "PROPOSED" && t.to === "ACCEPTED"), // confirmar agendamento pede o endereço (formulário próprio)
+  ).map((t) => ({ to: t.to, reason: !!t.reason }));
 }
 
 export const CHAT_AFTER_DAYS = 7;

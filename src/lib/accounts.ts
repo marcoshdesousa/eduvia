@@ -12,6 +12,12 @@ import { clearAttempts, recordFailure, tooManyFailures } from "@/lib/rate-limit"
 
 export class AccountError extends Error {}
 
+/** Código do link de convite: 8 letras/números fáceis de ler. */
+export function newRefCode() {
+  const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => abc[b % abc.length]).join("");
+}
+
 export function checkPassword(password: string, confirm: string) {
   if (password.length < 8) throw new AccountError("A senha precisa ter pelo menos 8 caracteres.");
   if (password.length > 128) throw new AccountError("Senha longa demais.");
@@ -36,7 +42,7 @@ export const isAdminCpf = (cpf: string) => !!process.env.ADMIN_CPF && onlyDigits
 
 /** Cria a conta (usuário + senha) numa transação; `extra` cria o perfil do profissional junto. */
 export async function createAccount(
-  input: { name: string; cpf: string; password: string; role: Role },
+  input: { name: string; cpf: string; password: string; role: Role; referredById?: string | null },
   extra?: (tx: Prisma.TransactionClient, userId: string) => Promise<unknown>,
 ) {
   const hash = cpfHash(input.cpf);
@@ -46,7 +52,7 @@ export async function createAccount(
   try {
     await db.$transaction(async (tx) => {
       const role = isAdminCpf(input.cpf) ? "ADMIN" : input.role;
-      await tx.user.create({ data: { id, name: input.name, email: internalEmail(), role, cpfHash: hash, cpfSealed: sealCpf(input.cpf) } });
+      await tx.user.create({ data: { id, name: input.name, email: internalEmail(), role, cpfHash: hash, cpfSealed: sealCpf(input.cpf), refCode: newRefCode(), referredById: input.referredById ?? null } });
       await tx.account.create({ data: { id: randomUUID(), userId: id, providerId: "credential", accountId: id, password } });
       if (extra) await extra(tx, id);
     });

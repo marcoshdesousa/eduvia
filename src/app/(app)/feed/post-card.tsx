@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ProPhoto, RecommendedBadge } from "@/components/bits";
 import { category, shortName } from "@/lib/domain";
 import type { feedPosts } from "@/lib/feed";
-import { postImageUrl, providerPhotoUrl } from "@/lib/providers";
+import { postImageUrl, profilePhotoUrl } from "@/lib/providers";
 
 type FeedPost = Awaited<ReturnType<typeof feedPosts>>[number];
 
@@ -10,11 +10,11 @@ export function PostCard({ post }: { post: FeedPost }) {
   const pro = post.pro;
   return (
     <article className="overflow-hidden rounded-2xl border border-border bg-surface">
-      <Link href={`/prestador/${pro.id}`} className="flex items-center gap-2 p-3">
-        <ProPhoto url={providerPhotoUrl(pro)} name={pro.user.name} size={36} />
+      <Link href={`/prestador/${pro.id}${post.service ? `?perfil=${post.service.category}` : ""}`} className="flex items-center gap-2 p-3">
+        <ProPhoto url={post.service ? profilePhotoUrl(post.service) : null} name={pro.user.name} size={36} />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 truncate text-sm font-semibold">{shortName(pro.user.name)} {pro.subscription?.plan === "FULL" && <RecommendedBadge />}</p>
-          <p className="truncate text-xs text-muted">{pro.services.map((s) => category(s.category)?.label ?? s.category).join(" · ")}{pro.places[0] && ` · ${pro.places[0].city}/${pro.places[0].uf}`}</p>
+          <p className="truncate text-xs text-muted">{post.service ? category(post.service.category)?.label : ""}{pro.places[0] && ` · ${pro.places[0].city}/${pro.places[0].uf}`}</p>
         </div>
       </Link>
       <Link href={`/prestador/${pro.id}`}>

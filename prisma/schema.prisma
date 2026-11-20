@@ -35,6 +35,12 @@ model User {
   blockedAt       DateTime?
   blockReason     String?
   acceptedTermsAt DateTime  @default(now())
+  /// código do link de indicação ("/convite/CODIGO")
+  refCode         String?   @unique
+  /// quem indicou esta conta
+  referredById    String?
+  referredBy      User?     @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals       User[]    @relation("Referrals")
 
   sessions       Session[]
   accounts       Account[]
@@ -43,6 +49,7 @@ model User {
   clientBookings Booking[]              @relation("ClientBookings")
   favorites      Favorite[]
   messages       Message[]
+  conversations  Conversation[]         @relation("ClientConversations")
   reviewsGiven   Review[]               @relation("ReviewAuthor")
   reviewsGot     Review[]               @relation("ReviewTarget")
   reports        Report[]               @relation("Reporter")
@@ -145,7 +152,7 @@ model ProviderProfile {
   id             String         @id @default(cuid())
   userId         String         @unique
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  birthDate      DateTime       @db.Date
+  birthDate      DateTime?      @db.Date
   /// telefone (criptografado): só a plataforma vê (verificação e cobrança Pix); nunca aparece no app
   phoneSealed    String
   photoKey       String?
@@ -161,6 +168,13 @@ model ProviderProfile {
   quickBannedUntil DateTime?
   /// quando aceitou as regras do Contrate rápido (preço fixo, 2 horas, penalidades). Sem isso não recebe chamados.
   quickTermsAt   DateTime?
+  /// formas de pagamento aceitas: PIX, DINHEIRO, DEBITO, CREDITO
+  payMethods     String[]       @default(["PIX", "DINHEIRO"])
+  /// false = o cliente não pede direto: manda mensagem e o prestador agenda pela conversa
+  directBooking  Boolean        @default(true)
+  /// indicações contam a partir daqui (o desconto zera quando é usado numa mensalidade)
+  referralsFrom  DateTime       @default(now())
+  quickReplies   QuickReply[]
   ratingSum      Int            @default(0)
   ratingCount    Int            @default(0)
   completedCount Int            @default(0)
@@ -175,6 +189,9 @@ model ProviderProfile {
   favoritedBy  Favorite[]
   subscription Subscription?
   offers       QuickOffer[]
+  conversations Conversation[]
+  agenda       AgendaEntry[]
+  finance      FinanceEntry[]
 
   @@index([status])
 }
@@ -194,6 +211,12 @@ model ProviderService {
   priceCents  Int
   unit        PriceUnit       @default(DIARIA)
   description String?
+  /// cada serviço é um "perfil" do trabalhador (um por profissão), com foto, bio, fotos e links próprios
+  photoKey    String?
+  bio         String?
+  instagram   String?
+  website     String?
+  posts       Post[]
   createdAt   DateTime        @default(now())
 
   @@unique([proId, category])
@@ -235,6 +258,9 @@ model Post {
   id        String          @id @default(cuid())
   proId     String
   pro       ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  /// perfil (profissão) em que a foto aparece
+  serviceId String?
+  service   ProviderService? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   imageKey  String
   caption   String?
   createdAt DateTime        @default(now())
@@ -330,6 +356,8 @@ enum BookingMode {
 }
 
 enum BookingStatus {
+  /// agendamento criado pelo prestador na conversa: horário reservado, falta o cliente confirmar com o endereço
+  PROPOSED
   SEARCHING
   NO_PROVIDER
   WAITING_PRO
@@ -444,16 +472,37 @@ model BookingStatusHistory {
 }
 
 enum MessageKind {
+  /// cartão de agendamento (aponta para o pedido)
+  SCHEDULE
   TEXT
   AUDIO
   IMAGE
   VIDEO
 }
 
+/// Conversa entre um cliente e um prestador (estilo WhatsApp). Pode começar antes de contratar.
+model Conversation {
+  id            String          @id @default(cuid())
+  clientId      String
+  client        User            @relation("ClientConversations", fields: [clientId], references: [id], onDelete: Cascade)
+  proId         String
+  pro           ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  lastMessageAt DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+  messages      Message[]
+
+  @@unique([clientId, proId])
+  @@index([proId, lastMessageAt])
+  @@index([clientId, lastMessageAt])
+}
+
 model Message {
-  id          String      @id @default(cuid())
-  bookingId   String
-  booking     Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// pedido citado (cartão de agendamento)
+  bookingId      String?
+  booking        Booking?     @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   senderId    String
   sender      User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
   kind        MessageKind
@@ -462,9 +511,12 @@ model Message {
   mime        String?
   durationSec Int?
   readAt      DateTime?
+  editedAt    DateTime?
+  /// apagada por quem mandou (some para os dois)
+  deletedAt   DateTime?
   createdAt   DateTime    @default(now())
 
-  @@index([bookingId, createdAt])
+  @@index([conversationId, createdAt])
 }
 
 model Favorite {
@@ -609,4 +661,48 @@ model PlatformSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+/// Compromisso que o prestador coloca na própria agenda (bloqueia o horário e gera lembrete).
+model AgendaEntry {
+  id        String          @id @default(cuid())
+  proId     String
+  pro       ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  title     String
+  startsAt  DateTime
+  endsAt    DateTime
+  notes     String?
+  createdAt DateTime        @default(now())
+
+  @@index([proId, startsAt])
+}
+
+enum FinanceKind {
+  IN
+  OUT
+}
+
+/// Lançamento manual da gestão financeira do prestador (os serviços concluídos entram sozinhos).
+model FinanceEntry {
+  id          String          @id @default(cuid())
+  proId       String
+  pro         ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  kind        FinanceKind
+  amountCents Int
+  description String
+  date        DateTime        @db.Date
+  createdAt   DateTime        @default(now())
+
+  @@index([proId, date])
+}
+
+/// Mensagens rápidas que o trabalhador cadastra para mandar com um toque.
+model QuickReply {
+  id        String          @id @default(cuid())
+  proId     String
+  pro       ProviderProfile @relation(fields: [proId], references: [id], onDelete: Cascade)
+  text      String
+  createdAt DateTime        @default(now())
+
+  @@index([proId, createdAt])
 }

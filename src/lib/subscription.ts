@@ -4,7 +4,7 @@
 import type { Plan, PaymentKind } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { appUrl } from "@/lib/app-url";
-import { MAX_PACKS, PERIOD_DAYS, PLANS, TRIAL_DAYS, UNLOCK_FEE_CENTS, formatBRL, monthlyCents, placesLimit, upgradeCents } from "@/lib/domain";
+import { MAX_PACKS, PERIOD_DAYS, PLANS, TRIAL_DAYS, UNLOCK_FEE_CENTS, discountedCents, formatBRL, monthlyCents, placesLimit, referralPct, upgradeCents } from "@/lib/domain";
 import { createPix, pixStatus, syncpayConfigured, webhookToken } from "@/lib/syncpay";
 import { openCpf } from "@/lib/cpf";
 import { openSecret } from "@/lib/secret-box";
@@ -16,6 +16,8 @@ const PIX_REUSE_MS = 30 * 60_000;
 export const RENEW_WINDOW_DAYS = 7;
 
 export class PaymentError extends Error {}
+
+const active = (sub: { currentPeriodEnd: Date | null }) => !!sub.currentPeriodEnd && sub.currentPeriodEnd > new Date();
 
 export function subscriptionActive(sub: { currentPeriodEnd: Date | null } | null | undefined, now = new Date()) {
   return !!sub?.currentPeriodEnd && sub.currentPeriodEnd > now;
@@ -94,17 +96,28 @@ export async function startSubscriptionPix(userId: string, plan: Plan) {
   if (sub && !sub.trial && end && end.getTime() - Date.now() > RENEW_WINDOW_DAYS * DAY) {
     throw new PaymentError(`Seu plano está em dia até ${end.toLocaleDateString("pt-BR")}. A renovação abre ${RENEW_WINDOW_DAYS} dias antes de vencer.`);
   }
+  if (sub && active(sub) && !sub.trial && sub.plan === "FULL" && plan === "BASIC") {
+    throw new PaymentError("Você está no plano Completo. Para voltar ao Básico, espere o Completo terminar.");
+  }
   const charge = nextCharge(sub ?? { plan, packs: 0, nextPlan: null, nextPacks: null }, plan);
-  return createPayment(userId, "SUBSCRIPTION", charge.cents, { plan: charge.plan, packs: charge.packs }, `Diária Paga — plano ${PLANS[charge.plan].name}${charge.packs ? ` + ${charge.packs} pacote(s) de endereços` : ""} (${formatBRL(charge.cents)})`);
+  const referrals = await referralCount(pro.userId, pro.referralsFrom);
+  const cents = discountedCents(charge.cents, charge.plan, referrals);
+  const off = cents < charge.cents ? ` com ${referralPct(referrals).toString().replace(".", ",")}% de desconto por indicação` : "";
+  return createPayment(userId, "SUBSCRIPTION", cents, { plan: charge.plan, packs: charge.packs, referrals: cents < charge.cents ? referrals : 0 }, `Diária Paga — plano ${PLANS[charge.plan].name}${charge.packs ? ` + ${charge.packs} pacote(s) de endereços` : ""}${off} (${formatBRL(cents)})`);
 }
 
-/** Subir do Básico para o Completo agora: paga só a diferença dos dias que faltam. */
+/** Subir do Básico para o Completo agora: paga o Completo inteiro (sem desconto pelos dias usados) e começa um mês novo. */
 export async function startUpgradePix(userId: string) {
   const pro = await db.providerProfile.findUnique({ where: { userId }, include: { subscription: true } });
   const sub = pro?.subscription;
   if (!pro || !sub || sub.plan !== "BASIC" || !subscriptionActive(sub)) throw new PaymentError("A troca para o Completo é para quem está no Básico em dia.");
-  const cents = upgradeCents(sub.currentPeriodEnd);
-  return createPayment(userId, "UPGRADE", cents, { plan: "FULL", until: sub.currentPeriodEnd!.toISOString() }, `Diária Paga — troca para o plano Completo (${formatBRL(cents)})`);
+  const cents = upgradeCents();
+  return createPayment(userId, "UPGRADE", cents, { plan: "FULL" }, `Diária Paga — plano Completo (${formatBRL(cents)})`);
+}
+
+/** Quantas pessoas entraram pelo link desta conta desde o último desconto usado. */
+export async function referralCount(userId: string, since: Date) {
+  return db.user.count({ where: { referredById: userId, createdAt: { gt: since } } });
 }
 
 /** Cliente que não estava no endereço no Contrate rápido: paga R$ 2,85 para voltar a contratar na hora. */
@@ -134,7 +147,7 @@ export async function grantPayment(paymentId: string, now = new Date()) {
     const claimed = await tx.payment.updateMany({ where: { id: paymentId, status: "PENDING" }, data: { status: "PAID", paidAt: now } });
     if (!claimed.count) return null;
     const pay = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
-    const meta = (pay.meta ?? {}) as { plan?: Plan; packs?: number; days?: number };
+    const meta = (pay.meta ?? {}) as { plan?: Plan; packs?: number; days?: number; referrals?: number };
     if (pay.kind === "UNLOCK") {
       const user = await tx.user.findUniqueOrThrow({ where: { id: pay.userId } });
       await tx.cpfLedger.update({ where: { cpfHash: user.cpfHash }, data: { clientBlockedUntil: null, clientBlockReason: null } });
@@ -143,7 +156,7 @@ export async function grantPayment(paymentId: string, now = new Date()) {
     const pro = await tx.providerProfile.findUniqueOrThrow({ where: { userId: pay.userId }, include: { subscription: true } });
     const sub = pro.subscription;
     if (pay.kind === "UPGRADE") {
-      await tx.subscription.update({ where: { proId: pro.id }, data: { plan: "FULL", nextPlan: null } });
+      await tx.subscription.update({ where: { proId: pro.id }, data: { plan: "FULL", nextPlan: null, trial: false, currentPeriodEnd: new Date(now.getTime() + PERIOD_DAYS * DAY) } });
       return { userId: pay.userId, proId: pro.id, kind: pay.kind, text: "Pronto! Você agora está no plano Completo." };
     }
     const plan = meta.plan ?? "FULL";
@@ -157,6 +170,8 @@ export async function grantPayment(paymentId: string, now = new Date()) {
       update: { plan, packs, nextPlan: null, nextPacks: null, trial: false, currentPeriodEnd: period.end },
     });
     await tx.payment.update({ where: { id: pay.id }, data: { meta: { ...meta, plan, packs, start: period.start.toISOString(), end: period.end.toISOString() } } });
+    // desconto de indicação usado: a contagem recomeça (quem entrou depois do Pix gerado conta para o próximo)
+    if (meta.referrals) await tx.providerProfile.update({ where: { id: pro.id }, data: { referralsFrom: pay.createdAt } });
     return { userId: pay.userId, proId: pro.id, kind: pay.kind, text: `Plano ${PLANS[plan].name} ativo até ${period.end.toLocaleDateString("pt-BR")}.` };
   });
   if (result) {

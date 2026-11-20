@@ -86,3 +86,24 @@ export async function cancelSearchAction(bookingId: string): Promise<ActionResul
   revalidatePath(`/pedidos/${bookingId}`);
   return { ok: "Chamado cancelado." };
 }
+
+/** Cliente confirma o agendamento feito pelo prestador na conversa, informando o endereço. */
+export async function confirmScheduleAction(bookingId: string, _: ActionResult, d: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  const { confirmSchedule } = await import("@/lib/bookings");
+  const s = (k: string) => String(d.get(k) ?? "").trim();
+  const num = (v: string) => (v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+  try {
+    await confirmSchedule(
+      bookingId,
+      user.id,
+      { street: s("street"), number: s("number"), complement: s("complement"), district: s("district"), city: s("city"), uf: s("uf").toUpperCase(), cep: s("cep"), reference: s("reference"), lat: num(s("lat")), lng: num(s("lng")) },
+      { saveAddressLabel: d.get("saveAddress") === "on" ? s("saveLabel") || "Endereço" : null, payMethod: s("payMethod") || null },
+    );
+  } catch (e) {
+    if (e instanceof BookingError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/pedidos/${bookingId}`);
+  return { ok: "Agendamento confirmado! ✅" };
+}

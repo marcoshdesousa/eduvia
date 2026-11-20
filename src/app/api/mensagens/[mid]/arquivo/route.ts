@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { apiUser } from "@/lib/api";
-import { chatAccess } from "@/lib/chat";
+import { conversationAccess } from "@/lib/chat";
 import { db } from "@/lib/db";
 import { readObject } from "@/lib/storage";
 
@@ -10,9 +10,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ mid: str
   if (error) return error;
   const { mid } = await params;
   const m = await db.message.findUnique({ where: { id: mid } });
-  if (!m?.fileKey) return new NextResponse(null, { status: 404 });
-  const access = await chatAccess(m.bookingId, user);
-  if (!access?.read) return new NextResponse(null, { status: 404 });
+  if (!m?.fileKey || m.deletedAt) return new NextResponse(null, { status: 404 });
+  const access = await conversationAccess(m.conversationId, user);
+  if (!access) return new NextResponse(null, { status: 404 });
   let data: Buffer;
   try {
     data = await readObject(m.fileKey);

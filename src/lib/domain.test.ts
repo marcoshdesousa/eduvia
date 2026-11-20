@@ -22,6 +22,8 @@ import {
   quickPrice,
   transitionRule,
   upgradeCents,
+  referralPct,
+  discountedCents,
 } from "./domain";
 
 const brl = (c: number) => formatBRL(c).replace(/\s/g, " ");
@@ -50,21 +52,25 @@ describe("planos do prestador", () => {
     expect(monthlyCents("FULL", 4)).toBe(1585 + 4 * 385);
     expect(monthlyCents("BASIC", 2)).toBe(685);
   });
-  it("subir para o Completo no meio do mês paga só a diferença dos dias que faltam", () => {
-    const now = new Date("2026-11-20T12:00:00Z");
-    expect(upgradeCents(new Date("2026-12-05T12:00:00Z"), now)).toBe(450); // 15 dias de 9,00
-    expect(upgradeCents(null, now)).toBe(1585);
-    expect(upgradeCents(new Date("2026-11-20T13:00:00Z"), now)).toBe(100); // mínimo R$ 1,00
+  it("subir para o Completo paga o Completo inteiro, sem desconto", () => {
+    expect(upgradeCents()).toBe(1585);
+  });
+  it("indicação: 0,5% por pessoa até 30%; Básico nunca abaixo de R$ 4,85", () => {
+    expect(referralPct(10)).toBe(5);
+    expect(referralPct(100)).toBe(30);
+    expect(discountedCents(1585, "FULL", 10)).toBe(1506);
+    expect(discountedCents(1585, "FULL", 999)).toBe(1110);
+    expect(discountedCents(685, "BASIC", 999)).toBe(485);
+    expect(discountedCents(685, "BASIC", 0)).toBe(685);
   });
 });
 
 describe("prestador visível e Contrate rápido", () => {
   const future = new Date(Date.now() + 86_400_000);
-  const base = { status: "ACTIVE" as const, paused: false, photoKey: "f", subscriptionEnd: future, services: 1, places: 1 };
+  const base = { status: "ACTIVE" as const, paused: false, subscriptionEnd: future, services: 1, places: 1 };
   it("aparece com plano em dia, foto, serviço e endereço", () => {
     expect(providerVisible(base)).toBe(true);
     expect(providerVisible({ ...base, subscriptionEnd: new Date(Date.now() - 1) })).toBe(false);
-    expect(providerVisible({ ...base, photoKey: null })).toBe(false);
     expect(providerVisible({ ...base, services: 0 })).toBe(false);
     expect(providerVisible({ ...base, places: 0 })).toBe(false);
     expect(providerVisible({ ...base, status: "SUSPENDED" })).toBe(false);

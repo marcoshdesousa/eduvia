@@ -5,6 +5,11 @@ import { AlertTriangle, CalendarClock, CheckCircle2, ExternalLink, Info, LifeBuo
 import { ActionButton } from "@/components/action-button";
 import { BookingBadge, ProPhoto, Rating, Stars } from "@/components/bits";
 import { ChatBox } from "@/components/chat-box";
+import { conversationWith } from "@/lib/chat";
+import { proposeScheduleAction } from "../../mensagens/actions";
+import { ConfirmSchedule } from "./confirm-schedule";
+import { UFS } from "@/lib/places";
+import { savedAddresses } from "@/lib/saved-addresses";
 import { MapPicker } from "@/components/map-picker";
 import { ReportButton } from "@/components/report-dialog";
 import { buttonClass } from "@/components/ui/button";
@@ -13,7 +18,7 @@ import { roleIn } from "@/lib/bookings";
 import { db } from "@/lib/db";
 import { ARRIVE_HOURS, BOOKING_LABEL, CLIENT_NOSHOW_WAIT_MIN, REPORT_REASONS, UNIT_LABEL, canReview, category, chatOpen, formatBRL, nextSteps, proSeesAddress, qtyLabel, ratingOf, shortName } from "@/lib/domain";
 import { formatWhen } from "@/lib/places";
-import { providerPhotoUrl } from "@/lib/providers";
+import { accountPhotoUrl } from "@/lib/providers";
 import { requireUser } from "@/lib/session";
 import { report, toggleBlock } from "../../social-actions";
 import { cancelSearchAction, changeStatusAction, clientNoShowAction, reviewAction } from "./actions";
@@ -23,9 +28,7 @@ import { StatusActions } from "./status-actions";
 
 export const metadata: Metadata = { title: "Pedido" };
 
-const PAY = { PIX: "Pix", DINHEIRO: "dinheiro", CARTAO: "cartão (maquininha do prestador)" } as Record<string, string>;
-const PRO_REPLIES = ["Estou a caminho 🚗", "Chego em 15 min", "Chego em 30 min", "Chego em 1 hora", "Cheguei! Estou na porta", "Pode me mandar uma referência do local?"];
-const CLIENT_REPLIES = ["Estou te esperando", "Pode tocar a campainha", "Me avise quando estiver perto", "Precisa de alguma informação?"];
+const PAY: Record<string, string> = { PIX: "Pix", DINHEIRO: "dinheiro", DEBITO: "cartão de débito", CREDITO: "cartão de crédito", CARTAO: "cartão" };
 
 export default async function BookingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ enviado?: string }> }) {
   const { id } = await params;
@@ -34,7 +37,7 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
   const b = await db.booking.findUnique({
     where: { id },
     include: {
-      pro: { include: { user: { select: { id: true, name: true } } } },
+      pro: { include: { user: { select: { id: true, name: true } }, services: { select: { id: true, photoKey: true }, orderBy: { createdAt: "asc" } } } },
       client: { select: { id: true, name: true } },
       history: { orderBy: { createdAt: "asc" }, include: { by: { select: { name: true, role: true } } } },
       reviews: true,
@@ -51,6 +54,8 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
   const cat = category(b.category);
   const showAddress = !b.addressPurgedAt && (isClient || as === "ADMIN" || (isPro && proSeesAddress(b)));
   const chat = chatOpen(b);
+  // conversa entre os dois (uma só, antes e depois de contratar)
+  const conversation = b.proId && as !== "ADMIN" ? await conversationWith(b.clientId, b.proId) : null;
   const myReview = b.reviews.find((r) => r.authorId === user.id);
   const otherReview = b.reviews.find((r) => r.authorId !== user.id);
   const steps = nextSteps(b.status, as, b.mode);
@@ -117,7 +122,7 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
         <div className="flex flex-wrap items-start justify-between gap-3">
           {pro ? (
             <div className="flex items-center gap-3">
-              {isPro ? <ProPhoto url={null} name={b.client.name} size={56} /> : <ProPhoto url={providerPhotoUrl(pro)} name={pro.user.name} size={56} />}
+              {isPro ? <ProPhoto url={null} name={b.client.name} size={56} /> : <ProPhoto url={accountPhotoUrl(pro)} name={pro.user.name} size={56} />}
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted">{isPro ? "Cliente" : "Prestador"}</p>
                 {isPro ? <p className="font-semibold">{otherName}</p> : <Link href={`/prestador/${pro.id}`} className="font-semibold hover:underline">{shortName(pro.user.name)}</Link>}
@@ -178,7 +183,15 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
         {(b.status === "REFUSED" || b.status === "EXPIRED") && isClient && <Link href={`/buscar?servico=${b.category}`} className={buttonClass("primary")}>Escolher outro prestador</Link>}
       </Card>
 
-      <Card className="space-y-3">
+      {b.status === "PROPOSED" && isClient && (
+        <Card className="space-y-3 border-2 border-primary">
+          <CardTitle>📅 Confirmar agendamento</CardTitle>
+          <p className="text-sm text-muted">{otherName} reservou este horário para você. Informe o endereço para confirmar. Se não der, cancele.</p>
+          <ConfirmSchedule bookingId={b.id} saved={await savedAddresses(user.id)} ufs={UFS} payMethods={b.pro?.payMethods ?? []} />
+        </Card>
+      )}
+
+      {b.status !== "PROPOSED" && <Card className="space-y-3">
         <CardTitle className="flex items-center gap-2"><MapPin size={18} /> Endereço</CardTitle>
         {showAddress ? (
           <>
@@ -192,10 +205,16 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
         ) : (
           <p className="flex items-center gap-2 text-sm text-muted"><Lock size={16} /> {b.addrDistrict ? `${b.addrDistrict}, ` : ""}{b.addrCity}/{b.addrUf}. O endereço completo aparece depois que você aceitar.</p>
         )}
-      </Card>
+      </Card>}
 
-      {chat.read && as !== "ADMIN" ? (
-        <ChatBox bookingId={b.id} otherName={otherName} initialWrite={chat.write && !blocked} quickReplies={b.status === "COMPLETED" ? [] : isPro ? PRO_REPLIES : CLIENT_REPLIES} />
+      {conversation && as !== "ADMIN" ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold">Conversa com {otherName}</h2>
+            <Link href={`/mensagens/${conversation.id}`} className="text-sm text-primary">Abrir em tela cheia</Link>
+          </div>
+          <ChatBox conversationId={conversation.id} otherName={otherName} initialWrite={!blocked} height="h-[45vh] max-h-[420px]" scheduleAction={isPro ? proposeScheduleAction.bind(null, conversation.id) : undefined} />
+        </div>
       ) : chat.read && as === "ADMIN" ? (
         <Card className="space-y-2 text-sm">
           <CardTitle>Conversa</CardTitle>

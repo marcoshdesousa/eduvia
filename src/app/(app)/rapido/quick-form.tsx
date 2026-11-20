@@ -84,7 +84,8 @@ export function QuickForm({ saved, ufs, initialCategory, prices }: { saved: Save
               <legend className="mb-1 w-full text-sm font-medium">Como vai pagar ao prestador</legend>
               <label className="flex items-center gap-2"><input type="radio" name="payMethod" value="PIX" defaultChecked className="accent-[var(--primary)]" /> Pix</label>
               <label className="flex items-center gap-2"><input type="radio" name="payMethod" value="DINHEIRO" className="accent-[var(--primary)]" /> Dinheiro</label>
-              <label className="flex items-center gap-2"><input type="radio" name="payMethod" value="CARTAO" className="accent-[var(--primary)]" /> Cartão (se tiver maquininha)</label>
+              <label className="flex items-center gap-2"><input type="radio" name="payMethod" value="DEBITO" className="accent-[var(--primary)]" /> Débito</label>
+              <label className="flex items-center gap-2"><input type="radio" name="payMethod" value="CREDITO" className="accent-[var(--primary)]" /> Crédito</label>
             </fieldset>
           </Card>
 

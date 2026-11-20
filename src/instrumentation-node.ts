@@ -19,11 +19,12 @@ async function quick() {
 }
 
 async function tick() {
-  const { expireSweep, reminderSweep, purgeAddresses } = await import("./lib/bookings");
+  const { expireSweep, reminderSweep, agendaReminderSweep, purgeAddresses } = await import("./lib/bookings");
   const { subscriptionSweep } = await import("./lib/subscription");
   const jobs: [string, () => Promise<unknown>][] = [
     ["expirar pedidos", () => expireSweep()],
     ["lembretes", () => reminderSweep()],
+    ["lembretes da agenda", () => agendaReminderSweep()],
     ["planos e pagamentos", () => subscriptionSweep()],
     ["endereços antigos", () => purgeAddresses()],
   ];

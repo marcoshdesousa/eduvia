@@ -8,13 +8,14 @@ import { db } from "@/lib/db";
 import { ACTIVE_STATUSES, CATEGORIES, CATEGORY_GROUPS, category } from "@/lib/domain";
 import { feedPosts } from "@/lib/feed";
 import { postImageUrl } from "@/lib/providers";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getMode } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Início" };
 
 export default async function HomePage() {
   const user = await getCurrentUser();
   if (user?.role === "ADMIN") redirect("/admin");
+  if ((await getMode(user)) === "trabalho") redirect("/painel");
   const [posts, open] = await Promise.all([
     feedPosts({ take: 6 }),
     user ? db.booking.findMany({ where: { clientId: user.id, status: { in: ["SEARCHING", "WAITING_PRO", ...ACTIVE_STATUSES] } }, orderBy: { createdAt: "desc" }, take: 3 }) : [],
@@ -57,9 +58,9 @@ export default async function HomePage() {
       {CATEGORY_GROUPS.map((g) => (
         <section key={g} className="space-y-2">
           <h2 className="font-bold">{g}</h2>
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
             {CATEGORIES.filter((c) => c.group === g).map((c) => (
-              <Link key={c.slug} href={`/buscar?servico=${c.slug}`} className="flex w-24 shrink-0 flex-col items-center gap-1 rounded-2xl border border-border bg-surface p-3 text-center text-xs font-medium transition hover:border-primary">
+              <Link key={c.slug} href={`/buscar?servico=${c.slug}`} className="flex flex-col items-center gap-1 rounded-2xl border border-border bg-surface p-2 text-center text-[11px] font-medium leading-tight transition hover:border-primary">
                 <span className="text-3xl">{c.emoji}</span>
                 <span className="leading-tight">{c.label}</span>
               </Link>
@@ -91,7 +92,7 @@ export default async function HomePage() {
             <p className="font-bold">Você presta serviço?</p>
             <p className="text-sm text-muted">Receba clientes perto de você. 3 dias grátis.</p>
           </div>
-          <Link href={user ? "/seja-prestador" : "/cadastro?quero=trabalhar"} className={buttonClass("primary", "sm", "shrink-0 whitespace-nowrap")}>Quero trabalhar</Link>
+          <Link href={user ? "/seja-prestador" : "/cadastro?quero=trabalhar"} className={buttonClass("primary", "sm", "shrink-0 whitespace-nowrap")}>Turbinar conta</Link>
         </Card>
       )}
     </div>

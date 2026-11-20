@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/session";
 
 const s = (d: FormData, k: string) => String(d.get(k) ?? "").trim();
 const num = (v: string) => (v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
-const PAY = ["PIX", "DINHEIRO", "CARTAO"];
+const PAY = ["PIX", "DINHEIRO", "DEBITO", "CREDITO"];
 
 function address(d: FormData): AddressInput {
   const lat = num(s(d, "lat"));

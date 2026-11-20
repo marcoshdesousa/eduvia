@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 import type { Plan } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
-import { MAX_PLACES, PACK_CENTS, PACK_PLACES, PERIOD_DAYS, PLANS, formatBRL, upgradeCents } from "@/lib/domain";
+import { MAX_PLACES, PACK_CENTS, PACK_PLACES, PERIOD_DAYS, PLANS, formatBRL, referralPct, upgradeCents } from "@/lib/domain";
 import { requireProvider } from "@/lib/session";
-import { RENEW_WINDOW_DAYS, nextCharge, subscriptionActive } from "@/lib/subscription";
+import { RENEW_WINDOW_DAYS, nextCharge, referralCount, subscriptionActive } from "@/lib/subscription";
 import { BackLink } from "../back-link";
 import { setNextPlanAction, subscriptionPixAction, upgradePixAction } from "../actions";
 
@@ -22,8 +22,11 @@ const FEATURES: Record<Plan, string[]> = {
 const KIND = { SUBSCRIPTION: "Mensalidade", UPGRADE: "Troca para o Completo", UNLOCK: "Desbloqueio" } as const;
 const STATUS = { PENDING: "Aguardando", PAID: "Pago", FAILED: "Não pago", REFUNDED: "Devolvido" } as Record<string, string>;
 
-export default async function PlanPage() {
-  const user = await requireProvider();
+export default async function PlanPage({ searchParams }: { searchParams: Promise<{ bloqueado?: string }> }) {
+  const user = await requireProvider({ allowUnpaid: true });
+  const { bloqueado } = await searchParams;
+  const referrals = await referralCount(user.id, user.provider.referralsFrom);
+  const pct = referralPct(referrals);
   const [sub, payments] = await Promise.all([
     db.subscription.findUnique({ where: { proId: user.provider.id } }),
     db.payment.findMany({ where: { userId: user.id, status: { not: "PENDING" } }, orderBy: { createdAt: "desc" }, take: 12 }),
@@ -32,11 +35,22 @@ export default async function PlanPage() {
   const end = sub?.currentPeriodEnd ?? null;
   const canRenew = !sub || !active || sub.trial || (end && end.getTime() - Date.now() <= RENEW_WINDOW_DAYS * 86_400_000);
   const next = sub ? nextCharge(sub) : null;
+  // no Completo em dia não dá para descer para o Básico: só quando o Completo terminar
+  const fullLocked = !!sub && active && !sub.trial && sub.plan === "FULL";
 
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <BackLink />
       <PageTitle title="Seu plano" subtitle="Para o cliente é grátis. Você paga só a mensalidade, sem comissão: o valor do serviço é todo seu." />
+      {!active && (
+        <Card className="border-danger/50 bg-danger/5">
+          <p className="font-semibold">🔒 {sub?.trial || bloqueado ? "Seu teste grátis acabou" : "Seu plano venceu"}</p>
+          <p className="text-sm">A área de trabalho fica bloqueada (perfis, agenda, mensagens, financeiro e histórico) até você pagar. Sua conta de cliente continua liberada.</p>
+        </Card>
+      )}
+      {pct > 0 && (
+        <Card className="border-accent/50 bg-accent-soft text-sm">🎁 Você tem <strong>{pct.toString().replace(".", ",")}% de desconto</strong> na próxima mensalidade ({referrals} pessoa(s) entraram pelo seu link).</Card>
+      )}
 
       {sub && (
         <Card className="space-y-1">
@@ -57,7 +71,7 @@ export default async function PlanPage() {
       {sub?.plan === "BASIC" && active && !sub.trial && (
         <Card className="space-y-2 border-primary/40">
           <CardTitle>Subir para o Completo agora</CardTitle>
-          <p className="text-sm text-muted">Paga só a diferença dos dias que faltam: <strong className="text-foreground">{formatBRL(upgradeCents(end))}</strong>.</p>
+          <p className="text-sm text-muted">Paga o Completo inteiro e começa um mês novo de Completo agora: <strong className="text-foreground">{formatBRL(upgradeCents())}</strong>.</p>
           <PixBox start={upgradePixAction} label="Pagar diferença com Pix" paidText="Pronto! Você está no plano Completo." />
         </Card>
       )}
@@ -77,8 +91,10 @@ export default async function PlanPage() {
             <ul className="space-y-1 text-sm">
               {FEATURES[plan].map((f) => <li key={f} className="flex items-center gap-2"><Check size={16} className="text-primary" /> {f}</li>)}
             </ul>
-            {canRenew ? (
-              <PixBox start={subscriptionPixAction.bind(null, plan)} label={`${active && !sub?.trial ? "Renovar" : "Assinar"} ${p.name} com Pix`} variant={plan === "FULL" ? "primary" : "secondary"} paidText={`Pagamento confirmado! Plano ${p.name} ativo por ${PERIOD_DAYS} dias.`} />
+            {plan === "BASIC" && fullLocked ? (
+              <p className="text-xs text-muted">Você está no Completo. O Básico fica disponível quando o Completo terminar ({end!.toLocaleDateString("pt-BR")}).</p>
+            ) : canRenew ? (
+              <PixBox start={subscriptionPixAction.bind(null, plan)} label={`${active && !sub?.trial ? "Renovar" : "Assinar"} ${p.name} com Pix${pct > 0 ? ` (−${pct.toString().replace(".", ",")}%)` : ""}`} variant={plan === "FULL" ? "primary" : "secondary"} paidText={`Pagamento confirmado! Plano ${p.name} ativo por ${PERIOD_DAYS} dias.`} />
             ) : sub && next?.plan !== plan ? (
               <ActionButton action={setNextPlanAction.bind(null, plan)} variant="outline" className="w-full">Mudar para o {p.name} na próxima mensalidade</ActionButton>
             ) : (

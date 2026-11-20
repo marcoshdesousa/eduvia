@@ -29,7 +29,7 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
         photoKey: "perfil/x.jpg",
         quickOn: true,
         quickTermsAt: opts.terms === false ? null : new Date(),
-        services: { create: { category: "diarista", priceCents: price, unit: "DIARIA" } },
+        services: { create: { category: "diarista", priceCents: price, unit: "DIARIA", photoKey: "perfil/x.jpg" } },
         places: { create: { label: "Casa", city: "São Paulo", uf: "SP", lat, lng } },
         availability: { create: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startMin: 0, endMin: 1439 })) },
         subscription: { create: { plan: opts.plan ?? "FULL", currentPeriodEnd: new Date(NOW.getTime() + 10 * 86_400_000) } },
@@ -136,6 +136,42 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
     const order = (await quickCandidates(b)).map((p) => p.id).filter((id) => id === refuser.proId || id === good.proId);
     expect(order).toEqual([good.proId, refuser.proId]);
     await db.booking.update({ where: { id: b.id }, data: { status: "CANCELED_CLIENT" } });
+  });
+
+  it("agendamento pela conversa: reserva o horário, ninguém pede por cima, o cliente confirma com o endereço", async () => {
+    const { proposeSchedule, confirmSchedule, createBooking, BookingError } = await import("./bookings");
+    const { conversationWith } = await import("./chat");
+    const pro = await provider("Agenda", 15000, -23.6, -46.6);
+    const client = await user("Cliente Conversa");
+    const other = await user("Outro Cliente");
+    const conv = await conversationWith(client.id, pro.proId);
+    const at = new Date(Date.now() + 3 * 86_400_000);
+    at.setUTCHours(13, 0, 0, 0); // 10h em São Paulo
+    const b = await proposeSchedule(conv.id, pro.id, { category: "diarista", unit: "DIARIA", quantity: 1, scheduledAt: at, priceCents: 16000 });
+    expect(b.status).toBe("PROPOSED");
+    expect(await db.message.count({ where: { conversationId: conv.id, kind: "SCHEDULE", bookingId: b.id } })).toBe(1);
+    // o mesmo horário não pode ser pedido por outra pessoa
+    await expect(createBooking({ clientId: other.id, proId: pro.proId, category: "diarista", quantity: 1, scheduledAt: new Date(at.getTime() + 3_600_000), address: { street: "Rua A", city: "São Paulo", uf: "SP" } })).rejects.toBeInstanceOf(BookingError);
+    // compromisso pessoal também bloqueia
+    await db.agendaEntry.create({ data: { proId: pro.proId, title: "Médico", startsAt: new Date(at.getTime() + 86_400_000), endsAt: new Date(at.getTime() + 86_400_000 + 2 * 3_600_000) } });
+    await expect(proposeSchedule(conv.id, pro.id, { category: "diarista", unit: "DIARIA", quantity: 1, scheduledAt: new Date(at.getTime() + 86_400_000 + 3_600_000), priceCents: 16000 })).rejects.toBeInstanceOf(BookingError);
+    await confirmSchedule(b.id, client.id, { street: "Rua das Flores", number: "10", city: "São Paulo", uf: "SP" });
+    const after = await db.booking.findUniqueOrThrow({ where: { id: b.id } });
+    expect(after.status).toBe("ACCEPTED");
+    expect(after.addrStreet).toBe("Rua das Flores");
+    expect(after.estimateCents).toBe(16000);
+  });
+
+  it("indicação: conta só quem entrou depois do último desconto", async () => {
+    const { referralCount } = await import("./subscription");
+    const inviter = await user("Quem Convida");
+    const since = new Date(Date.now() - 1000);
+    for (let i = 0; i < 3; i++) {
+      const u = await user(`Convidado ${i}`);
+      await db.user.update({ where: { id: u.id }, data: { referredById: inviter.id } });
+    }
+    expect(await referralCount(inviter.id, since)).toBe(3);
+    expect(await referralCount(inviter.id, new Date(Date.now() + 1000))).toBe(0);
   });
 
   it("pacotes de endereço: liberam na hora, entram na próxima mensalidade, máximo 11", async () => {

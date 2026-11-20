@@ -4,7 +4,7 @@ import { Empty, PageTitle } from "@/components/bits";
 import { ProviderCard } from "@/components/provider-card";
 import { db } from "@/lib/db";
 import { providerVisible, ratingOf } from "@/lib/domain";
-import { providerPhotoUrl } from "@/lib/providers";
+import { accountPhotoUrl } from "@/lib/providers";
 import { requireUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Favoritos" };
@@ -14,7 +14,7 @@ export default async function FavoritesPage() {
   const favs = await db.favorite.findMany({
     where: { clientId: user.id },
     orderBy: { createdAt: "desc" },
-    include: { pro: { include: { user: { select: { name: true, blockedAt: true } }, subscription: true, places: { where: { active: true } }, services: { orderBy: { priceCents: "asc" } } } } },
+    include: { pro: { include: { user: { select: { name: true, blockedAt: true } }, subscription: true, places: { where: { active: true } }, services: { where: { photoKey: { not: null } }, orderBy: { priceCents: "asc" } } } } },
   });
   const list = favs.map(({ pro }) => ({ pro, on: providerVisible({ ...pro, subscriptionEnd: pro.subscription?.currentPeriodEnd, blocked: !!pro.user.blockedAt, services: pro.services.length, places: pro.places.length }) })).filter((x) => x.on);
   return (
@@ -26,7 +26,7 @@ export default async function FavoritesPage() {
             <li key={pro.id}>
               <ProviderCard
                 href={`/prestador/${pro.id}`}
-                p={{ id: pro.id, name: pro.user.name, photoUrl: providerPhotoUrl(pro), rating: ratingOf(pro), ratingCount: pro.ratingCount, priceCents: pro.services[0].priceCents, unit: pro.services[0].unit, plan: pro.subscription?.plan ?? "BASIC", distanceKm: null, place: pro.places[0] ? `${pro.places[0].city}/${pro.places[0].uf}` : "" }}
+                p={{ id: pro.id, name: pro.user.name, photoUrl: accountPhotoUrl(pro), rating: ratingOf(pro), ratingCount: pro.ratingCount, priceCents: pro.services[0].priceCents, unit: pro.services[0].unit, plan: pro.subscription?.plan ?? "BASIC", distanceKm: null, place: pro.places[0] ? `${pro.places[0].city}/${pro.places[0].uf}` : "" }}
               />
             </li>
           ))}

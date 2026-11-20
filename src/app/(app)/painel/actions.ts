@@ -3,8 +3,8 @@ import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/components/action-form";
 import type { Plan } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
-import { MAX_PLACES, PHONE_BLOCKED_MSG, WEEKDAYS, containsPhone, hhmmToMinutes, normalizeInstagram, placesLimit, providerVisible } from "@/lib/domain";
-import { InputError, readBio, readPlace, readService } from "@/lib/provider-input";
+import { MAX_PLACES, PHONE_BLOCKED_MSG, WEEKDAYS, containsPhone, hhmmToMinutes, isPayMethod, placesLimit, providerVisible } from "@/lib/domain";
+import { InputError, readPlace, readProfile } from "@/lib/provider-input";
 import { requireProvider } from "@/lib/session";
 import { PaymentError, addPack, removePack, setNextPlan, startSubscriptionPix, startUpgradePix, subscriptionActive } from "@/lib/subscription";
 import { deleteObject } from "@/lib/storage";
@@ -26,7 +26,7 @@ const done = (ok: string, ...paths: string[]): ActionResult => {
 async function proState(proId: string) {
   const p = await db.providerProfile.findUniqueOrThrow({
     where: { id: proId },
-    include: { subscription: true, user: { select: { blockedAt: true } }, _count: { select: { services: true, places: { where: { active: true } } } } },
+    include: { subscription: true, user: { select: { blockedAt: true } }, _count: { select: { services: { where: { photoKey: { not: null } } }, places: { where: { active: true } } } } },
   });
   return { ...p, visible: providerVisible({ ...p, subscriptionEnd: p.subscription?.currentPeriodEnd ?? null, blocked: !!p.user.blockedAt, services: p._count.services, places: p._count.places }) };
 }
@@ -39,7 +39,7 @@ export async function setQuickAction(on: boolean): Promise<ActionResult> {
     if (p.subscription?.plan !== "FULL" || !subscriptionActive(p.subscription)) return { error: "O Contrate rápido é só para o plano Completo em dia." };
     if (!p.quickTermsAt) return { error: "Aceite as regras do Contrate rápido primeiro." };
     if (p.quickBannedUntil && p.quickBannedUntil > new Date()) return { error: `Você está fora do Contrate rápido até ${p.quickBannedUntil.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} porque aceitou um chamado e não chegou a tempo.` };
-    if (!p.visible) return { error: p.paused ? "Tire a pausa do perfil primeiro." : !subscriptionActive(p.subscription) ? "Seu plano não está em dia. Pague para receber chamados." : "Complete o perfil (foto, serviço e endereço) primeiro." };
+    if (!p.visible) return { error: p.paused ? "Tire a pausa primeiro." : !subscriptionActive(p.subscription) ? "Seu plano não está em dia. Pague para receber chamados." : "Crie um perfil com foto e cadastre um endereço primeiro." };
   }
   await db.providerProfile.update({ where: { id: p.id }, data: { quickOn: on } });
   return done(on ? "Você está disponível. Deixe o app aberto ou as notificações ligadas para ouvir os chamados." : "Você não vai receber chamados agora.");
@@ -68,52 +68,51 @@ export async function setPausedAction(paused: boolean): Promise<ActionResult> {
   return done(paused ? "Perfil pausado: você não aparece nas buscas." : "Perfil de volta na vitrine.");
 }
 
-export async function saveProfileAction(_: ActionResult, f: FormData): Promise<ActionResult> {
+/** Salva um perfil (profissão): valor, cobrança, especificações, bio, Instagram e site. */
+export async function updateProfileAction(serviceId: string, _: ActionResult, f: FormData): Promise<ActionResult> {
   const user = await requireProvider();
   return guard(async () => {
-    const bio = readBio(f);
-    const raw = String(f.get("instagram") ?? "").trim();
-    const instagram = raw ? normalizeInstagram(raw) : null;
-    if (raw && !instagram) throw new InputError("Instagram inválido. Use só o nome, ex.: @maria.diarista");
-    if (instagram && containsPhone(instagram)) throw new InputError(PHONE_BLOCKED_MSG);
-    await db.providerProfile.update({ where: { id: user.provider.id }, data: { bio, instagram } });
+    const { category: _c, ...data } = readProfile(f);
+    void _c;
+    const r = await db.providerService.updateMany({ where: { id: serviceId, proId: user.provider.id }, data });
+    if (!r.count) throw new InputError("Perfil não encontrado.");
     return done("Perfil salvo.", "/painel/perfil", `/prestador/${user.provider.id}`);
   });
 }
 
-export async function addServiceAction(_: ActionResult, f: FormData): Promise<ActionResult> {
+/** Apaga um perfil (profissão) com as fotos dele. */
+export async function deleteProfileAction(serviceId: string): Promise<ActionResult> {
   const user = await requireProvider();
-  return guard(async () => {
-    const s = readService(f);
-    const count = await db.providerService.count({ where: { proId: user.provider.id } });
-    if (count >= 12) throw new InputError("Você pode ter até 12 serviços.");
-    try {
-      await db.providerService.create({ data: { ...s, proId: user.provider.id } });
-    } catch (e) {
-      if ((e as { code?: string }).code === "P2002") throw new InputError("Você já oferece este serviço. Edite o valor na lista.");
-      throw e;
-    }
-    return done("Serviço incluído.", "/painel/servicos");
-  });
+  const svc = await db.providerService.findFirst({ where: { id: serviceId, proId: user.provider.id }, include: { posts: true } });
+  if (!svc) return { error: "Perfil não encontrado." };
+  await db.providerService.delete({ where: { id: svc.id } });
+  for (const k of [svc.photoKey, ...svc.posts.map((p) => p.imageKey)]) if (k) await deleteObject(k).catch(() => {});
+  return done("Perfil apagado.", "/painel/perfil");
 }
 
-export async function updateServiceAction(_: ActionResult, f: FormData): Promise<ActionResult> {
+/** Formas de pagamento aceitas e se o cliente pode pedir direto (ou só pela conversa). */
+export async function savePaymentAction(_: ActionResult, f: FormData): Promise<ActionResult> {
   const user = await requireProvider();
-  return guard(async () => {
-    const id = String(f.get("id") ?? "");
-    const s = readService(f);
-    const r = await db.providerService.updateMany({ where: { id, proId: user.provider.id }, data: { priceCents: s.priceCents, unit: s.unit, description: s.description } });
-    if (!r.count) throw new InputError("Serviço não encontrado.");
-    return done("Serviço atualizado.", "/painel/servicos");
-  });
+  const methods = f.getAll("pay").map(String).filter(isPayMethod);
+  if (!methods.length) return { error: "Escolha pelo menos uma forma de pagamento." };
+  await db.providerProfile.update({ where: { id: user.provider.id }, data: { payMethods: methods, directBooking: f.get("directBooking") === "on" } });
+  return done("Salvo.", "/painel/pagamentos", `/prestador/${user.provider.id}`);
 }
 
-export async function deleteServiceAction(id: string): Promise<ActionResult> {
+export async function addQuickReplyAction(_: ActionResult, f: FormData): Promise<ActionResult> {
   const user = await requireProvider();
-  const count = await db.providerService.count({ where: { proId: user.provider.id } });
-  if (count <= 1) return { error: "Você precisa ter pelo menos um serviço." };
-  await db.providerService.deleteMany({ where: { id, proId: user.provider.id } });
-  return done("Serviço removido.", "/painel/servicos");
+  const text = String(f.get("text") ?? "").trim().slice(0, 300);
+  if (text.length < 2) return { error: "Escreva a mensagem." };
+  if (containsPhone(text)) return { error: PHONE_BLOCKED_MSG };
+  if ((await db.quickReply.count({ where: { proId: user.provider.id } })) >= 30) return { error: "Até 30 mensagens rápidas." };
+  await db.quickReply.create({ data: { proId: user.provider.id, text } });
+  return done("Mensagem rápida salva.", "/painel/mensagens-rapidas");
+}
+
+export async function deleteQuickReplyAction(id: string): Promise<ActionResult> {
+  const user = await requireProvider();
+  await db.quickReply.deleteMany({ where: { id, proId: user.provider.id } });
+  return done("Apagada.", "/painel/mensagens-rapidas");
 }
 
 export async function addPlaceAction(_: ActionResult, f: FormData): Promise<ActionResult> {
@@ -160,7 +159,7 @@ export async function removePackAction(): Promise<ActionResult> {
 }
 
 export async function setNextPlanAction(plan: Plan): Promise<ActionResult> {
-  const user = await requireProvider();
+  const user = await requireProvider({ allowUnpaid: true });
   if (plan !== "BASIC" && plan !== "FULL") return { error: "Plano inválido." };
   const sub = await db.subscription.findUnique({ where: { proId: user.provider.id } });
   if (!sub) return { error: "Escolha o plano na hora de pagar." };
@@ -169,14 +168,14 @@ export async function setNextPlanAction(plan: Plan): Promise<ActionResult> {
 }
 
 export async function subscriptionPixAction(plan: Plan): Promise<{ paymentId?: string; error?: string }> {
-  const user = await requireProvider();
+  const user = await requireProvider({ allowUnpaid: true });
   if (plan !== "BASIC" && plan !== "FULL") return { error: "Plano inválido." };
   const r = await guard(async () => ({ paymentId: (await startSubscriptionPix(user.id, plan)).id }));
   return r;
 }
 
 export async function upgradePixAction(): Promise<{ paymentId?: string; error?: string }> {
-  const user = await requireProvider();
+  const user = await requireProvider({ allowUnpaid: true });
   return guard(async () => ({ paymentId: (await startUpgradePix(user.id)).id }));
 }
 
@@ -186,7 +185,7 @@ export async function deletePostAction(id: string): Promise<ActionResult> {
   if (!post) return { error: "Foto não encontrada." };
   await db.post.delete({ where: { id } });
   await deleteObject(post.imageKey).catch(() => {});
-  return done("Foto apagada.", "/painel/portfolio", `/prestador/${user.provider.id}`);
+  return done("Foto apagada.", "/painel/perfil", `/prestador/${user.provider.id}`);
 }
 
 /** Horários de atendimento: para cada dia, ligado + início e fim (um período por dia). */
@@ -203,4 +202,48 @@ export async function saveAgendaAction(_: ActionResult, f: FormData): Promise<Ac
   if (!rules.length) return { error: "Escolha pelo menos um dia. Para parar de aparecer, use Pausar perfil." };
   await db.$transaction([db.availabilityRule.deleteMany({ where: { proId: user.provider.id } }), db.availabilityRule.createMany({ data: rules.map((r) => ({ ...r, proId: user.provider.id })) })]);
   return done("Horários salvos.", "/painel/agenda");
+}
+
+/** Compromisso na agenda (bloqueia o horário para pedidos e chamados, e o app lembra 1 hora antes). */
+export async function addAgendaEntryAction(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const user = await requireProvider();
+  const { localToUtc } = await import("@/lib/places");
+  const place = await db.providerPlace.findFirst({ where: { proId: user.provider.id }, select: { uf: true } });
+  const uf = place?.uf ?? "SP";
+  const title = String(f.get("title") ?? "").trim().slice(0, 80);
+  const date = String(f.get("date") ?? "");
+  const start = localToUtc(date, String(f.get("start") ?? ""), uf);
+  const end = localToUtc(date, String(f.get("end") ?? ""), uf);
+  if (title.length < 2) return { error: "Dê um nome ao compromisso." };
+  if (!start || !end || end <= start) return { error: "Confira a data e os horários (o fim precisa ser depois do início)." };
+  const notes = String(f.get("notes") ?? "").trim().slice(0, 500) || null;
+  await db.agendaEntry.create({ data: { proId: user.provider.id, title, startsAt: start, endsAt: end, notes } });
+  return done("Compromisso salvo. Vamos te lembrar 1 hora antes.", "/painel/agenda");
+}
+
+export async function deleteAgendaEntryAction(id: string): Promise<ActionResult> {
+  const user = await requireProvider();
+  await db.agendaEntry.deleteMany({ where: { id, proId: user.provider.id } });
+  return done("Compromisso apagado.", "/painel/agenda");
+}
+
+/** Lançamento manual na gestão financeira (entrada ou saída). */
+export async function addFinanceEntryAction(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const user = await requireProvider();
+  const { parseBRL, parseDateOnly } = await import("@/lib/domain");
+  const kind = f.get("kind") === "OUT" ? "OUT" : "IN";
+  const cents = parseBRL(String(f.get("amount") ?? ""));
+  const date = parseDateOnly(String(f.get("date") ?? ""));
+  const description = String(f.get("description") ?? "").trim().slice(0, 120);
+  if (cents == null || cents <= 0 || cents > 100_000_000) return { error: "Informe o valor." };
+  if (!date) return { error: "Informe a data." };
+  if (description.length < 2) return { error: "Descreva o lançamento (ex.: material, combustível, serviço extra)." };
+  await db.financeEntry.create({ data: { proId: user.provider.id, kind, amountCents: cents, date, description } });
+  return done(kind === "IN" ? "Entrada lançada." : "Saída lançada.", "/painel/financeiro");
+}
+
+export async function deleteFinanceEntryAction(id: string): Promise<ActionResult> {
+  const user = await requireProvider();
+  await db.financeEntry.deleteMany({ where: { id, proId: user.provider.id } });
+  return done("Lançamento apagado.", "/painel/financeiro");
 }

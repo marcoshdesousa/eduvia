@@ -12,7 +12,7 @@ import { maskCpf } from "@/lib/core/phone";
 import { openCpf } from "@/lib/cpf";
 import { db } from "@/lib/db";
 import { PLANS, ageOn, category, formatBRL, ratingOf } from "@/lib/domain";
-import { providerPhotoUrl } from "@/lib/providers";
+import { accountPhotoUrl } from "@/lib/providers";
 import { requireAdmin } from "@/lib/session";
 import { subscriptionActive } from "@/lib/subscription";
 import { cn } from "@/lib/utils";
@@ -58,7 +58,7 @@ export default async function AdminProviders({ searchParams }: { searchParams: P
               <li key={p.id}>
                 <Card className="space-y-3">
                   <div className="flex flex-wrap items-start gap-3">
-                    <ProPhoto url={providerPhotoUrl(p)} name={p.user.name} size={72} className="rounded-xl" />
+                    <ProPhoto url={accountPhotoUrl(p)} name={p.user.name} size={72} className="rounded-xl" />
                     <div className="min-w-0 flex-1 space-y-1 text-sm">
                       <p className="flex flex-wrap items-center gap-2 text-base font-semibold">
                         <Link href={`/prestador/${p.id}`} className="hover:underline">{p.user.name}</Link>
@@ -67,7 +67,7 @@ export default async function AdminProviders({ searchParams }: { searchParams: P
                         {p.quickOn && <Badge tone="success">⚡ Disponível</Badge>}
                         {banned && <Badge tone="warning">Fora do rápido até {p.quickBannedUntil!.toLocaleDateString("pt-BR")}</Badge>}
                       </p>
-                      <p>{ageOn(p.birthDate)} anos · CPF {cpf ? <Reveal userId={p.userId} what="cpf" masked={maskCpf(cpf)} /> : "—"} · Celular <Reveal userId={p.userId} what="phone" masked="(**) *****-****" /></p>
+                      <p>{p.birthDate ? `${ageOn(p.birthDate)} anos · ` : ""}CPF {cpf ? <Reveal userId={p.userId} what="cpf" masked={maskCpf(cpf)} /> : "—"} · Celular <Reveal userId={p.userId} what="phone" masked="(**) *****-****" /></p>
                       <p className="text-muted">{p.services.map((s) => `${category(s.category)?.label ?? s.category} ${formatBRL(s.priceCents)}`).join(" · ")}</p>
                       <p className="text-muted">{p.places.map((pl) => `${pl.city}/${pl.uf}`).join(", ")} · nota {ratingOf(p)?.toFixed(1) ?? "—"} ({p.ratingCount}) · {p.completedCount} serviços</p>
                       <p className="text-xs text-muted">Plano: {sub ? `${PLANS[sub.plan].name}${sub.trial ? " (teste)" : ""}${sub.packs ? ` + ${sub.packs} pacote(s)` : ""} · ${subscriptionActive(sub) ? `em dia até ${sub.currentPeriodEnd!.toLocaleDateString("pt-BR")}` : "vencido"}` : "nenhum"}</p>

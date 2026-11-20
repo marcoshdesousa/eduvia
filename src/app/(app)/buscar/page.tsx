@@ -6,7 +6,7 @@ import { ProviderCard } from "@/components/provider-card";
 import { buttonClass } from "@/components/ui/button";
 import { category, isCategory, parseBRL } from "@/lib/domain";
 import { UFS, officialCity } from "@/lib/places";
-import { providerPhotoUrl, searchProviders } from "@/lib/providers";
+import { profilePhotoUrl, searchProviders } from "@/lib/providers";
 import { getCurrentUser } from "@/lib/session";
 import { SearchBar } from "./search-bar";
 
@@ -23,12 +23,23 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const city = uf && sp.cidade ? officialCity(uf, sp.cidade) : null;
   const maxCents = sp.max ? parseBRL(sp.max) : null;
   const cat = category(servico);
-  const results = servico && (near || city) ? await searchProviders({ category: servico, near, uf: near ? null : uf, city: near ? null : city, maxCents }, { clientId: user?.id }) : null;
+  const results = servico ? await searchProviders({ category: servico, near, uf: near ? null : uf, city: near ? null : city, maxCents }, { clientId: user?.id }) : null;
   const now = new Date();
   return (
     <div className="space-y-4">
-      <PageTitle title={cat ? `${cat.emoji} ${cat.label}` : "Encontrar prestador"} subtitle="Os mais perto aparecem primeiro. Prestadores ★ Recomendados (plano Completo) ficam no topo." />
-      <SearchBar ufs={UFS} initial={{ servico, uf, cidade: city ?? sp.cidade ?? "", max: sp.max ?? "", lat: near ? String(lat) : "", lng: near ? String(lng) : "" }} />
+      <PageTitle title={cat ? `${cat.emoji} ${cat.label}` : "Encontrar prestador"} subtitle="Prestadores ★ Recomendados (plano Completo) ficam no topo. Use o filtro para ver os mais perto de você." />
+      {servico ? (
+        <details className="rounded-2xl border border-border bg-surface">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+            🔎 {near ? "Mais perto de você" : city ? `Em ${city}/${uf}` : "Todo o Brasil"} · <span className="text-primary">filtrar (perto de mim, cidade, preço)</span>
+          </summary>
+          <div className="px-1 pb-1">
+            <SearchBar ufs={UFS} initial={{ servico, uf, cidade: city ?? sp.cidade ?? "", max: sp.max ?? "", lat: near ? String(lat) : "", lng: near ? String(lng) : "" }} />
+          </div>
+        </details>
+      ) : (
+        <SearchBar ufs={UFS} initial={{ servico, uf, cidade: city ?? sp.cidade ?? "", max: sp.max ?? "", lat: near ? String(lat) : "", lng: near ? String(lng) : "" }} />
+      )}
       {cat && (
         <Link href={`/rapido?servico=${cat.slug}`} className={buttonClass("outline", "md", "w-full border-primary/50 text-primary")}>
           <Zap size={16} /> Precisa agora? Use o Contrate rápido
@@ -42,11 +53,11 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               return (
                 <li key={p.id}>
                   <ProviderCard
-                    href={`/prestador/${p.id}`}
+                    href={`/prestador/${p.id}?perfil=${p.service.category}`}
                     p={{
                       id: p.id,
                       name: p.user.name,
-                      photoUrl: providerPhotoUrl(p),
+                      photoUrl: profilePhotoUrl(p.service),
                       rating: p.rating,
                       ratingCount: p.ratingCount,
                       priceCents: p.priceCents,

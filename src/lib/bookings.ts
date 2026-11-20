@@ -31,6 +31,8 @@ import {
 import { formatWhen, localParts, officialCity } from "@/lib/places";
 import { bbox, visibleWhere } from "@/lib/providers";
 import { clientBlock } from "@/lib/subscription";
+import { conversationWith } from "@/lib/chat";
+import type { Prisma } from "@/generated/prisma/client";
 
 export class BookingError extends Error {}
 
@@ -67,6 +69,13 @@ async function saveAddress(clientId: string, label: string | null | undefined, b
   await db.address.create({ data: { clientId, label: label.slice(0, 40), street: b.addrStreet, number: b.addrNumber, complement: b.addrComplement, district: b.addrDistrict, city: b.addrCity, uf: b.addrUf, cep: b.addrCep, lat: b.lat, lng: b.lng } });
 }
 
+/** O prestador já tem algo nesse intervalo? (serviço confirmado, agendamento esperando o cliente ou compromisso da agenda) */
+export async function slotTaken(tx: Prisma.TransactionClient | typeof db, proId: string, start: Date, end: Date) {
+  const near = await tx.booking.findMany({ where: { proId, status: { in: [...ACTIVE_STATUSES, "PROPOSED"] }, scheduledAt: { lt: end, gt: new Date(start.getTime() - 9 * 30 * H) } }, select: { scheduledAt: true, unit: true, quantity: true } });
+  if (near.some((b) => b.scheduledAt.getTime() + busyHours(b.unit, b.quantity) * H > start.getTime())) return true;
+  return !!(await tx.agendaEntry.findFirst({ where: { proId, startsAt: { lt: end }, endsAt: { gt: start } }, select: { id: true } }));
+}
+
 // ───────────────────────── Pedido normal ─────────────────────────
 
 export type BookingInput = {
@@ -92,10 +101,11 @@ export async function createBooking(input: BookingInput, now = new Date()) {
     where: { id: input.proId },
     include: { subscription: true, availability: true, services: true, places: { where: { active: true } }, user: { select: { id: true, blockedAt: true } } },
   });
-  if (!pro || !providerVisible({ ...pro, subscriptionEnd: pro.subscription?.currentPeriodEnd, blocked: !!pro.user.blockedAt, services: pro.services.length, places: pro.places.length }, now)) {
+  if (!pro || !providerVisible({ ...pro, subscriptionEnd: pro.subscription?.currentPeriodEnd, blocked: !!pro.user.blockedAt, services: pro.services.filter((x) => x.photoKey).length, places: pro.places.length }, now)) {
     throw new BookingError("Este prestador não está recebendo pedidos agora.");
   }
   if (pro.userId === input.clientId) throw new BookingError("Você não pode contratar a si mesmo.");
+  if (!pro.directBooking) throw new BookingError("Este prestador agenda pela conversa. Mande uma mensagem para combinar o dia.");
   const blocked = await db.block.findFirst({ where: { OR: [{ blockerId: pro.userId, blockedId: input.clientId }, { blockerId: input.clientId, blockedId: pro.userId }] } });
   if (blocked) throw new BookingError("Não é possível enviar pedido para este prestador.");
   const service = pro.services.find((s) => s.category === input.category);
@@ -108,8 +118,7 @@ export async function createBooking(input: BookingInput, now = new Date()) {
   const end = new Date(input.scheduledAt.getTime() + busyHours(service.unit, input.quantity) * H);
   const booking = await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${pro.id}))`;
-    const clash = await tx.booking.findFirst({ where: { proId: pro.id, status: { in: ACTIVE_STATUSES }, scheduledAt: { lt: end, gt: new Date(input.scheduledAt.getTime() - 9 * 30 * H) } } });
-    if (clash && clash.scheduledAt.getTime() + busyHours(clash.unit, clash.quantity) * H > input.scheduledAt.getTime()) throw new BookingError("O prestador já tem um serviço confirmado nesse horário. Escolha outro horário.");
+    if (await slotTaken(tx, pro.id, input.scheduledAt, end)) throw new BookingError("O prestador já tem um compromisso nesse horário. Escolha outro horário.");
     if ((await tx.booking.count({ where: { clientId: input.clientId, status: { in: ["WAITING_PRO", "SEARCHING"] } } })) >= 10) throw new BookingError("Você já tem 10 pedidos aguardando resposta. Espere algumas respostas.");
     return tx.booking.create({
       data: {
@@ -132,6 +141,7 @@ export async function createBooking(input: BookingInput, now = new Date()) {
     });
   });
   await saveAddress(input.clientId, input.saveAddressLabel, addr);
+  await conversationWith(input.clientId, pro.id);
   await notify(pro.userId, {
     title: `Novo pedido: ${categoryLabel(service.category)}`,
     body: `${qtyLabel(service.unit, input.quantity)} em ${city} — ${formatWhen(input.scheduledAt, input.address.uf)}. Aceite ou recuse.`,
@@ -214,7 +224,7 @@ export async function quickCandidates(b: { id: string; clientId: string; categor
       subscription: { plan: "FULL", currentPeriodEnd: { gt: now } },
       OR: [{ quickBannedUntil: null }, { quickBannedUntil: { lt: now } }],
       userId: { not: b.clientId },
-      services: { some: { category: b.category } },
+      services: { some: { category: b.category, photoKey: { not: null } } },
       places: { some: { active: true, ...bbox(point, settings.quickMaxKm) } },
       offers: { none: { bookingId: b.id } },
       NOT: { user: { OR: [{ blocks: { some: { blockedId: b.clientId } } }, { blockedBy: { some: { blockerId: b.clientId } } }] } },
@@ -228,6 +238,7 @@ export async function quickCandidates(b: { id: string; clientId: string; categor
   const busy = new Set(
     (await db.booking.findMany({ where: { proId: { in: rows.map((r) => r.id) }, mode: "QUICK", status: { in: ACTIVE_STATUSES } }, select: { proId: true } })).map((x) => x.proId),
   );
+  for (const e of await db.agendaEntry.findMany({ where: { proId: { in: rows.map((r) => r.id) }, startsAt: { lt: new Date(now.getTime() + ARRIVE_HOURS * H) }, endsAt: { gt: now } }, select: { proId: true } })) busy.add(e.proId);
   const list = rows
     .filter((p) => !busy.has(p.id) && fitsAvailability(p.availability, at.weekday, at.minutes, 1))
     .map((p) => ({
@@ -293,6 +304,7 @@ export async function acceptOffer(offerId: string, proUserId: string, now = new 
     throw new BookingError("Outro prestador aceitou primeiro. Fica para a próxima!");
   }
   const pro = await db.user.findUniqueOrThrow({ where: { id: proUserId }, select: { name: true } });
+  await conversationWith(offer.booking.clientId, offer.proId);
   await notify(offer.booking.clientId, {
     title: `${pro.name.split(" ")[0]} aceitou seu chamado! 🎉`,
     body: `Chega em até ${ARRIVE_HOURS} horas. Converse pelo chat.`,
@@ -421,7 +433,7 @@ export async function quickSweep(now = new Date()) {
 }
 
 export async function expireSweep(now = new Date()) {
-  const late = await db.booking.findMany({ where: { mode: "NORMAL", status: "WAITING_PRO", expiresAt: { lt: now } }, select: { id: true }, take: 200 });
+  const late = await db.booking.findMany({ where: { mode: "NORMAL", status: { in: ["WAITING_PRO", "PROPOSED"] }, expiresAt: { lt: now } }, select: { id: true }, take: 200 });
   for (const b of late) await changeStatus(b.id, "EXPIRED", { id: null, as: "SYSTEM" }, null, now).catch(() => {});
   return late.length;
 }
@@ -433,6 +445,84 @@ export async function reminderSweep(now = new Date()) {
     const body = `${categoryLabel(b.category)} ${formatWhen(b.scheduledAt, b.addrUf)} em ${b.addrCity}.`;
     for (const userId of [b.clientId, b.pro?.userId].filter(Boolean) as string[]) await notify(userId, { title: "Lembrete: serviço próximo", body, href: `/pedidos/${b.id}`, dedupeKey: `lembrete:${b.id}:${tag}:${userId}` });
   }
+}
+
+/** Lembrete dos compromissos da agenda do prestador (1 hora antes). */
+export async function agendaReminderSweep(now = new Date()) {
+  const soon = await db.agendaEntry.findMany({ where: { startsAt: { gt: now, lt: new Date(now.getTime() + 65 * 60_000) } }, include: { pro: { select: { userId: true } } }, take: 500 });
+  for (const e of soon) {
+    await notify(e.pro.userId, { title: `Lembrete: ${e.title}`, body: `Às ${e.startsAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}.`, href: "/painel/agenda", dedupeKey: `agenda:${e.id}` });
+  }
+}
+
+// ───────────────────────── Agendamento pela conversa ─────────────────────────
+
+export type ProposeInput = { category: string; unit: PriceUnit; quantity: number; scheduledAt: Date; priceCents: number; notes?: string | null };
+
+/** O prestador marca o dia na conversa: o horário fica reservado e o cliente confirma informando o endereço. */
+export async function proposeSchedule(conversationId: string, proUserId: string, input: ProposeInput, now = new Date()) {
+  const conv = await db.conversation.findUnique({ where: { id: conversationId }, include: { pro: { include: { places: { where: { active: true }, take: 1 }, services: true } } } });
+  if (!conv || conv.pro.userId !== proUserId) throw new BookingError("Conversa não encontrada.");
+  const svc = conv.pro.services.find((x) => x.category === input.category);
+  if (!svc) throw new BookingError("Escolha um serviço que você oferece.");
+  if (input.scheduledAt.getTime() < now.getTime() + 30 * 60_000) throw new BookingError("Escolha um horário com pelo menos 30 minutos de antecedência.");
+  if (input.scheduledAt.getTime() > now.getTime() + 120 * 24 * H) throw new BookingError("Escolha uma data nos próximos 4 meses.");
+  if (!Number.isInteger(input.priceCents) || input.priceCents < 500 || input.priceCents > 500_000) throw new BookingError("Confira o valor (de R$ 5,00 a R$ 5.000,00).");
+  const total = estimateCents(input.priceCents, input.quantity, input.unit);
+  const notes = input.notes?.trim().slice(0, 600) || null;
+  if (notes && containsPhone(notes)) throw new BookingError(PHONE_BLOCKED_MSG);
+  const place = conv.pro.places[0];
+  const end = new Date(input.scheduledAt.getTime() + busyHours(input.unit, input.quantity) * H);
+  const booking = await db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${conv.pro.id}))`;
+    if (await slotTaken(tx, conv.pro.id, input.scheduledAt, end)) throw new BookingError("Você já tem um compromisso nesse horário.");
+    const b = await tx.booking.create({
+      data: {
+        mode: "NORMAL",
+        clientId: conv.clientId,
+        proId: conv.pro.id,
+        status: "PROPOSED",
+        category: input.category,
+        unit: input.unit,
+        quantity: input.quantity,
+        unitPriceCents: input.priceCents,
+        estimateCents: total,
+        scheduledAt: input.scheduledAt,
+        expiresAt: input.scheduledAt,
+        notes,
+        addrStreet: "(o cliente informa ao confirmar)",
+        addrCity: place?.city ?? "",
+        addrUf: place?.uf ?? "SP",
+        history: { create: { to: "PROPOSED", byUserId: proUserId } },
+      },
+    });
+    await tx.message.create({ data: { conversationId, senderId: proUserId, kind: "SCHEDULE", bookingId: b.id, text: notes } });
+    await tx.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } });
+    return b;
+  });
+  await notify(conv.clientId, {
+    title: "📅 Agendamento para você confirmar",
+    body: `${categoryLabel(input.category)} ${formatWhen(input.scheduledAt, booking.addrUf)} · ${formatBRL(total)}. Confirme com o endereço.`,
+    href: `/pedidos/${booking.id}`,
+  });
+  return booking;
+}
+
+/** O cliente confirma o agendamento informando o endereço. */
+export async function confirmSchedule(bookingId: string, clientId: string, address: AddressInput, opts: { saveAddressLabel?: string | null; payMethod?: string | null } = {}, now = new Date()) {
+  await checkClient(clientId);
+  const b = await db.booking.findUnique({ where: { id: bookingId }, include: { pro: { select: { userId: true } } } });
+  if (!b || b.clientId !== clientId || b.status !== "PROPOSED") throw new BookingError("Este agendamento não está mais esperando confirmação.");
+  if (b.scheduledAt < now) throw new BookingError("Este horário já passou. Peça outro ao prestador pela conversa.");
+  const city = officialCity(address.uf, address.city);
+  if (!city) throw new BookingError("Município do endereço não encontrado. Confira o estado e a cidade.");
+  if (!address.street.trim()) throw new BookingError("Informe a rua do endereço.");
+  const addr = addressData(address, city);
+  const r = await db.booking.updateMany({ where: { id: b.id, status: "PROPOSED" }, data: { ...addr, status: "ACCEPTED", acceptedAt: now, expiresAt: null, payMethod: opts.payMethod || null } });
+  if (!r.count) throw new BookingError("O agendamento acabou de mudar. Atualize a tela.");
+  await db.bookingStatusHistory.create({ data: { bookingId: b.id, from: "PROPOSED", to: "ACCEPTED", byUserId: clientId } });
+  await saveAddress(clientId, opts.saveAddressLabel, addr);
+  if (b.pro) await notify(b.pro.userId, { title: "Agendamento confirmado ✅", body: `${categoryLabel(b.category)} ${formatWhen(b.scheduledAt, addr.addrUf)} em ${city}.`, href: `/pedidos/${b.id}` });
 }
 
 export const ADDRESS_RETENTION_DAYS = 90;
