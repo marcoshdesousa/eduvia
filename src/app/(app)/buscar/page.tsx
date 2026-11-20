@@ -54,7 +54,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                       plan: p.plan,
                       distanceKm: p.distanceKm,
                       place: `${place.district ? `${place.district}, ` : ""}${place.city}`,
-                      quickNow: p.quickOn && !(p.quickBannedUntil && p.quickBannedUntil > now),
+                      quickNow: p.plan === "FULL" && !!p.quickTermsAt && p.quickOn && !(p.quickBannedUntil && p.quickBannedUntil > now),
                       overBudget: !!maxCents && p.priceCents > maxCents,
                     }}
                   />

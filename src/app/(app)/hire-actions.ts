@@ -2,7 +2,6 @@
 import { redirect } from "next/navigation";
 import type { ActionResult } from "@/components/action-form";
 import { BookingError, createBooking, createQuick, type AddressInput } from "@/lib/bookings";
-import { parseBRL } from "@/lib/domain";
 import { localToUtc } from "@/lib/places";
 import { allowAttempt } from "@/lib/rate-limit";
 import { requireUser } from "@/lib/session";
@@ -64,17 +63,12 @@ export async function createQuickAction(_: ActionResult, d: FormData): Promise<A
   if (!(await allowAttempt(`quick:${user.id}`, 10, 60))) return { error: "Muitos chamados em pouco tempo. Espere um pouco." };
   const addr = address(d);
   if (addr.lat == null || addr.lng == null) return { error: "Precisamos do local no mapa para achar quem está perto. Use “Onde estou” ou toque no mapa." };
-  const max = parseBRL(s(d, "max"));
-  if (max == null) return { error: "Informe até quanto você quer pagar." };
-  const min = Number(s(d, "minCents"));
-  if (Number.isFinite(min) && min > 0 && max < min) return { error: "O valor máximo não pode ser menor que o valor mínimo da plataforma." };
   let id: string;
   try {
     const b = await createQuick({
       clientId: user.id,
       category: s(d, "category"),
       quantity: Number(s(d, "quantity")),
-      maxCents: max,
       notes: s(d, "notes"),
       address: { ...addr, lat: addr.lat, lng: addr.lng },
       saveAddressLabel: d.get("saveAddress") === "on" ? s(d, "saveLabel") || "Endereço" : null,

@@ -53,8 +53,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
         <ol className="grid gap-3 md:grid-cols-4">
           {[
             "Escolha o serviço e libere a sua localização.",
-            "Veja o menor preço da plataforma e diga até quanto você paga.",
-            "Tocamos no celular de quem está mais perto. O primeiro que aceitar leva.",
+            "Descreva o que precisa. O valor é fixo para cada profissão, sem surpresa.",
+            "Tocamos no celular de quem está perto e mais aceita chamados. O primeiro que aceitar leva.",
             "O prestador chega em até 2 horas. Vocês conversam pelo chat.",
           ].map((t, i) => (
             <li key={t} className="flex gap-3 rounded-xl border border-border bg-surface p-4">
@@ -98,7 +98,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
                   <p className="flex items-center justify-between font-semibold">{p.name} {p.recommended && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent">★ Recomendado</span>}</p>
                   <p className="text-3xl font-extrabold text-brand-ink">{formatBRL(p.priceCents)}<span className="text-sm font-medium text-muted">/mês</span></p>
                   <p className="text-xs text-muted">{formatBRL(p.platformCents)} da plataforma + {formatBRL(p.feesCents)} de impostos e taxas</p>
-                  <p className="text-sm">{k === "FULL" ? `Aparece primeiro, ${p.places} endereços e pacotes de +${PACK_PLACES} por ${formatBRL(PACK_CENTS)}` : `${p.places} endereço de atendimento`}</p>
+                  <p className="text-sm">{k === "FULL" ? `⚡ Contrate rápido, aparece primeiro, ${p.places} endereços e pacotes de +${PACK_PLACES} por ${formatBRL(PACK_CENTS)}` : `${p.places} endereço, pedidos com data marcada`}</p>
                 </Card>
               );
             })}

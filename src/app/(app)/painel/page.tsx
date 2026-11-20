@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { AlertTriangle, CalendarClock, ChevronRight, Clock, Crown, Eye, Images, MapPin, User, Wallet, Wrench } from "lucide-react";
 import { ActionSwitch } from "@/components/action-button";
 import { PageTitle, ProPhoto, Rating } from "@/components/bits";
-import { PushToggle } from "@/components/push-toggle";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { db } from "@/lib/db";
@@ -12,7 +11,8 @@ import { providerFinance } from "@/lib/finance";
 import { providerPhotoUrl } from "@/lib/providers";
 import { requireProvider } from "@/lib/session";
 import { subscriptionActive } from "@/lib/subscription";
-import { setPausedAction, setQuickAction } from "./actions";
+import { setPausedAction } from "./actions";
+import { QuickCard } from "./quick-card";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -23,12 +23,11 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
   const { novo } = await searchParams;
   const pro = await db.providerProfile.findUniqueOrThrow({
     where: { id: user.provider.id },
-    include: { subscription: true, _count: { select: { services: true, posts: true, places: { where: { active: true } } } } },
+    include: { subscription: true, services: { select: { category: true } }, _count: { select: { services: true, posts: true, places: { where: { active: true } } } } },
   });
   const sub = pro.subscription;
   const active = subscriptionActive(sub);
   const visible = providerVisible({ ...pro, subscriptionEnd: sub?.currentPeriodEnd ?? null, blocked: false, services: pro._count.services, places: pro._count.places });
-  const banned = pro.quickBannedUntil && pro.quickBannedUntil > new Date() ? pro.quickBannedUntil : null;
   const [fin, waiting, current] = await Promise.all([
     providerFinance(pro.id),
     db.booking.count({ where: { proId: pro.id, status: "WAITING_PRO" } }),
@@ -81,16 +80,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
         <p className="text-sm text-muted">Plano <strong className="text-foreground">{PLANS[sub!.plan].name}</strong> em dia até {sub!.currentPeriodEnd!.toLocaleDateString("pt-BR")}.</p>
       )}
 
-      <Card className="space-y-3">
-        <ActionSwitch
-          on={pro.quickOn && !banned && visible}
-          action={setQuickAction}
-          label="⚡ Disponível para o Contrate rápido"
-          hint="Ligado, você recebe chamados de clientes perto de você. Quem aceitar primeiro leva — e tem 2 horas para chegar."
-        />
-        {banned && <p className="rounded-lg bg-danger/10 p-2 text-xs text-danger">Você aceitou um chamado e não chegou em 2 horas. Fica fora do Contrate rápido até {fmtDate(banned)}. Os pedidos normais continuam.</p>}
-        <PushToggle />
-      </Card>
+      <QuickCard pro={pro} full={sub?.plan === "FULL" && active} visible={visible} />
 
       {!visible && active && (
         <Card className="border-warning/50">

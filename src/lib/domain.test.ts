@@ -17,6 +17,9 @@ import {
   quickEligible,
   rankProviders,
   rankQuick,
+  acceptRate,
+  acceptTier,
+  quickPrice,
   transitionRule,
   upgradeCents,
 } from "./domain";
@@ -80,13 +83,27 @@ describe("prestador visível e Contrate rápido", () => {
     ];
     expect(rankProviders(list, 20000).map((p) => p.id)).toEqual(["completo-perto", "completo-longe", "completo-perto-caro", "basico-perto"]);
   });
-  it("Contrate rápido: mais perto primeiro e, perto, quem fez menos serviços", () => {
+  it("Contrate rápido: quem aceita mais toca primeiro; quem recusa muito fica por último", () => {
     const list = [
-      { id: "longe", distanceKm: 12, recentJobs: 0, plan: "FULL" as const },
-      { id: "perto-ocupado", distanceKm: 1, recentJobs: 9, plan: "FULL" as const },
-      { id: "perto-livre", distanceKm: 1.8, recentJobs: 1, plan: "FULL" as const },
+      { id: "longe-bom", distanceKm: 12, acceptRate: 0.95 },
+      { id: "perto-recusa", distanceKm: 0.5, acceptRate: 0.2 },
+      { id: "perto-novo", distanceKm: 1.8, acceptRate: null },
+      { id: "perto-otimo", distanceKm: 1.9, acceptRate: 1 },
+      { id: "perto-medio", distanceKm: 1, acceptRate: 0.5 },
     ];
-    expect(rankQuick(list).map((p) => p.id)).toEqual(["perto-livre", "perto-ocupado", "longe"]);
+    expect(rankQuick(list).map((p) => p.id)).toEqual(["perto-novo", "perto-otimo", "longe-bom", "perto-medio", "perto-recusa"]);
+  });
+  it("taxa de aceite só vale depois de alguns chamados", () => {
+    expect(acceptRate({ accepted: 1, missed: 2 })).toBeNull();
+    expect(acceptRate({ accepted: 3, missed: 7 })).toBe(0.3);
+    expect(acceptTier(0.3)).toBe(2);
+    expect(acceptTier(0.75)).toBe(0);
+  });
+  it("Contrate rápido tem preço fixo por profissão (o admin pode trocar)", () => {
+    expect(quickPrice("pedreiro")).toBe(18000);
+    expect(quickPrice("pedreiro", { pedreiro: 17000 })).toBe(17000);
+    expect(quickPrice("nada")).toBeNull();
+    for (const c of CATEGORIES) expect(c.quick).toBeGreaterThan(0);
   });
   it("distância em km", () => {
     // Parauapebas → Marabá ~ 125 km em linha reta

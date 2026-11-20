@@ -16,12 +16,13 @@
 
 ## Contrate rápido (estilo app de corrida)
 
-1. Cliente escolhe o serviço e a quantidade; a localização vem do aparelho (com permissão).
-2. Aparece o **valor mínimo** (menor preço da plataforma para o serviço × quantidade, não editável). O cliente define **até quanto paga**: quanto maior, mais prestadores (inclusive mais longe) recebem.
-3. O servidor toca em rodadas (padrão: 3 prestadores por vez, 45 s cada, até 40 km, por 8 min) os que estão **Disponíveis**, dentro do horário, mais perto e com menos chamados na semana; Completo tem prioridade na mesma faixa de distância.
-4. Toque: com o app aberto, som de chamado + vibração e tela de Aceitar/Recusar; com o app fechado, notificação com vibração forte que fica na tela (som personalizado não é possível em notificação web).
-5. **O primeiro que aceita leva** e tem **2 horas para chegar**. Endereço e chat liberam no aceite.
-6. Penalidades:
+1. Cliente escolhe o serviço e a quantidade, **descreve o que precisa** (obrigatório, aparece no toque) e a localização vem do aparelho (com permissão).
+2. **Valor fixo por profissão** (ex.: pedreiro R$ 180 a diária), um pouco abaixo do mercado, o mesmo para todos. O prestador recebe tudo. O admin muda os valores em **Admin → Configurações**.
+3. Só recebe chamado quem está no **plano Completo em dia**, marcou a **caixinha** aceitando as regras do Contrate rápido, ligou o **Disponível**, oferece o serviço e está no horário. Terminou um serviço, volta a tocar.
+4. O servidor toca em rodadas (padrão: 3 prestadores por vez, 45 s cada, até 40 km, por 8 min). Ordem: **quem aceita mais primeiro** (taxa de aceite dos últimos 30 dias; recusar ou deixar tocar sem responder conta contra; quem aceita menos de 40% quase não toca), depois quem está mais perto.
+5. Toque: com o app aberto, som de chamado + vibração e tela de Aceitar/Recusar; com o app fechado, notificação com vibração forte que fica na tela (som personalizado não é possível em notificação web).
+6. **O primeiro que aceita leva** e tem **2 horas para chegar**. Endereço e chat liberam no aceite.
+7. Penalidades:
    - Prestador não chegou em 2 h → cancelado automaticamente e **7 dias fora do Contrate rápido**.
    - Cliente não estava (o prestador marca "Cheguei" e só depois de 15 min pode registrar) → cliente fica **30 dias sem contratar** ou paga **R$ 2,85** para liberar na hora.
    - O admin pode retirar penalidades em **Admin → Penalidades**.

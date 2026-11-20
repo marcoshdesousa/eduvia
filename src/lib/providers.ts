@@ -1,6 +1,6 @@
 // Vitrine: busca de prestadores por categoria, cidade e proximidade.
 import { Prisma } from "@/generated/prisma/client";
-import type { Plan, PriceUnit } from "@/generated/prisma/enums";
+import type { Plan } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { distanceKm, ratingOf, rankProviders } from "@/lib/domain";
 
@@ -60,17 +60,6 @@ export async function searchProviders(f: SearchInput, opts: { clientId?: string 
   if (f.near) list = list.filter((p) => p.distanceKm! <= radius);
   if (f.minRating) list = list.filter((p) => p.rating == null || p.rating >= f.minRating!);
   return rankProviders(list, f.maxCents);
-}
-
-/** Menor preço da plataforma para um serviço (o "valor mínimo" do Contrate rápido). */
-export async function lowestPrice(category: string, near?: { lat: number; lng: number } | null, radiusKm = 40, unit?: PriceUnit) {
-  const rows = await db.providerService.findMany({
-    where: { category, ...(unit ? { unit } : {}), pro: { ...visibleWhere(), ...(near ? { places: { some: { active: true, ...bbox(near, radiusKm) } } } : {}) } },
-    orderBy: { priceCents: "asc" },
-    take: 1,
-    select: { priceCents: true, unit: true },
-  });
-  return rows[0] ?? null;
 }
 
 export const providerPhotoUrl = (p: { id: string; photoKey: string | null }) => (p.photoKey ? `/api/foto/${p.id}?v=${p.photoKey.slice(-12, -5)}` : null);

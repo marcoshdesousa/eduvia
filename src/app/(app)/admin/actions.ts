@@ -140,6 +140,25 @@ export async function adminReply(ticketId: string, _: ActionResult, d: FormData)
   return { ok: close ? "Chamado encerrado." : "Resposta enviada." };
 }
 
+/** Valores fixos do Contrate rápido por profissão (vazio = volta ao padrão). */
+export async function saveQuickPrices(_: ActionResult, d: FormData): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const { CATEGORIES, parseBRL } = await import("@/lib/domain");
+  const out: Record<string, number> = {};
+  for (const c of CATEGORIES) {
+    const raw = s(d, `price_${c.slug}`);
+    if (!raw) continue;
+    const v = parseBRL(raw);
+    if (v == null || v < 500 || v > 500_000) return { error: `Valor inválido para ${c.label}: use de R$ 5,00 a R$ 5.000,00.` };
+    if (v !== c.quick) out[c.slug] = v;
+  }
+  await saveSetting("quickPrices", out);
+  await audit(admin.id, "settings.quick_prices", "PlatformSetting", null, out);
+  revalidatePath("/admin/config");
+  revalidatePath("/rapido");
+  return { ok: "Valores do Contrate rápido salvos. Chamados novos já usam os valores novos." };
+}
+
 export async function saveSettings(_: ActionResult, d: FormData): Promise<ActionResult> {
   const admin = await requireAdmin();
   const n = (k: string) => Number(s(d, k));

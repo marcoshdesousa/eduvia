@@ -22,7 +22,7 @@ export default async function ServicesPage() {
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <BackLink />
-      <PageTitle title="Serviços e preços" subtitle="O valor que você cobra aparece na busca. No Contrate rápido, o cliente vê o menor valor da plataforma e escolhe até quanto paga." />
+      <PageTitle title="Serviços e preços" subtitle="O valor que você cobra aparece na busca e nos pedidos com data marcada. No Contrate rápido o valor é fixo por profissão (veja no painel)." />
       {services.map((s) => (
         <Card key={s.id} className="space-y-3">
           <div className="flex items-start justify-between gap-2">

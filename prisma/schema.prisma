@@ -159,6 +159,8 @@ model ProviderProfile {
   quickOn        Boolean        @default(false)
   /// não aceitou e não chegou em 2 horas: fica fora do Contrate rápido até esta data
   quickBannedUntil DateTime?
+  /// quando aceitou as regras do Contrate rápido (preço fixo, 2 horas, penalidades). Sem isso não recebe chamados.
+  quickTermsAt   DateTime?
   ratingSum      Int            @default(0)
   ratingCount    Int            @default(0)
   completedCount Int            @default(0)

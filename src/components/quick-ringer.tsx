@@ -150,8 +150,8 @@ export function QuickRinger() {
               <div className="rounded-xl bg-surface-2 p-3"><p className="text-muted">Você recebe</p><p className="text-lg font-bold">{offer.price}</p><p className="text-xs text-muted">{offer.qty}</p></div>
               <div className="rounded-xl bg-surface-2 p-3"><p className="text-muted">Distância</p><p className="text-lg font-bold">{offer.distance}</p><p className="flex items-center gap-1 text-xs text-muted"><MapPin size={12} /> {offer.place}</p></div>
             </div>
-            {offer.notes && <p className="rounded-xl bg-surface-2 p-3 text-sm">“{offer.notes}”</p>}
-            <p className="text-xs text-muted">Aceitando, você tem até 2 horas para chegar. O endereço completo aparece depois do aceite.</p>
+            {offer.notes && <div className="rounded-xl bg-surface-2 p-3 text-sm"><p className="text-xs font-semibold uppercase text-muted">O que o cliente precisa</p><p className="mt-1 whitespace-pre-line">{offer.notes}</p></div>}
+            <p className="text-xs text-muted">Aceitando, você tem até 2 horas para chegar. O endereço completo aparece depois do aceite. Recusar muito faz você tocar menos.</p>
             <div className="grid grid-cols-[1fr_2fr] gap-2">
               <Button variant="outline" size="lg" disabled={busy} onClick={() => answer("recusar")}>Recusar</Button>
               <Button size="lg" disabled={busy} onClick={() => answer("aceitar")}>{busy && <Loader2 className="animate-spin" size={18} />} Aceitar</Button>

@@ -1,11 +1,15 @@
 // Contratações: pedido normal (o cliente escolhe o prestador) e Contrate rápido (toca para os mais perto).
 // Toda mudança de status fica no histórico (quem, quando, por quê).
-import type { BookingStatus, Plan, PriceUnit } from "@/generated/prisma/enums";
+import type { BookingStatus, PriceUnit } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { notify, sendPush } from "@/lib/notifications";
 import { getSettings } from "@/lib/settings";
 import {
   ACTIVE_STATUSES,
+  PHONE_BLOCKED_MSG,
+  acceptRate,
+  containsPhone,
+  quickPrice,
   ARRIVE_HOURS,
   BOOKING_LABEL,
   CLIENT_BLOCK_DAYS,
@@ -138,7 +142,7 @@ export async function createBooking(input: BookingInput, now = new Date()) {
 
 // ───────────────────────── Contrate rápido ─────────────────────────
 
-export type QuickInput = { clientId: string; category: string; quantity: number; maxCents: number; notes?: string | null; address: AddressInput & { lat: number; lng: number }; saveAddressLabel?: string | null; payMethod?: string | null };
+export type QuickInput = { clientId: string; category: string; quantity: number; notes: string; address: AddressInput & { lat: number; lng: number }; saveAddressLabel?: string | null; payMethod?: string | null };
 
 /** Cria o chamado e já toca para a primeira rodada de prestadores perto. */
 export async function createQuick(input: QuickInput, now = new Date()) {
@@ -149,8 +153,12 @@ export async function createQuick(input: QuickInput, now = new Date()) {
   if (!city) throw new BookingError("Não reconhecemos o município. Confira o estado e a cidade.");
   if (!input.address.street.trim()) throw new BookingError("Informe a rua (o prestador só vê depois de aceitar).");
   if (!Number.isFinite(input.address.lat) || !Number.isFinite(input.address.lng)) throw new BookingError("Precisamos da sua localização no mapa para achar quem está perto.");
-  estimateCents(100, input.quantity, cat.unit); // confere a quantidade
-  if (!Number.isInteger(input.maxCents) || input.maxCents < 100) throw new BookingError("Informe quanto você quer gastar no máximo.");
+  const notes = input.notes?.trim().slice(0, 1000) ?? "";
+  if (notes.length < 10) throw new BookingError("Descreva o serviço que você precisa (pelo menos uma frase). O prestador lê antes de aceitar.");
+  if (containsPhone(notes)) throw new BookingError(PHONE_BLOCKED_MSG);
+  const settings = await getSettings();
+  const unitPrice = quickPrice(cat.slug, settings.quickPrices)!;
+  const total = estimateCents(unitPrice, input.quantity, cat.unit); // também confere a quantidade
   if ((await db.booking.count({ where: { clientId: input.clientId, mode: "QUICK", status: "SEARCHING" } })) >= 1) throw new BookingError("Você já tem um Contrate rápido procurando prestador. Espere ou cancele o anterior.");
   const addr = addressData(input.address, city);
   const booking = await db.booking.create({
@@ -161,9 +169,12 @@ export async function createQuick(input: QuickInput, now = new Date()) {
       category: cat.slug,
       unit: cat.unit,
       quantity: input.quantity,
-      maxCents: input.maxCents,
+      // valor fixo da profissão (não muda com o prestador que aceitar)
+      unitPriceCents: unitPrice,
+      estimateCents: total,
+      maxCents: total,
       scheduledAt: now,
-      notes: input.notes?.trim().slice(0, 1000) || null,
+      notes,
       payMethod: input.payMethod || null,
       ...addr,
       history: { create: { to: "SEARCHING", byUserId: input.clientId } },
@@ -174,8 +185,24 @@ export async function createQuick(input: QuickInput, now = new Date()) {
   return booking;
 }
 
-/** Prestadores que podem receber este chamado agora, já na ordem (mais perto e com menos serviços primeiro). */
-export async function quickCandidates(b: { id: string; clientId: string; category: string; unit: PriceUnit; quantity: number; maxCents: number | null; lat: number | null; lng: number | null; addrUf: string }, now = new Date()) {
+/** Taxa de aceite de cada prestador nos chamados dos últimos 30 dias (recusou ou deixou tocar sem responder = perdeu). */
+export async function quickStats(proIds: string[], now = new Date()) {
+  const rows = await db.quickOffer.groupBy({ by: ["proId", "state"], where: { proId: { in: proIds }, sentAt: { gt: new Date(now.getTime() - 30 * 24 * H) }, state: { in: ["ACCEPTED", "DECLINED", "EXPIRED"] } }, _count: true });
+  const out = new Map<string, { accepted: number; missed: number }>();
+  for (const r of rows) {
+    const cur = out.get(r.proId) ?? { accepted: 0, missed: 0 };
+    if (r.state === "ACCEPTED") cur.accepted += r._count;
+    else cur.missed += r._count;
+    out.set(r.proId, cur);
+  }
+  return out;
+}
+
+/**
+ * Quem pode receber este chamado agora, já na ordem do toque. Só entra quem está no plano Completo em dia, aceitou as
+ * regras do Contrate rápido (caixinha), ligou o Disponível, oferece o serviço, está no horário e não está em outro chamado.
+ */
+export async function quickCandidates(b: { id: string; clientId: string; category: string; unit: PriceUnit; quantity: number; estimateCents: number | null; lat: number | null; lng: number | null; addrUf: string }, now = new Date()) {
   if (b.lat == null || b.lng == null) return [];
   const settings = await getSettings();
   const point = { lat: b.lat, lng: b.lng };
@@ -183,30 +210,34 @@ export async function quickCandidates(b: { id: string; clientId: string; categor
     where: {
       ...visibleWhere(now),
       quickOn: true,
+      quickTermsAt: { not: null },
+      subscription: { plan: "FULL", currentPeriodEnd: { gt: now } },
       OR: [{ quickBannedUntil: null }, { quickBannedUntil: { lt: now } }],
       userId: { not: b.clientId },
-      services: { some: { category: b.category, unit: b.unit } },
+      services: { some: { category: b.category } },
       places: { some: { active: true, ...bbox(point, settings.quickMaxKm) } },
       offers: { none: { bookingId: b.id } },
       NOT: { user: { OR: [{ blocks: { some: { blockedId: b.clientId } } }, { blockedBy: { some: { blockerId: b.clientId } } }] } },
     },
-    include: { services: true, places: { where: { active: true } }, availability: true, subscription: { select: { plan: true } } },
+    include: { places: { where: { active: true } }, availability: true },
     take: 200,
   });
   const at = localParts(now, b.addrUf);
-  const weekAgo = new Date(now.getTime() - 7 * 24 * H);
-  const recent = await db.booking.groupBy({ by: ["proId"], where: { mode: "QUICK", proId: { in: rows.map((r) => r.id) }, acceptedAt: { gt: weekAgo } }, _count: true });
-  const jobs = new Map(recent.map((r) => [r.proId, r._count]));
+  const stats = await quickStats(rows.map((r) => r.id), now);
+  // quem está em outro chamado rápido não toca; terminou o serviço, volta a tocar
   const busy = new Set(
     (await db.booking.findMany({ where: { proId: { in: rows.map((r) => r.id) }, mode: "QUICK", status: { in: ACTIVE_STATUSES } }, select: { proId: true } })).map((x) => x.proId),
   );
   const list = rows
     .filter((p) => !busy.has(p.id) && fitsAvailability(p.availability, at.weekday, at.minutes, 1))
-    .map((p) => {
-      const s = p.services.find((x) => x.category === b.category && x.unit === b.unit)!;
-      return { id: p.id, userId: p.userId, priceCents: s.priceCents * b.quantity, distanceKm: Math.min(...p.places.map((pl) => distanceKm(point, pl))), recentJobs: jobs.get(p.id) ?? 0, plan: (p.subscription?.plan ?? "BASIC") as Plan };
-    })
-    .filter((p) => p.distanceKm <= settings.quickMaxKm && (!b.maxCents || p.priceCents <= b.maxCents));
+    .map((p) => ({
+      id: p.id,
+      userId: p.userId,
+      priceCents: b.estimateCents ?? 0,
+      distanceKm: Math.min(...p.places.map((pl) => distanceKm(point, pl))),
+      acceptRate: acceptRate(stats.get(p.id) ?? { accepted: 0, missed: 0 }),
+    }))
+    .filter((p) => p.distanceKm <= settings.quickMaxKm);
   return rankQuick(list);
 }
 

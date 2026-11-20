@@ -57,50 +57,61 @@ export const MAX_QTY: Record<PriceUnit, number> = { DIARIA: 30, HORA: 12, SERVIC
 export const CATEGORY_GROUPS = ["Casa e limpeza", "Obras e reparos", "Cuidados", "Transporte e entregas", "Beleza e bem-estar", "Outros"] as const;
 
 export const CATEGORIES = [
-  { slug: "diarista", label: "Diarista / faxina", emoji: "🧹", unit: "DIARIA", group: "Casa e limpeza" },
-  { slug: "passadeira", label: "Passadeira", emoji: "👕", unit: "DIARIA", group: "Casa e limpeza" },
-  { slug: "lavadeira", label: "Lavadeira", emoji: "🧺", unit: "DIARIA", group: "Casa e limpeza" },
-  { slug: "cozinheira", label: "Cozinheira", emoji: "🍲", unit: "DIARIA", group: "Casa e limpeza" },
-  { slug: "jardineiro", label: "Jardineiro", emoji: "🌿", unit: "DIARIA", group: "Casa e limpeza" },
-  { slug: "piscineiro", label: "Limpeza de piscina", emoji: "🏊", unit: "SERVICO", group: "Casa e limpeza" },
-  { slug: "dedetizacao", label: "Dedetização", emoji: "🪳", unit: "SERVICO", group: "Casa e limpeza" },
-  { slug: "pedreiro", label: "Pedreiro", emoji: "🧱", unit: "DIARIA", group: "Obras e reparos" },
-  { slug: "servente", label: "Servente / ajudante de obra", emoji: "🦺", unit: "DIARIA", group: "Obras e reparos" },
-  { slug: "pintor", label: "Pintor", emoji: "🎨", unit: "DIARIA", group: "Obras e reparos" },
-  { slug: "eletricista", label: "Eletricista", emoji: "⚡", unit: "SERVICO", group: "Obras e reparos" },
-  { slug: "encanador", label: "Encanador", emoji: "🔧", unit: "SERVICO", group: "Obras e reparos" },
-  { slug: "carpinteiro", label: "Carpinteiro / marceneiro", emoji: "🪚", unit: "DIARIA", group: "Obras e reparos" },
-  { slug: "gesseiro", label: "Gesseiro", emoji: "🏗️", unit: "DIARIA", group: "Obras e reparos" },
-  { slug: "azulejista", label: "Azulejista", emoji: "🔲", unit: "DIARIA", group: "Obras e reparos" },
-  { slug: "serralheiro", label: "Serralheiro", emoji: "🔩", unit: "SERVICO", group: "Obras e reparos" },
-  { slug: "vidraceiro", label: "Vidraceiro", emoji: "🪟", unit: "SERVICO", group: "Obras e reparos" },
-  { slug: "montador", label: "Montador de móveis", emoji: "🪑", unit: "SERVICO", group: "Obras e reparos" },
-  { slug: "ar-condicionado", label: "Técnico de ar-condicionado", emoji: "❄️", unit: "SERVICO", group: "Obras e reparos" },
-  { slug: "cuidador-idoso", label: "Cuidador(a) de idoso", emoji: "🧓", unit: "DIARIA", group: "Cuidados" },
-  { slug: "baba", label: "Babá", emoji: "🍼", unit: "DIARIA", group: "Cuidados" },
-  { slug: "pet", label: "Cuidador de pets / passeador", emoji: "🐕", unit: "SERVICO", group: "Cuidados" },
-  { slug: "enfermagem", label: "Técnico(a) de enfermagem", emoji: "🩺", unit: "DIARIA", group: "Cuidados" },
-  { slug: "motorista", label: "Motorista particular", emoji: "🚗", unit: "DIARIA", group: "Transporte e entregas" },
-  { slug: "compras", label: "Compras no supermercado", emoji: "🛒", unit: "SERVICO", group: "Transporte e entregas" },
-  { slug: "frete", label: "Frete e mudança", emoji: "🚚", unit: "SERVICO", group: "Transporte e entregas" },
-  { slug: "chapa", label: "Carregador / chapa", emoji: "📦", unit: "DIARIA", group: "Transporte e entregas" },
-  { slug: "manicure", label: "Manicure", emoji: "💅", unit: "SERVICO", group: "Beleza e bem-estar" },
-  { slug: "cabeleireiro", label: "Cabeleireiro(a)", emoji: "💇", unit: "SERVICO", group: "Beleza e bem-estar" },
-  { slug: "costureira", label: "Costureira", emoji: "🧵", unit: "SERVICO", group: "Beleza e bem-estar" },
-  { slug: "personal", label: "Personal trainer", emoji: "🏋️", unit: "HORA", group: "Beleza e bem-estar" },
-  { slug: "professor", label: "Professor particular", emoji: "📚", unit: "HORA", group: "Outros" },
-  { slug: "garcom", label: "Garçom / garçonete", emoji: "🍽️", unit: "DIARIA", group: "Outros" },
-  { slug: "seguranca", label: "Vigia / segurança", emoji: "🛡️", unit: "DIARIA", group: "Outros" },
-  { slug: "mecanico", label: "Mecânico", emoji: "🛠️", unit: "SERVICO", group: "Outros" },
-  { slug: "lavador", label: "Lavador de carro", emoji: "🧽", unit: "SERVICO", group: "Outros" },
-  { slug: "outros", label: "Outros serviços", emoji: "✨", unit: "DIARIA", group: "Outros" },
-] as const satisfies readonly { slug: string; label: string; emoji: string; unit: PriceUnit; group: (typeof CATEGORY_GROUPS)[number] }[];
+  { slug: "diarista", label: "Diarista / faxina", emoji: "🧹", unit: "DIARIA", group: "Casa e limpeza", quick: 15000 },
+  { slug: "passadeira", label: "Passadeira", emoji: "👕", unit: "DIARIA", group: "Casa e limpeza", quick: 12000 },
+  { slug: "lavadeira", label: "Lavadeira", emoji: "🧺", unit: "DIARIA", group: "Casa e limpeza", quick: 12000 },
+  { slug: "cozinheira", label: "Cozinheira", emoji: "🍲", unit: "DIARIA", group: "Casa e limpeza", quick: 15000 },
+  { slug: "jardineiro", label: "Jardineiro", emoji: "🌿", unit: "DIARIA", group: "Casa e limpeza", quick: 15000 },
+  { slug: "piscineiro", label: "Limpeza de piscina", emoji: "🏊", unit: "SERVICO", group: "Casa e limpeza", quick: 12000 },
+  { slug: "dedetizacao", label: "Dedetização", emoji: "🪳", unit: "SERVICO", group: "Casa e limpeza", quick: 20000 },
+  { slug: "pedreiro", label: "Pedreiro", emoji: "🧱", unit: "DIARIA", group: "Obras e reparos", quick: 18000 },
+  { slug: "servente", label: "Servente / ajudante de obra", emoji: "🦺", unit: "DIARIA", group: "Obras e reparos", quick: 11000 },
+  { slug: "pintor", label: "Pintor", emoji: "🎨", unit: "DIARIA", group: "Obras e reparos", quick: 17000 },
+  { slug: "eletricista", label: "Eletricista", emoji: "⚡", unit: "SERVICO", group: "Obras e reparos", quick: 15000 },
+  { slug: "encanador", label: "Encanador", emoji: "🔧", unit: "SERVICO", group: "Obras e reparos", quick: 13000 },
+  { slug: "carpinteiro", label: "Carpinteiro / marceneiro", emoji: "🪚", unit: "DIARIA", group: "Obras e reparos", quick: 18000 },
+  { slug: "gesseiro", label: "Gesseiro", emoji: "🏗️", unit: "DIARIA", group: "Obras e reparos", quick: 18000 },
+  { slug: "azulejista", label: "Azulejista", emoji: "🔲", unit: "DIARIA", group: "Obras e reparos", quick: 18000 },
+  { slug: "serralheiro", label: "Serralheiro", emoji: "🔩", unit: "SERVICO", group: "Obras e reparos", quick: 18000 },
+  { slug: "vidraceiro", label: "Vidraceiro", emoji: "🪟", unit: "SERVICO", group: "Obras e reparos", quick: 15000 },
+  { slug: "montador", label: "Montador de móveis", emoji: "🪑", unit: "SERVICO", group: "Obras e reparos", quick: 10000 },
+  { slug: "ar-condicionado", label: "Técnico de ar-condicionado", emoji: "❄️", unit: "SERVICO", group: "Obras e reparos", quick: 18000 },
+  { slug: "cuidador-idoso", label: "Cuidador(a) de idoso", emoji: "🧓", unit: "DIARIA", group: "Cuidados", quick: 15000 },
+  { slug: "baba", label: "Babá", emoji: "🍼", unit: "DIARIA", group: "Cuidados", quick: 13000 },
+  { slug: "pet", label: "Cuidador de pets / passeador", emoji: "🐕", unit: "SERVICO", group: "Cuidados", quick: 5000 },
+  { slug: "enfermagem", label: "Técnico(a) de enfermagem", emoji: "🩺", unit: "DIARIA", group: "Cuidados", quick: 20000 },
+  { slug: "motorista", label: "Motorista particular", emoji: "🚗", unit: "DIARIA", group: "Transporte e entregas", quick: 20000 },
+  { slug: "compras", label: "Compras no supermercado", emoji: "🛒", unit: "SERVICO", group: "Transporte e entregas", quick: 4000 },
+  { slug: "frete", label: "Frete e mudança", emoji: "🚚", unit: "SERVICO", group: "Transporte e entregas", quick: 15000 },
+  { slug: "chapa", label: "Carregador / chapa", emoji: "📦", unit: "DIARIA", group: "Transporte e entregas", quick: 12000 },
+  { slug: "manicure", label: "Manicure", emoji: "💅", unit: "SERVICO", group: "Beleza e bem-estar", quick: 4000 },
+  { slug: "cabeleireiro", label: "Cabeleireiro(a)", emoji: "💇", unit: "SERVICO", group: "Beleza e bem-estar", quick: 5000 },
+  { slug: "costureira", label: "Costureira", emoji: "🧵", unit: "SERVICO", group: "Beleza e bem-estar", quick: 5000 },
+  { slug: "personal", label: "Personal trainer", emoji: "🏋️", unit: "HORA", group: "Beleza e bem-estar", quick: 8000 },
+  { slug: "professor", label: "Professor particular", emoji: "📚", unit: "HORA", group: "Outros", quick: 6000 },
+  { slug: "garcom", label: "Garçom / garçonete", emoji: "🍽️", unit: "DIARIA", group: "Outros", quick: 13000 },
+  { slug: "seguranca", label: "Vigia / segurança", emoji: "🛡️", unit: "DIARIA", group: "Outros", quick: 15000 },
+  { slug: "mecanico", label: "Mecânico", emoji: "🛠️", unit: "SERVICO", group: "Outros", quick: 15000 },
+  { slug: "lavador", label: "Lavador de carro", emoji: "🧽", unit: "SERVICO", group: "Outros", quick: 5000 },
+  { slug: "outros", label: "Outros serviços", emoji: "✨", unit: "DIARIA", group: "Outros", quick: 12000 },
+] as const satisfies readonly { slug: string; label: string; emoji: string; unit: PriceUnit; group: (typeof CATEGORY_GROUPS)[number]; quick: number }[];
 
 export type CategorySlug = (typeof CATEGORIES)[number]["slug"];
 const CAT = new Map<string, (typeof CATEGORIES)[number]>(CATEGORIES.map((c) => [c.slug, c]));
 export const category = (slug: string) => CAT.get(slug) ?? null;
 export const categoryLabel = (slug: string) => CAT.get(slug)?.label ?? slug;
 export const isCategory = (slug: string) => CAT.has(slug);
+
+/**
+ * Contrate rápido: valor FIXO por profissão (por diária, hora ou serviço), um pouco abaixo do mercado.
+ * O admin pode trocar cada valor (ficam em `overrides`). O prestador recebe tudo: a plataforma não tira nada.
+ */
+export function quickPrice(slug: string, overrides: Record<string, number> = {}) {
+  const c = CAT.get(slug);
+  if (!c) return null;
+  const o = overrides[slug];
+  return Number.isInteger(o) && o >= 100 ? o : c.quick;
+}
 
 // ───────────── Dinheiro, datas e idade ─────────────
 
@@ -182,9 +193,25 @@ export function rankProviders<T extends { plan: Plan; distanceKm: number | null;
  * Ordem do Contrate rápido: quem está perto toca primeiro (até 5 km um pouco mais longe empata), e entre
  * os que estão perto, quem fez menos serviços rápidos na semana. Plano Completo ganha um pequeno empurrão.
  */
-export function rankQuick<T extends { distanceKm: number; recentJobs: number; plan: Plan }>(list: T[]) {
+/** Taxa de aceite dos chamados (últimos 30 dias). Recusar ou deixar tocar sem responder conta contra. */
+export const QUICK_MIN_SAMPLE = 5;
+export function acceptRate(stats: { accepted: number; missed: number }) {
+  const total = stats.accepted + stats.missed;
+  return total < QUICK_MIN_SAMPLE ? null : stats.accepted / total; // null = poucos chamados ainda (conta como bom)
+}
+/** Faixa do prestador na fila: 0 = aceita bastante (ou é novo), 1 = médio, 2 = recusa muito (quase não toca). */
+export function acceptTier(rate: number | null) {
+  return rate == null || rate >= 0.7 ? 0 : rate >= 0.4 ? 1 : 2;
+}
+
+/**
+ * Ordem do toque no Contrate rápido: primeiro quem aceita mais (quem recusa muito fica por último e quase não toca),
+ * depois quem está mais perto (faixas de distância), depois a maior taxa de aceite e, por fim, a distância exata.
+ */
+export function rankQuick<T extends { distanceKm: number; acceptRate: number | null }>(list: T[]) {
   const band = (km: number) => (km <= 2 ? 0 : km <= 5 ? 1 : km <= 10 ? 2 : km <= 20 ? 3 : 4);
-  return [...list].sort((a, b) => band(a.distanceKm) - band(b.distanceKm) || Number(b.plan === "FULL") - Number(a.plan === "FULL") || a.recentJobs - b.recentJobs || a.distanceKm - b.distanceKm);
+  const rate = (p: T) => p.acceptRate ?? 1;
+  return [...list].sort((a, b) => acceptTier(a.acceptRate) - acceptTier(b.acceptRate) || band(a.distanceKm) - band(b.distanceKm) || rate(b) - rate(a) || a.distanceKm - b.distanceKm);
 }
 
 // ───────────── Proibido número de telefone / WhatsApp ─────────────

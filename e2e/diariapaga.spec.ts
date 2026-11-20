@@ -62,7 +62,11 @@ test("Diária Paga: prestador com teste grátis, Contrate rápido com toque, cha
   );
   await shot(pro, "02-painel-prestador");
 
-  // liga o Disponível
+  // aceita as regras do Contrate rápido (caixinha) e liga o Disponível
+  await expect(pro.getByText("Participar do Contrate rápido")).toBeVisible();
+  await pro.getByRole("checkbox", { name: /Li e aceito as regras/ }).check();
+  await pro.getByRole("button", { name: "Quero participar" }).click();
+  await expect(pro.getByText(/Sua taxa de aceite/)).toBeVisible();
   await pro.getByRole("switch", { name: /Disponível para o Contrate rápido/ }).click();
   await expect(pro.getByText(/Você está disponível/)).toBeVisible();
 
@@ -88,13 +92,14 @@ test("Diária Paga: prestador com teste grátis, Contrate rápido com toque, cha
 
   // 4. Contrate rápido
   await cli.goto("/rapido?servico=diarista");
-  await expect(cli.getByText(/Valor mínimo/)).toBeVisible({ timeout: 20_000 });
-  await expect(cli.getByText("R$ 150,00").first()).toBeVisible();
+  await expect(cli.getByText("5. Valor fixo")).toBeVisible({ timeout: 20_000 });
+  await cli.getByRole("button", { name: "Mais" }).click(); // 2 diárias
+  await expect(cli.getByText("R$ 300,00")).toBeVisible(); // valor fixo da diarista (R$ 150) × 2
   await cli.getByLabel("Rua / avenida").fill("Rua das Flores");
   await cli.getByLabel("Número").fill("100");
   await cli.locator("#uf").selectOption("SP");
   await cli.locator("#city").fill("São Paulo");
-  await cli.getByLabel("Pago no máximo (R$)").fill("200");
+  await cli.getByLabel(/Descrição do serviço/).fill("Faxina completa em casa de 2 quartos, com geladeira e janelas.");
   await shot(cli, "06-rapido");
   await cli.getByRole("button", { name: /Chamar agora/ }).click();
   await expect(cli).toHaveURL(/\/pedidos\/\w+/, { timeout: 20_000 });
@@ -105,6 +110,8 @@ test("Diária Paga: prestador com teste grátis, Contrate rápido com toque, cha
   await pro.goto("/painel");
   const accept = pro.getByRole("button", { name: "Aceitar" });
   await expect(accept).toBeVisible({ timeout: 20_000 });
+  await expect(pro.getByText("Faxina completa em casa de 2 quartos")).toBeVisible();
+  await expect(pro.getByText("R$ 300,00")).toBeVisible();
   await shot(pro, "08-chamado-tocando");
   await accept.click();
   await expect(pro).toHaveURL(/\/pedidos\/\w+/, { timeout: 20_000 });
@@ -128,7 +135,7 @@ test("Diária Paga: prestador com teste grátis, Contrate rápido com toque, cha
     await expect(pro.getByRole("button", { name: step, exact: true })).toHaveCount(0, { timeout: 15_000 });
   }
   await pro.getByRole("button", { name: "Marcar como concluído" }).click();
-  await pro.getByLabel(/Quanto você recebeu/).fill("160");
+  await pro.getByLabel(/Quanto você recebeu/).fill("310");
   await pro.getByRole("button", { name: "Concluir serviço" }).click();
   await expect(pro.getByText("Serviço concluído").first()).toBeVisible({ timeout: 15_000 });
 
@@ -140,7 +147,7 @@ test("Diária Paga: prestador com teste grátis, Contrate rápido com toque, cha
 
   // 8. financeiro do prestador
   await pro.goto("/painel/financeiro");
-  await expect(pro.getByText("R$ 160,00").first()).toBeVisible();
+  await expect(pro.getByText("R$ 310,00").first()).toBeVisible();
   await shot(pro, "10-financeiro");
 
   // 9. admin

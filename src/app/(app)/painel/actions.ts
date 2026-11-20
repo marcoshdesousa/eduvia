@@ -36,11 +36,30 @@ export async function setQuickAction(on: boolean): Promise<ActionResult> {
   const user = await requireProvider();
   const p = await proState(user.provider.id);
   if (on) {
+    if (p.subscription?.plan !== "FULL" || !subscriptionActive(p.subscription)) return { error: "O Contrate rápido é só para o plano Completo em dia." };
+    if (!p.quickTermsAt) return { error: "Aceite as regras do Contrate rápido primeiro." };
     if (p.quickBannedUntil && p.quickBannedUntil > new Date()) return { error: `Você está fora do Contrate rápido até ${p.quickBannedUntil.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} porque aceitou um chamado e não chegou a tempo.` };
     if (!p.visible) return { error: p.paused ? "Tire a pausa do perfil primeiro." : !subscriptionActive(p.subscription) ? "Seu plano não está em dia. Pague para receber chamados." : "Complete o perfil (foto, serviço e endereço) primeiro." };
   }
   await db.providerProfile.update({ where: { id: p.id }, data: { quickOn: on } });
   return done(on ? "Você está disponível. Deixe o app aberto ou as notificações ligadas para ouvir os chamados." : "Você não vai receber chamados agora.");
+}
+
+/** A "caixinha": o prestador aceita participar do Contrate rápido (preço fixo, 2 horas para chegar, penalidades). */
+export async function acceptQuickTermsAction(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const user = await requireProvider();
+  if (f.get("agree") !== "on") return { error: "Marque a caixinha para participar." };
+  const sub = await db.subscription.findUnique({ where: { proId: user.provider.id } });
+  if (sub?.plan !== "FULL" || !subscriptionActive(sub)) return { error: "O Contrate rápido é só para o plano Completo em dia." };
+  await db.providerProfile.update({ where: { id: user.provider.id }, data: { quickTermsAt: new Date() } });
+  return done("Pronto! Agora ligue o Disponível para começar a receber chamados.");
+}
+
+/** Sair do Contrate rápido (desmarca a caixinha). */
+export async function leaveQuickAction(): Promise<ActionResult> {
+  const user = await requireProvider();
+  await db.providerProfile.update({ where: { id: user.provider.id }, data: { quickTermsAt: null, quickOn: false } });
+  return done("Você saiu do Contrate rápido. Pode voltar quando quiser.");
 }
 
 export async function setPausedAction(paused: boolean): Promise<ActionResult> {

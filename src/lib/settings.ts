@@ -12,6 +12,8 @@ export const SETTING_DEFAULTS = {
   quickMaxKm: 40,
   /** Contrate rápido: minutos procurando antes de avisar que ninguém aceitou */
   quickSearchMinutes: 8,
+  /** Contrate rápido: valor fixo de cada profissão trocado pelo admin (centavos; sem valor = o padrão) */
+  quickPrices: {} as Record<string, number>,
   /** WhatsApp do suporte (opcional; aparece na tela de suporte) */
   supportWhatsapp: "",
 };

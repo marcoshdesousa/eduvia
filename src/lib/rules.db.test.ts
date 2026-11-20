@@ -18,8 +18,8 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
     return { id, cpfHash };
   }
 
-  /** Prestador visível em São Paulo, Disponível no rápido, diarista a R$ 150 (ou o preço dado). */
-  async function provider(name: string, price = 15000, lat = -23.55, lng = -46.63) {
+  /** Prestador visível em São Paulo, plano Completo, caixinha do rápido aceita e Disponível, diarista. */
+  async function provider(name: string, price = 15000, lat = -23.55, lng = -46.63, opts: { plan?: "FULL" | "BASIC"; terms?: boolean } = {}) {
     const u = await user(name);
     const pro = await db.providerProfile.create({
       data: {
@@ -28,10 +28,11 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
         phoneSealed: "x",
         photoKey: "perfil/x.jpg",
         quickOn: true,
+        quickTermsAt: opts.terms === false ? null : new Date(),
         services: { create: { category: "diarista", priceCents: price, unit: "DIARIA" } },
         places: { create: { label: "Casa", city: "São Paulo", uf: "SP", lat, lng } },
         availability: { create: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startMin: 0, endMin: 1439 })) },
-        subscription: { create: { plan: "FULL", currentPeriodEnd: new Date(NOW.getTime() + 10 * 86_400_000) } },
+        subscription: { create: { plan: opts.plan ?? "FULL", currentPeriodEnd: new Date(NOW.getTime() + 10 * 86_400_000) } },
       },
     });
     return { ...u, proId: pro.id };
@@ -56,18 +57,22 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
     expect(sub.currentPeriodEnd).toBeNull();
   });
 
-  it("Contrate rápido: toca para quem está perto e cabe no preço; o primeiro que aceita leva", async () => {
-    const { createQuick, acceptOffer } = await import("./bookings");
-    const near = await provider("Perto Barata", 12000);
+  it("Contrate rápido: valor fixo; só toca para Completo com a caixinha aceita e perto; o primeiro que aceita leva", async () => {
+    const { createQuick, acceptOffer, BookingError } = await import("./bookings");
+    const near = await provider("Perto", 12000);
     const far = await provider("Longe", 12000, -23.9, -46.9); // ~50 km
-    const pricey = await provider("Cara", 40000);
+    const basic = await provider("Básico", 12000, -23.55, -46.63, { plan: "BASIC" });
+    const noTerms = await provider("Sem caixinha", 12000, -23.55, -46.63, { terms: false });
     const client = await user("Cliente Rápido");
-    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, maxCents: 20000, address });
+    await expect(createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "", address })).rejects.toBeInstanceOf(BookingError);
+    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 2, notes: "Faxina completa, casa de 2 quartos", address });
+    expect(b.estimateCents).toBe(2 * 15000); // valor fixo da diarista × 2 diárias, não o preço do perfil
     const offers = await db.quickOffer.findMany({ where: { bookingId: b.id } });
     const ids = offers.map((o) => o.proId);
     expect(ids).toContain(near.proId);
     expect(ids).not.toContain(far.proId);
-    expect(ids).not.toContain(pricey.proId);
+    expect(ids).not.toContain(basic.proId);
+    expect(ids).not.toContain(noTerms.proId);
     const mine = offers.find((o) => o.proId === near.proId)!;
     // duas tentativas ao mesmo tempo: só uma ganha
     const r = await Promise.allSettled([acceptOffer(mine.id, near.id), acceptOffer(mine.id, near.id)]);
@@ -76,7 +81,7 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
     expect(after.status).toBe("ACCEPTED");
     expect(after.proId).toBe(near.proId);
     expect(after.arriveBy!.getTime() - after.acceptedAt!.getTime()).toBe(2 * 3_600_000);
-    expect(after.estimateCents).toBe(12000);
+    expect(after.estimateCents).toBe(30000);
     await db.booking.update({ where: { id: b.id }, data: { status: "CANCELED_CLIENT" } });
   });
 
@@ -84,7 +89,7 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
     const { createQuick, acceptOffer, quickSweep } = await import("./bookings");
     const pro = await provider("Atrasado", 11000, -23.552, -46.632);
     const client = await user("Cliente Espera");
-    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, maxCents: 11000, address });
+    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "Faxina completa na casa", address });
     const offer = await db.quickOffer.findFirstOrThrow({ where: { bookingId: b.id, proId: pro.proId } });
     await acceptOffer(offer.id, pro.id);
     await quickSweep(new Date(Date.now() + 2 * 3_600_000 + 60_000));
@@ -98,7 +103,7 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
     const { createQuick, acceptOffer, changeStatus, clientNoShow, BookingError } = await import("./bookings");
     const pro = await provider("Pontual", 10500, -23.553, -46.633);
     const client = await user("Cliente Sumido");
-    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, maxCents: 10500, address });
+    const b = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "Faxina completa na casa", address });
     const offer = await db.quickOffer.findFirstOrThrow({ where: { bookingId: b.id, proId: pro.proId } });
     await acceptOffer(offer.id, pro.id);
     await changeStatus(b.id, "ARRIVED", { id: pro.id, as: "PRO" });
@@ -106,7 +111,29 @@ describe.skipIf(!process.env.DATABASE_URL)("regras do Diária Paga no banco", as
     await clientNoShow(b.id, pro.id, new Date(Date.now() + 16 * 60_000));
     const ledger = await db.cpfLedger.findUniqueOrThrow({ where: { cpfHash: client.cpfHash } });
     expect(ledger.clientBlockedUntil!.getTime()).toBeGreaterThan(Date.now() + 29 * 86_400_000);
-    await expect(createQuick({ clientId: client.id, category: "diarista", quantity: 1, maxCents: 20000, address })).rejects.toThrow(/sem contratar/);
+    await expect(createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "Faxina completa na casa", address })).rejects.toThrow(/sem contratar/);
+  });
+
+  it("quem recusa muito vai para o fim da fila", async () => {
+    const { createQuick, quickCandidates, quickStats } = await import("./bookings");
+    const refuser = await provider("Recusa Muito", 12000, -23.5506, -46.6334);
+    const good = await provider("Aceita Sempre", 12000, -23.62, -46.7); // mais longe
+    const client = await user("Cliente Fila");
+    // histórico: o primeiro recusou 8 de 10; o segundo aceitou 6 de 6
+    const old = await createQuick({ clientId: client.id, category: "diarista", quantity: 1, notes: "Chamado antigo para o teste", address });
+    await db.booking.update({ where: { id: old.id }, data: { status: "CANCELED_CLIENT" } });
+    await db.quickOffer.deleteMany({ where: { bookingId: old.id } });
+    const mk = (proId: string, state: "ACCEPTED" | "DECLINED", n: number) =>
+      Promise.all(Array.from({ length: n }, () => db.booking.create({ data: { mode: "QUICK", clientId: client.id, status: "CANCELED_CLIENT", category: "diarista", unit: "DIARIA", quantity: 1, scheduledAt: new Date(), addrStreet: "x", addrCity: "São Paulo", addrUf: "SP", offers: { create: { proId, wave: 1, distanceKm: 1, priceCents: 15000, state, expiresAt: new Date() } } } })));
+    await mk(refuser.proId, "DECLINED", 8);
+    await mk(refuser.proId, "ACCEPTED", 2);
+    await mk(good.proId, "ACCEPTED", 6);
+    const stats = await quickStats([refuser.proId, good.proId]);
+    expect(stats.get(refuser.proId)).toEqual({ accepted: 2, missed: 8 });
+    const b = await db.booking.create({ data: { mode: "QUICK", clientId: client.id, status: "SEARCHING", category: "diarista", unit: "DIARIA", quantity: 1, estimateCents: 15000, scheduledAt: new Date(), addrStreet: "x", addrCity: "São Paulo", addrUf: "SP", lat: address.lat, lng: address.lng } });
+    const order = (await quickCandidates(b)).map((p) => p.id).filter((id) => id === refuser.proId || id === good.proId);
+    expect(order).toEqual([good.proId, refuser.proId]);
+    await db.booking.update({ where: { id: b.id }, data: { status: "CANCELED_CLIENT" } });
   });
 
   it("pacotes de endereço: liberam na hora, entram na próxima mensalidade, máximo 11", async () => {

@@ -30,8 +30,9 @@ export default function Terms() {
       </ul>
       <h2>5. Contrate rápido</h2>
       <ul>
-        <li>O cliente informa o serviço, a localização e o valor máximo, que não pode ser menor que o menor preço da plataforma para aquele serviço.</li>
-        <li>O chamado toca para os prestadores disponíveis mais próximos. O primeiro que aceitar fica com o serviço e tem até {ARRIVE_HOURS} horas para chegar.</li>
+        <li>O cliente informa o serviço, a quantidade, a localização e uma descrição do que precisa. O valor é fixo para cada profissão, definido pelo Diária Paga, e é pago integralmente ao prestador.</li>
+        <li>Só recebem chamados os prestadores do plano Completo em dia que aceitaram as regras do Contrate rápido e estão Disponíveis.</li>
+        <li>O chamado toca primeiro para quem aceita mais chamados e está mais perto. Quem recusa muito, ou deixa tocar sem responder, passa a receber menos chamados. O primeiro que aceitar fica com o serviço e tem até {ARRIVE_HOURS} horas para chegar.</li>
         <li>Se o prestador não chegar em {ARRIVE_HOURS} horas, o chamado é cancelado e ele fica {PRO_QUICK_BAN_DAYS} dias sem receber chamados do Contrate rápido.</li>
         <li>Se o prestador chegar e o cliente não estiver no endereço (depois de 15 minutos de espera), o cliente fica {CLIENT_BLOCK_DAYS} dias sem contratar, ou paga {formatBRL(UNLOCK_FEE_CENTS)} para liberar a conta na hora.</li>
       </ul>

@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import { ActionForm } from "@/components/action-form";
 import { PageTitle } from "@/components/bits";
 import { SubmitButton } from "@/components/submit-button";
-import { Card } from "@/components/ui/card";
+import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/form";
-import { PACK_CENTS, PLANS, UNLOCK_FEE_CENTS, formatBRL } from "@/lib/domain";
+import { CATEGORIES, CATEGORY_GROUPS, PACK_CENTS, PLANS, UNIT_LABEL, UNLOCK_FEE_CENTS, formatBRL, quickPrice } from "@/lib/domain";
 import { requireAdmin } from "@/lib/session";
 import { getSettings } from "@/lib/settings";
 import { syncpayConfigured } from "@/lib/syncpay";
-import { saveSettings } from "../actions";
+import { saveQuickPrices, saveSettings } from "../actions";
 
 export const metadata: Metadata = { title: "Configurações" };
 
@@ -49,6 +49,24 @@ export default async function AdminConfig() {
             <Input id="supportWhatsapp" name="supportWhatsapp" defaultValue={s.supportWhatsapp} placeholder="(00) 00000-0000" />
           </div>
           <SubmitButton pendingText="Salvando…">Salvar</SubmitButton>
+        </ActionForm>
+      </Card>
+      <Card className="space-y-3">
+        <CardTitle>⚡ Valores fixos do Contrate rápido</CardTitle>
+        <p className="text-sm text-muted">O mesmo valor para todos os prestadores de cada profissão (um pouco abaixo do mercado). O prestador recebe tudo. Chamados novos usam o valor novo.</p>
+        <ActionForm action={saveQuickPrices} className="space-y-4">
+          {CATEGORY_GROUPS.map((g) => (
+            <fieldset key={g} className="space-y-2">
+              <legend className="text-sm font-semibold">{g}</legend>
+              {CATEGORIES.filter((c) => c.group === g).map((c) => (
+                <div key={c.slug} className="grid grid-cols-[1fr_7rem] items-center gap-2 text-sm">
+                  <label htmlFor={`price_${c.slug}`}>{c.emoji} {c.label} <span className="text-xs text-muted">{UNIT_LABEL[c.unit].per}{s.quickPrices[c.slug] ? ` · padrão ${formatBRL(c.quick)}` : ""}</span></label>
+                  <Input id={`price_${c.slug}`} name={`price_${c.slug}`} inputMode="decimal" defaultValue={(quickPrice(c.slug, s.quickPrices)! / 100).toFixed(2).replace(".", ",")} className="h-9" />
+                </div>
+              ))}
+            </fieldset>
+          ))}
+          <SubmitButton pendingText="Salvando…">Salvar valores</SubmitButton>
         </ActionForm>
       </Card>
       <Card className="space-y-1 text-sm text-muted">

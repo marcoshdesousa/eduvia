@@ -74,7 +74,7 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
         <Card className="space-y-2 text-center">
           <Radar label={cat?.emoji ?? "⚡"} />
           <p className="text-lg font-bold">Procurando {cat?.label.toLowerCase() ?? "prestador"} perto de você…</p>
-          <p className="text-sm text-muted">Estamos chamando quem está mais perto e disponível agora{b.maxCents ? `, até ${formatBRL(b.maxCents)}` : ""}. O primeiro que aceitar leva.</p>
+          <p className="text-sm text-muted">Estamos chamando quem está perto e disponível agora, pelo valor fixo de {formatBRL(b.estimateCents ?? 0)}. O primeiro que aceitar leva.</p>
           {b._count.offers > 0 && <p className="text-xs text-muted">{b._count.offers} prestador(es) chamado(s) até agora</p>}
           <ActionButton action={cancelSearchAction.bind(null, b.id)} variant="outline" confirm="Cancelar o chamado?">Cancelar chamado</ActionButton>
         </Card>
@@ -82,7 +82,7 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
       {b.status === "NO_PROVIDER" && isClient && (
         <Card className="space-y-2 border-warning/50 bg-warning/10">
           <p className="font-semibold">Ninguém aceitou desta vez 😕</p>
-          <p className="text-sm">Tente de novo com um valor máximo maior, ou procure na lista e marque um horário.</p>
+          <p className="text-sm">Tente de novo daqui a pouco, ou procure na lista e marque um horário.</p>
           <div className="flex flex-wrap gap-2">
             <Link href={`/rapido?servico=${b.category}`} className={buttonClass("primary")}><Zap size={16} /> Chamar de novo</Link>
             <Link href={`/buscar?servico=${b.category}`} className={buttonClass("outline")}>Ver prestadores</Link>
@@ -145,7 +145,7 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
           <div className="flex gap-2">
             <Wallet size={18} className="shrink-0 text-primary" />
             <div>
-              <dt className="text-muted">{b.finalCents != null ? "Valor final" : value != null ? "Valor combinado" : "Valor máximo"}</dt>
+              <dt className="text-muted">{b.finalCents != null ? "Valor final" : value != null ? "Valor combinado" : "Valor"}</dt>
               <dd className="font-medium">
                 {formatBRL(value ?? b.maxCents ?? 0)}
                 {b.unitPriceCents != null && b.finalCents == null && <span className="font-normal text-muted"> ({formatBRL(b.unitPriceCents)} {UNIT_LABEL[b.unit].per})</span>}

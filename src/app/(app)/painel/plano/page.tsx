@@ -16,8 +16,8 @@ import { setNextPlanAction, subscriptionPixAction, upgradePixAction } from "../a
 export const metadata: Metadata = { title: "Plano" };
 
 const FEATURES: Record<Plan, string[]> = {
-  FULL: ["Aparece primeiro nas buscas", "Selo ★ Recomendado", "3 endereços de atendimento", `Pacotes de +${PACK_PLACES} endereços (até ${MAX_PLACES})`, "Contrate rápido, chat e portfólio"],
-  BASIC: ["1 endereço de atendimento", "Aparece depois do Completo", "Contrate rápido, chat e portfólio"],
+  FULL: ["⚡ Recebe chamados do Contrate rápido", "Aparece primeiro nas buscas", "Selo ★ Recomendado", "3 endereços de atendimento", `Pacotes de +${PACK_PLACES} endereços (até ${MAX_PLACES})`, "Chat, portfólio e financeiro"],
+  BASIC: ["1 endereço de atendimento", "Aparece depois do Completo", "Pedidos com data marcada (sem Contrate rápido)", "Chat, portfólio e financeiro"],
 };
 const KIND = { SUBSCRIPTION: "Mensalidade", UPGRADE: "Troca para o Completo", UNLOCK: "Desbloqueio" } as const;
 const STATUS = { PENDING: "Aguardando", PAID: "Pago", FAILED: "Não pago", REFUNDED: "Devolvido" } as Record<string, string>;

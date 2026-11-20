@@ -34,7 +34,7 @@ export default async function ProviderPage({ params }: { params: Promise<{ id: s
   const isOwner = user?.id === pro.userId;
   if (!visible && !isOwner && user?.role !== "ADMIN") notFound();
   const full = pro.subscription?.plan === "FULL";
-  const quickNow = visible && pro.quickOn && !(pro.quickBannedUntil && pro.quickBannedUntil > new Date());
+  const quickNow = visible && full && !!pro.quickTermsAt && pro.quickOn && !(pro.quickBannedUntil && pro.quickBannedUntil > new Date());
 
   const [reviews, fav, blocked] = await Promise.all([
     db.review.findMany({ where: { targetId: pro.userId, hiddenAt: null, booking: { proId: pro.id } }, orderBy: { createdAt: "desc" }, take: 20, include: { author: { select: { name: true } } } }),
